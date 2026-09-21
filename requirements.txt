@@ -1,0 +1,13 @@
+PySide6>=6.6.0
+SQLAlchemy>=2.0.0
+pandas>=2.0.0
+numpy>=1.26.0
+requests>=2.31.0
+pyyaml>=6.0.0
+python-dotenv>=1.0.0
+matplotlib>=3.8.0
+Pillow>=10.0.0
+pytest>=8.0.0
+pyinstaller>=6.0.0
+truststore>=0.10.0
+krx-openapi>=0.1.0
