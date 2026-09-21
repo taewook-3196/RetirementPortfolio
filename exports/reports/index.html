@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>모닝 포트폴리오 리포트 | 2026-09-21</title>
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-card: rgba(26, 34, 52, 0.85);
+            --bg-card-sub: rgba(36, 48, 74, 0.6);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-accent: rgba(99, 102, 241, 0.25);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --accent-primary: #6366f1;
+            --accent-success: #10b981;
+            --accent-danger: #ef4444;
+            --accent-warning: #f59e0b;
+            --accent-cyan: #06b6d4;
+            --gradient-header: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
+            --gradient-card: linear-gradient(180deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Segoe UI", Roboto, sans-serif;
+            line-height: 1.5;
+            letter-spacing: -0.015em;
+            padding: 0 0 40px 0;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
+                radial-gradient(circle at 85% 65%, rgba(16, 185, 129, 0.08) 0%, transparent 45%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 0 16px;
+        }
+
+        /* 헤더 스타일 */
+        .header {
+            padding: 28px 16px 20px 16px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 6px;
+        }
+
+        .header-meta {
+            font-size: 13px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .acc-pill {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-weight: 500;
+            color: #e2e8f0;
+        }
+
+        /* 공통 카드 */
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 18px;
+            padding: 20px;
+            margin-bottom: 18px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .card-title-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-icon {
+            font-size: 18px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.18);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.18);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .badge-info {
+            background: rgba(99, 102, 241, 0.18);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.18);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        /* KPI 요약 스타일 */
+        .kpi-main {
+            text-align: center;
+            padding: 12px 0 16px 0;
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 16px;
+        }
+
+        .kpi-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .kpi-value-huge {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            color: #ffffff;
+        }
+
+        .kpi-pl-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 6px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .pl-plus { color: #f87171; }
+        .pl-minus { color: #60a5fa; }
+        .pl-zero { color: var(--text-muted); }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .kpi-sub-item {
+            background: var(--bg-card-sub);
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .kpi-sub-label {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .kpi-sub-val {
+            font-size: 16px;
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+
+        /* AI 브리핑 카드 스타일 */
+        .ai-guide-box {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(59, 130, 246, 0.08) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 14px;
+        }
+
+        .ai-guide-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .ai-dday-badge {
+            font-size: 13px;
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 8px;
+            background: #6366f1;
+            color: #ffffff;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+        }
+
+        .ai-comment {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #e2e8f0;
+        }
+
+        .ai-comment strong {
+            color: #38bdf8;
+        }
+
+        .recom-item-card {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .recom-info-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .recom-info-ticker {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .recom-val-box {
+            text-align: right;
+        }
+
+        .recom-shares {
+            font-size: 14px;
+            font-weight: 700;
+            color: #a5b4fc;
+        }
+
+        .recom-amt {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* 보유 종목 테이블/카드 */
+        .pos-item {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .pos-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .pos-item:first-child {
+            padding-top: 0;
+        }
+
+        .pos-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .pos-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .pos-eval {
+            font-size: 14px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .pos-details {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .progress-bar-bg {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 9999px;
+            overflow: hidden;
+            margin-top: 8px;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #38bdf8);
+            border-radius: 9999px;
+        }
+
+        /* 계좌별 보유종목 그룹 스타일 */
+        .account-tabs {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .account-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .account-tab-btn {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 11.5px;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .account-tab-btn:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            color: #ffffff;
+        }
+
+        .account-tab-btn.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(59, 130, 246, 0.22) 100%);
+            border-color: var(--accent-primary);
+            color: #ffffff;
+            font-weight: 700;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+        }
+
+        .account-pos-group {
+            background: rgba(15, 23, 42, 0.55);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            transition: opacity 0.2s ease;
+        }
+
+        .account-pos-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .account-pos-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 8px;
+        }
+
+        .account-group-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .account-badge-pill {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.35);
+        }
+
+        .account-name-label {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .account-broker-label {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .account-group-kpi {
+            text-align: right;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .account-eval-amount {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .account-sub-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10.5px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+            padding: 0 2px;
+        }
+
+        /* AI briefing account tabs */
+        .ai-tabs {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .ai-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .ai-tab-btn {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 11.5px;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .ai-tab-btn:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            color: #ffffff;
+        }
+
+        .ai-tab-btn.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(59, 130, 246, 0.22) 100%);
+            border-color: var(--accent-primary);
+            color: #ffffff;
+            font-weight: 700;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+        }
+
+        .account-ai-group {
+            background: rgba(15, 23, 42, 0.55);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            transition: opacity 0.2s ease;
+        }
+
+        .account-ai-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .account-ai-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 10px;
+        }
+
+        /* 뉴스 카드 스타일 */
+        .news-item {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .news-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .news-item:first-child {
+            padding-top: 0;
+        }
+
+        .news-tag-box {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .news-tag {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(99, 102, 241, 0.15);
+            color: #818cf8;
+            border: 1px solid rgba(99, 102, 241, 0.25);
+        }
+
+        .news-media {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .news-title {
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.45;
+            color: #f1f5f9;
+            text-decoration: none;
+            display: block;
+            margin-bottom: 4px;
+            transition: color 0.2s;
+        }
+
+        .news-title:hover {
+            color: #60a5fa;
+        }
+
+        .news-time {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        /* 시장 지표 바 */
+        .market-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .market-item {
+            background: var(--bg-card-sub);
+            padding: 10px 8px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .market-name {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-bottom: 2px;
+        }
+
+        .market-val {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .market-change {
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        /* 10대 글로벌 매크로 대시보드 스타일 */
+        .macro-subgroup {
+            margin-bottom: 12px;
+        }
+
+        .macro-subgroup:last-child {
+            margin-bottom: 0;
+        }
+
+        .macro-group-title {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .macro-grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+        }
+
+        .macro-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+        }
+
+        .macro-card {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 8px 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .macro-card-name {
+            font-size: 11px;
+            font-weight: 600;
+            color: #cbd5e1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .macro-card-val {
+            font-size: 13px;
+            font-weight: 800;
+            color: #ffffff;
+            margin: 2px 0;
+            letter-spacing: -0.02em;
+        }
+
+        .macro-card-footer {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .trend-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9.5px;
+            font-weight: 700;
+            padding: 2px 5px;
+            border-radius: 5px;
+            line-height: 1.2;
+            width: fit-content;
+        }
+
+        .trend-badge-up {
+            background: rgba(248, 113, 113, 0.16);
+            color: #f87171;
+            border: 1px solid rgba(248, 113, 113, 0.35);
+        }
+
+        .trend-badge-down {
+            background: rgba(96, 165, 250, 0.16);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.35);
+        }
+
+        .trend-badge-flat {
+            background: rgba(148, 163, 184, 0.15);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        .macro-fund-item {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .macro-fund-info {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .macro-fund-name {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .macro-fund-desc {
+            font-size: 10px;
+            color: var(--text-dim);
+        }
+
+        .macro-fund-valbox {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .macro-fund-val {
+            font-size: 13px;
+            font-weight: 800;
+            color: #38bdf8;
+        }
+
+        /* Gemini AI 섹션 전용 스타일 */
+        .gemini-quote-box {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(168, 85, 247, 0.12) 100%);
+            border: 1px solid rgba(168, 85, 247, 0.35);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+        }
+
+        .gemini-quote-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: #f8fafc;
+            line-height: 1.6;
+        }
+
+        .gemini-block {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 13px 15px;
+            margin-bottom: 10px;
+        }
+
+        .gemini-block-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #38bdf8;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .gemini-block-content {
+            font-size: 13.5px;
+            line-height: 1.65;
+            color: #cbd5e1;
+        }
+
+        .gemini-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+        }
+
+        /* 푸터 */
+        .footer {
+            text-align: center;
+            padding: 20px 16px 0 16px;
+            font-size: 12px;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+
+        .footer p {
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 상단 헤더 -->
+        <header class="header">
+            <div class="header-badge">🌅 Morning Portfolio Brief</div>
+            <h1 class="header-title">오늘의 투자 리포트</h1>
+            <div class="header-meta">
+                <span>2026-09-21 (월) 22:15</span>
+                <span>•</span>
+                <span class="acc-pill">전체 통합 포트폴리오 (3개 계좌)</span>
+            </div>
+        </header>
+
+        
+        <section class="card" style="border: 1px solid rgba(56, 189, 248, 0.35); margin-bottom: 18px;">
+            <div class="card-header">
+                <div class="card-title-group">
+                    <span class="card-icon">🌐</span>
+                    <h2 class="card-title">글로벌 10대 지표 & 최근 트렌드</h2>
+                </div>
+                <span class="badge badge-info">5일 모멘텀 & 펀더멘털</span>
+            </div>
+
+            <!-- 1. 미국 3대 증시 -->
+            <div class="macro-subgroup">
+                <div class="macro-group-title">
+                    <span>🇺🇸</span> <span>미국 3대 증시 (S&P 500 · 나스닥 100 · 다우존스)</span>
+                </div>
+                <div class="macro-grid-3">
+                    
+            <div class="macro-card">
+                <div class="macro-card-name" title="S&P 500 (^GSPC)">S&P 500</div>
+                <div class="macro-card-val">7,650.50 pt</div>
+                <div class="macro-card-footer">
+                    <span style="font-size: 10.5px; font-weight: 700;" class="pl-minus">전일 -0.08%</span>
+                    <span class="trend-badge trend-badge-up">▲ 상승 추세 (+0.4%)</span>
+                </div>
+            </div>
+            
+                    
+            <div class="macro-card">
+                <div class="macro-card-name" title="Nasdaq 100 (^NDX)">Nasdaq 100</div>
+                <div class="macro-card-val">29,644.17 pt</div>
+                <div class="macro-card-footer">
+                    <span style="font-size: 10.5px; font-weight: 700;" class="pl-plus">전일 +0.94%</span>
+                    <span class="trend-badge trend-badge-up">▲ 강한 상승 (+1.8%)</span>
+                </div>
+            </div>
+            
+                    
+            <div class="macro-card">
+                <div class="macro-card-name" title="다우존스 (DOW) (^DJI)">다우존스 (DOW)</div>
+                <div class="macro-card-val">51,682.64 pt</div>
+                <div class="macro-card-footer">
+                    <span style="font-size: 10.5px; font-weight: 700;" class="pl-minus">전일 -1.69%</span>
+                    <span class="trend-badge trend-badge-down">▼ 완만한 하락 (-1.4%)</span>
+                </div>
+            </div>
+            
+                </div>
+            </div>
+
+            <!-- 2. 국내 2대 증시 -->
+            <div class="macro-subgroup">
+                <div class="macro-group-title">
+                    <span>🇰🇷</span> <span>국내 2대 증시 (코스피 · 코스닥)</span>
+                </div>
+                <div class="macro-grid-2">
+                    
+            <div class="macro-card">
+                <div class="macro-card-name" title="코스피 (KOSPI) (^KS11)">코스피 (KOSPI)</div>
+                <div class="macro-card-val">7,007.72 pt</div>
+                <div class="macro-card-footer">
+                    <span style="font-size: 10.5px; font-weight: 700;" class="pl-plus">전일 +4.84%</span>
+                    <span class="trend-badge trend-badge-up">▲ 강한 상승 (+5.7%)</span>
+                </div>
+            </div>
+            
+                    
+            <div class="macro-card">
+                <div class="macro-card-name" title="코스닥 (KOSDAQ) (^KQ11)">코스닥 (KOSDAQ)</div>
+                <div class="macro-card-val">836.27 pt</div>
+                <div class="macro-card-footer">
+                    <span style="font-size: 10.5px; font-weight: 700;" class="pl-plus">전일 +3.65%</span>
+                    <span class="trend-badge trend-badge-up">▲ 강한 상승 (+2.9%)</span>
+                </div>
+            </div>
+            
+                </div>
+            </div>
+
+            <!-- 3. 핵심 거시 지표 -->
+            <div class="macro-subgroup">
+                <div class="macro-group-title">
+                    <span>⚡</span> <span>핵심 거시 지표 (환율 · 원자재 · 금리)</span>
+                </div>
+                <div class="macro-grid-3">
+                    
+            <div class="macro-card">
+                <div class="macro-card-name" title="원/달러 환율 (KRW=X)">원/달러 환율</div>
+                <div class="macro-card-val">1,372.5원</div>
+                <div class="macro-card-footer">
+                    <span style="font-size: 10.5px; font-weight: 700;" class="pl-plus">전일 +2.00%</span>
+                    <span class="trend-badge trend-badge-up">▲ 강한 상승 (+2.0%)</span>
+                </div>
+            </div>
+            
+                    
+            <div class="macro-card">
+                <div class="macro-card-name" title="WTI 국제유가 (CL=F)">WTI 국제유가</div>
+                <div class="macro-card-val">$93.07</div>
+                <div class="macro-card-footer">
+                    <span style="font-size: 10.5px; font-weight: 700;" class="pl-minus">전일 -9.14%</span>
+                    <span class="trend-badge trend-badge-down">▼ 하락 추세 (-9.1%)</span>
+                </div>
+            </div>
+            
+                    
+            <div class="macro-card">
+                <div class="macro-card-name" title="미국 10년물 국채금리 (^TNX)">미국 10년물 국채금리</div>
+                <div class="macro-card-val">4.97%</div>
+                <div class="macro-card-footer">
+                    <span style="font-size: 10.5px; font-weight: 700;" class="pl-minus">전일 -0.58%</span>
+                    <span class="trend-badge trend-badge-down">▼ 완만한 하락 (-0.6%)</span>
+                </div>
+            </div>
+            
+                </div>
+            </div>
+
+            <!-- 4. 미국 펀더멘털 -->
+            <div class="macro-subgroup" style="margin-bottom: 0;">
+                <div class="macro-group-title">
+                    <span>🏦</span> <span>미국 주요 경제 펀더멘털 (물가 & 고용)</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    
+            <div class="macro-fund-item">
+                <div class="macro-fund-info">
+                    <div class="macro-fund-name">미국 근원 PCE 물가지수 <span style="font-size: 10px; color: var(--text-dim); font-weight: normal;">(최근 발표 (2026.07 / 08월말 집계))</span></div>
+                    <div class="macro-fund-desc">연준 물가목표(2.0%)를 향해 점진적 하향 둔화 추세 지속 중</div>
+                </div>
+                <div class="macro-fund-valbox">
+                    <div class="macro-fund-val">3.3%</div>
+                    <span class="trend-badge trend-badge-down">▼ 둔화·안정세</span>
+                </div>
+            </div>
+            
+                    
+            <div class="macro-fund-item">
+                <div class="macro-fund-info">
+                    <div class="macro-fund-name">미국 비농업 신규고용 (NFP) <span style="font-size: 10px; color: var(--text-dim); font-weight: normal;">(최근 발표 (2026.08월분))</span></div>
+                    <div class="macro-fund-desc">경기침체 우려를 완화하는 견조한 일자리 창출력 유지</div>
+                </div>
+                <div class="macro-fund-valbox">
+                    <div class="macro-fund-val">+162K</div>
+                    <span class="trend-badge trend-badge-up">▲ 고용 견조세</span>
+                </div>
+            </div>
+            
+                    
+            <div class="macro-fund-item">
+                <div class="macro-fund-info">
+                    <div class="macro-fund-name">미국 실업률 <span style="font-size: 10px; color: var(--text-dim); font-weight: normal;">(최근 발표 (2026.08월분))</span></div>
+                    <div class="macro-fund-desc">역사적 저점 수준인 4%대 초반에서 안정적 횡보</div>
+                </div>
+                <div class="macro-fund-valbox">
+                    <div class="macro-fund-val">4.1%</div>
+                    <span class="trend-badge trend-badge-flat">━ 완전고용 횡보</span>
+                </div>
+            </div>
+            
+                </div>
+            </div>
+        </section>
+        
+        
+        <section class="card">
+            <div class="card-header">
+                <div class="card-title-group">
+                    <span class="card-icon">💰</span>
+                    <h2 class="card-title">내 계좌 자산 총괄</h2>
+                </div>
+                <span class="badge badge-danger">
+                    -79.91%
+                </span>
+            </div>
+
+            <div class="kpi-main">
+                <div class="kpi-label">총 평가자산</div>
+                <div class="kpi-value-huge">39,485,664원</div>
+                <div class="kpi-pl-group">
+                    <span class="kpi-label">평가손익:</span>
+                    <span class="pl-minus">-157,088,514원 (-79.91%)</span>
+                </div>
+            </div>
+
+            <div class="kpi-grid">
+                <div class="kpi-sub-item">
+                    <div class="kpi-sub-label">총 투자원금</div>
+                    <div class="kpi-sub-val">196,574,178원</div>
+                </div>
+                <div class="kpi-sub-item">
+                    <div class="kpi-sub-label">예수금 (현금 잔고)</div>
+                    <div class="kpi-sub-val">0원</div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 5px;">
+                <div style="font-size: 11px; font-weight: 700; color: #94a3b8;">🏢 등록 계좌별 현황</div>
+                
+                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 6px 10px; font-size: 11.5px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #cbd5e1; font-weight: 600;">기본 계좌 (퇴직연금)</span>
+                    <span><strong style="color: #ffffff;">10,545,064원</strong> <span class="pl-plus" style="font-weight: 700;">(+4.7%)</span></span>
+                </div>
+                
+                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 6px 10px; font-size: 11.5px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #cbd5e1; font-weight: 600;">공격적_레버리지_가즈아</span>
+                    <span><strong style="color: #ffffff;">1,029,000원</strong> <span class="pl-minus" style="font-weight: 700;">(-99.3%)</span></span>
+                </div>
+                
+                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 6px 10px; font-size: 11.5px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #cbd5e1; font-weight: 600;">ㅁㅁㅁㅁ</span>
+                    <span><strong style="color: #ffffff;">27,911,600원</strong> <span class="pl-minus" style="font-weight: 700;">(-23.5%)</span></span>
+                </div>
+                
+            </div>
+            
+        </section>
+        
+        
+        
+                <section class="card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <span class="card-icon">🤖</span>
+                            <h2 class="card-title">AI 투자 가이드 & 매수 전략</h2>
+                        </div>
+                        <span style="font-size: 12px; color: var(--text-dim);">3개 계좌 맞춤 전략</span>
+                    </div>
+                    <div class="ai-tabs"><button class="ai-tab-btn active" onclick="filterAccountAiGuide('all', this)">🌐 전체 (3개 계좌)</button><button class="ai-tab-btn" onclick="filterAccountAiGuide('ai-group-1', this)">🏢 기본 계좌 (퇴직연금)</button><button class="ai-tab-btn" onclick="filterAccountAiGuide('ai-group-2', this)">🏢 공격적_레버리지_가즈아</button><button class="ai-tab-btn" onclick="filterAccountAiGuide('ai-group-3', this)">🏢 ㅁㅁㅁㅁ</button></div>
+                    
+                    <div class="account-ai-group" id="ai-group-1">
+                        <div class="account-ai-header">
+                            <div class="account-group-title">
+                                <span class="account-badge-pill">계좌 1</span>
+                                <span class="account-name-label">기본 계좌 (퇴직연금)</span>
+                                <span class="account-broker-label">• 기본 증권</span>
+                            </div>
+                            <span class="badge badge-success" style="font-size: 11.5px; padding: 3px 8px;">이번 주기 매수 완료</span>
+                        </div>
+
+                        <div class="ai-guide-box" style="margin-bottom: 12px;">
+                            <div class="ai-comment">
+                                이번 주기(<strong>이번 달 (2026년 09월)</strong>) 매수가 성공적으로 완료되었습니다! 포트폴리오 비중이 안정적으로 유지되고 있습니다.
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 12.5px; font-weight: 700; color: #cbd5e1;">🎯 이번 주기 추천 매수 종목</span>
+                            <span style="font-size: 12.5px; font-weight: 700; color: #a5b4fc;">합계 0원</span>
+                        </div>
+
+                        
+                        <div style="text-align: center; padding: 14px; font-size: 13px; color: var(--text-dim);">
+                            현재 즉시 매수를 요하는 비중 불균형 종목이 없습니다. (포트폴리오 균형 양호)
+                        </div>
+                        
+                    </div>
+                    
+
+                    <div class="account-ai-group" id="ai-group-2">
+                        <div class="account-ai-header">
+                            <div class="account-group-title">
+                                <span class="account-badge-pill">계좌 2</span>
+                                <span class="account-name-label">공격적_레버리지_가즈아</span>
+                                <span class="account-broker-label">• 토스</span>
+                            </div>
+                            <span class="badge badge-info" style="font-size: 11.5px; padding: 3px 8px;">수시 매수</span>
+                        </div>
+
+                        <div class="ai-guide-box" style="margin-bottom: 12px;">
+                            <div class="ai-comment">
+                                설정된 투자 주기에 맞춰 낙폭 과대 종목 및 목표 비중 부족 종목을 우선하여 추천합니다.
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 12.5px; font-weight: 700; color: #cbd5e1;">🎯 이번 주기 추천 매수 종목</span>
+                            <span style="font-size: 12.5px; font-weight: 700; color: #a5b4fc;">합계 0원</span>
+                        </div>
+
+                        
+                        <div style="text-align: center; padding: 14px; font-size: 13px; color: var(--text-dim);">
+                            현재 즉시 매수를 요하는 비중 불균형 종목이 없습니다. (포트폴리오 균형 양호)
+                        </div>
+                        
+                    </div>
+                    
+
+                    <div class="account-ai-group" id="ai-group-3">
+                        <div class="account-ai-header">
+                            <div class="account-group-title">
+                                <span class="account-badge-pill">계좌 3</span>
+                                <span class="account-name-label">ㅁㅁㅁㅁ</span>
+                                <span class="account-broker-label">• ㄹㄹㄹ</span>
+                            </div>
+                            <span class="badge badge-info" style="font-size: 11.5px; padding: 3px 8px;">D-1</span>
+                        </div>
+
+                        <div class="ai-guide-box" style="margin-bottom: 12px;">
+                            <div class="ai-comment">
+                                다음 매수일까지 <strong>1일</strong> 남았습니다. (예정일: 2026-09-22) 현재 시장 변동성을 모니터링하며 매수 예산을 준비해 두세요.
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 12.5px; font-weight: 700; color: #cbd5e1;">🎯 이번 주기 추천 매수 종목</span>
+                            <span style="font-size: 12.5px; font-weight: 700; color: #a5b4fc;">합계 0원</span>
+                        </div>
+
+                        
+                        <div style="text-align: center; padding: 14px; font-size: 13px; color: var(--text-dim);">
+                            현재 즉시 매수를 요하는 비중 불균형 종목이 없습니다. (포트폴리오 균형 양호)
+                        </div>
+                        
+                    </div>
+                    
+                    
+                <script>
+                function filterAccountAiGuide(targetId, btnElement) {
+                    var groups = document.querySelectorAll('.account-ai-group');
+                    var btns = document.querySelectorAll('.ai-tab-btn');
+                    for (var i = 0; i < btns.length; i++) {
+                        btns[i].classList.remove('active');
+                    }
+                    if (btnElement) {
+                        btnElement.classList.add('active');
+                    }
+                    for (var j = 0; j < groups.length; j++) {
+                        if (targetId === 'all' || groups[j].id === targetId) {
+                            groups[j].style.display = 'block';
+                        } else {
+                            groups[j].style.display = 'none';
+                        }
+                    }
+                }
+                </script>
+                
+                </section>
+                
+        
+                <section class="card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <span class="card-icon">📊</span>
+                            <h2 class="card-title">등록 및 보유 종목 세부 현황</h2>
+                        </div>
+                        <span style="font-size: 12px; color: var(--text-dim);">3개 계좌 · 6개 종목</span>
+                    </div>
+                    <div class="account-tabs"><button class="account-tab-btn active" onclick="filterAccountPositions('all', this)">🌐 전체 (6개)</button><button class="account-tab-btn" onclick="filterAccountPositions('acc-group-1', this)">🏢 기본 계좌 (퇴직연금) (3개)</button><button class="account-tab-btn" onclick="filterAccountPositions('acc-group-2', this)">🏢 공격적_레버리지_가즈아 (1개)</button><button class="account-tab-btn" onclick="filterAccountPositions('acc-group-3', this)">🏢 ㅁㅁㅁㅁ (2개)</button></div>
+                    
+                    <div class="account-pos-group" id="acc-group-1">
+                        <div class="account-pos-header">
+                            <div class="account-group-title">
+                                <span class="account-badge-pill">계좌 1</span>
+                                <span class="account-name-label">기본 계좌 (퇴직연금)</span>
+                                <span class="account-broker-label">• 기본 증권</span>
+                            </div>
+                            <div class="account-group-kpi">
+                                <span class="account-eval-amount">10,545,064원</span>
+                                <span class="badge badge-success">+4.67%</span>
+                            </div>
+                        </div>
+                        <div class="account-sub-meta">
+                            <span>원금 10,074,178원</span>
+                            <span>•</span>
+                            <span>예수금 39,925,822원</span>
+                            <span>•</span>
+                            <span>종목 3개</span>
+                        </div>
+                        <div>
+                            
+            <div class="pos-item">
+                <div class="pos-header">
+                    <span class="pos-name">TIGER 미국테크TOP10 INDXX <span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">(381170)</span></span>
+                    <span class="pos-eval">1,604,456원</span>
+                </div>
+                
+                <div class="pos-details">
+                    <span>49주 × 32,744원</span>
+                    <span class="pl-plus">+5.81%</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 6px;">
+                    <span>현재비중: 15.2%</span>
+                    <span>목표비중: 15.0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: 15.2%;"></div>
+                </div>
+            </div>
+            
+            <div class="pos-item">
+                <div class="pos-header">
+                    <span class="pos-name">RISE TDF2040액티브 <span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">(442560)</span></span>
+                    <span class="pos-eval">6,324,808원</span>
+                </div>
+                
+                <div class="pos-details">
+                    <span>371주 × 17,048원</span>
+                    <span class="pl-plus">+5.10%</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 6px;">
+                    <span>현재비중: 60.0%</span>
+                    <span>목표비중: 60.0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: 60.0%;"></div>
+                </div>
+            </div>
+            
+            <div class="pos-item">
+                <div class="pos-header">
+                    <span class="pos-name">TIGER 미국S&P500동일가중 <span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">(488500)</span></span>
+                    <span class="pos-eval">2,615,800원</span>
+                </div>
+                
+                <div class="pos-details">
+                    <span>205주 × 12,760원</span>
+                    <span class="pl-plus">+2.98%</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 6px;">
+                    <span>현재비중: 24.8%</span>
+                    <span>목표비중: 25.0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: 24.8%;"></div>
+                </div>
+            </div>
+            
+                        </div>
+                    </div>
+                    
+
+                    <div class="account-pos-group" id="acc-group-2">
+                        <div class="account-pos-header">
+                            <div class="account-group-title">
+                                <span class="account-badge-pill">계좌 2</span>
+                                <span class="account-name-label">공격적_레버리지_가즈아</span>
+                                <span class="account-broker-label">• 토스</span>
+                            </div>
+                            <div class="account-group-kpi">
+                                <span class="account-eval-amount">1,029,000원</span>
+                                <span class="badge badge-danger">-99.31%</span>
+                            </div>
+                        </div>
+                        <div class="account-sub-meta">
+                            <span>원금 150,000,000원</span>
+                            <span>•</span>
+                            <span>예수금 0원</span>
+                            <span>•</span>
+                            <span>종목 1개</span>
+                        </div>
+                        <div>
+                            
+            <div class="pos-item">
+                <div class="pos-header">
+                    <span class="pos-name">ACE SK하이닉스단일종목레버리지 <span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">(0194T0)</span></span>
+                    <span class="pos-eval">1,029,000원</span>
+                </div>
+                
+                <div class="pos-details">
+                    <span>100주 × 10,290원</span>
+                    <span class="pl-minus">-99.31%</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 6px;">
+                    <span>현재비중: 100.0%</span>
+                    <span>목표비중: 0.0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: 100.0%;"></div>
+                </div>
+            </div>
+            
+                        </div>
+                    </div>
+                    
+
+                    <div class="account-pos-group" id="acc-group-3">
+                        <div class="account-pos-header">
+                            <div class="account-group-title">
+                                <span class="account-badge-pill">계좌 3</span>
+                                <span class="account-name-label">ㅁㅁㅁㅁ</span>
+                                <span class="account-broker-label">• ㄹㄹㄹ</span>
+                            </div>
+                            <div class="account-group-kpi">
+                                <span class="account-eval-amount">27,911,600원</span>
+                                <span class="badge badge-danger">-23.53%</span>
+                            </div>
+                        </div>
+                        <div class="account-sub-meta">
+                            <span>원금 36,500,000원</span>
+                            <span>•</span>
+                            <span>예수금 63,500,000원</span>
+                            <span>•</span>
+                            <span>종목 2개</span>
+                        </div>
+                        <div>
+                            
+            <div class="pos-item">
+                <div class="pos-header">
+                    <span class="pos-name">삼성전자 <span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">(005930)</span></span>
+                    <span class="pos-eval">27,783,000원</span>
+                </div>
+                
+                <div class="pos-details">
+                    <span>100주 × 277,830원</span>
+                    <span class="pl-minus">-18.29%</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 6px;">
+                    <span>현재비중: 99.5%</span>
+                    <span>목표비중: 0.0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: 99.5%;"></div>
+                </div>
+            </div>
+            
+            <div class="pos-item">
+                <div class="pos-header">
+                    <span class="pos-name">ACE 인버스 <span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">(145670)</span></span>
+                    <span class="pos-eval">128,600원</span>
+                </div>
+                
+                <div class="pos-details">
+                    <span>100주 × 1,286원</span>
+                    <span class="pl-minus">-94.86%</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 6px;">
+                    <span>현재비중: 0.5%</span>
+                    <span>목표비중: 0.0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: 0.5%;"></div>
+                </div>
+            </div>
+            
+                        </div>
+                    </div>
+                    
+                    
+                <script>
+                function filterAccountPositions(targetId, btnElement) {
+                    var groups = document.querySelectorAll('.account-pos-group');
+                    var btns = document.querySelectorAll('.account-tab-btn');
+                    for (var i = 0; i < btns.length; i++) {
+                        btns[i].classList.remove('active');
+                    }
+                    if (btnElement) {
+                        btnElement.classList.add('active');
+                    }
+                    for (var j = 0; j < groups.length; j++) {
+                        if (targetId === 'all' || groups[j].id === targetId) {
+                            groups[j].style.display = 'block';
+                        } else {
+                            groups[j].style.display = 'none';
+                        }
+                    }
+                }
+                </script>
+                
+                </section>
+                
+        
+        <section class="card">
+            <div class="card-header">
+                <div class="card-title-group">
+                    <span class="card-icon">📰</span>
+                    <h2 class="card-title">맞춤 시황 & 관심종목 뉴스</h2>
+                </div>
+                <span class="badge badge-info">실시간 픽</span>
+            </div>
+            
+            <div class="news-item">
+                <div class="news-tag-box">
+                    <span class="news-tag">RISE TDF2040액티브</span>
+                    <span class="news-media">머니투데이</span>
+                </div>
+                <a href="https://n.news.naver.com/mnews/article/008/0005405975" target="_blank" class="news-title">변동장에 연금 지킨다… TDF ETF 뭉칫돈</a>
+                <span class="news-time">202608280400</span>
+            </div>
+            
+            <div class="news-item">
+                <div class="news-tag-box">
+                    <span class="news-tag">자산배분·TDF</span>
+                    <span class="news-media">v.daum.net</span>
+                </div>
+                <a href="https://news.google.com/rss/articles/CBMiT0FVX3lxTFBWR3Z6STVkbEtnaGgxaGtwWE5ZLUpRcXRteUF0YUpIUGhQd0tCeWtua29Ld2U3Z3hNSGpFdHdYNzM0RW9qSGp6YU51QjJYTW8?oc=5" target="_blank" class="news-title">은퇴까지 알아서 자산배분…커지는 TDF 시장</a>
+                <span class="news-time">Mon, 21 Sep 2026 06:37:02 GMT</span>
+            </div>
+            
+            <div class="news-item">
+                <div class="news-tag-box">
+                    <span class="news-tag">경제속보</span>
+                    <span class="news-media">KBS 뉴스</span>
+                </div>
+                <a href="https://news.google.com/rss/articles/CBMiW0FVX3lxTE03UEprOFZEdDJmXzR0eFlSMVJtZS1nWTdrZnVSQ0plTzhsX21XbUxvX3dpSExFRERpdDdxUUF1dGFUSXI0QXhMWmVNa19RQ2dUSDJiV1h3SEsxM3c?oc=5" target="_blank" class="news-title">이재명 정부 첫 주거복지로드맵…“중산층까지 임대주택 혜택”</a>
+                <span class="news-time">Mon, 21 Sep 2026 10:05:00 GMT</span>
+            </div>
+            
+            <div class="news-item">
+                <div class="news-tag-box">
+                    <span class="news-tag">RISE TDF2040액티브</span>
+                    <span class="news-media">머니투데이</span>
+                </div>
+                <a href="https://n.news.naver.com/mnews/article/008/0005405771" target="_blank" class="news-title">"변동성 장세에서 퇴직연금 지키자"…TDF ETF에 자금 밀물</a>
+                <span class="news-time">202608271611</span>
+            </div>
+            
+            <div class="news-item">
+                <div class="news-tag-box">
+                    <span class="news-tag">경제속보</span>
+                    <span class="news-media">Chosunbiz</span>
+                </div>
+                <a href="https://news.google.com/rss/articles/CBMihAFBVV95cUxQbjJ3dHd1ZjB6YWhpVm1JTm84bVVJbDE3ZE9VbmFydjQ4LXYtQjNMVHFVTDR0U3d1eV9vb3VaOVhZcW5WcjZFR0sxc1FKMW9XYzk0SndXd1Rpb0tETWtTRjgwSWM5S2JQRnlKQ3BISTNXbTU3Y25Rdjc5T1RuU3N5cjFpOGvSAZgBQVVfeXFMTk9SamdSYWpsNlUtcjVfQUZCdm4zYnlLeldCdElpVUFfb3NBR2g5cjVmSXZqMF9DaVByc3JMamJFZmF0UDg4V1Z0bFNlZnNudXBSa0JWSGtTZGRrVFhjVkYyQVkyd0J2cDZIT3hzQTJKcGRJeTU5bERhY254OWtsaFkzQ2ZYN3E1MktaTDJ0ZHNzQUNmdXM0SGQ?oc=5" target="_blank" class="news-title">“기름 만원어치만 넣는 손님 늘어”… 추석 대목 휴업 고민하는 자영 주유소들 - 조선비즈</a>
+                <span class="news-time">Mon, 21 Sep 2026 07:17:00 GMT</span>
+            </div>
+            
+            <div class="news-item">
+                <div class="news-tag-box">
+                    <span class="news-tag">RISE TDF2040액티브</span>
+                    <span class="news-media">이데일리</span>
+                </div>
+                <a href="https://n.news.naver.com/mnews/article/018/0006232049" target="_blank" class="news-title">요동치는 국장에도 'TDF ETF'는 낙폭 제한…분산투자 방어력 확인</a>
+                <span class="news-time">202603101656</span>
+            </div>
+            
+            <div class="news-item">
+                <div class="news-tag-box">
+                    <span class="news-tag">자산배분·TDF</span>
+                    <span class="news-media">DealSite경제TV</span>
+                </div>
+                <a href="https://news.google.com/rss/articles/CBMiVkFVX3lxTE94eE01bTd1aTlBY1BTSW1Ed0NnZ2tQbWpYWnk5cGI1MXJhb2x1RVFGOE1oLXBKNWZiUWlEeXFQUmdaQUM2MHMxQkhGaURSTVYwVmFjWGt3?oc=5" target="_blank" class="news-title">[만나보니] [한국투자신탁운용] 강성수 상무 "은퇴 후에도 투자 계속…장기 자산배분이 답"</a>
+                <span class="news-time">Mon, 21 Sep 2026 01:00:23 GMT</span>
+            </div>
+            
+            <div class="news-item">
+                <div class="news-tag-box">
+                    <span class="news-tag">경제속보</span>
+                    <span class="news-media">한겨레</span>
+                </div>
+                <a href="https://news.google.com/rss/articles/CBMiZ0FVX3lxTE5oVmxfS21iNWJTZS0wdkRBUjRLMUNFUGZDTEdrZ3JYM0FTVlN5aUg2SjBuR2hNOVE0MUI1TkphQ202VmRxc3hOdWM3U0dKMkdYd2J3WHlHZFhSVjVfQ2xVRHc4YU1LTGc?oc=5" target="_blank" class="news-title">코스피, 열흘 만에 7천선 회복…삼전닉스 ‘자사주 매입’은 끝물</a>
+                <span class="news-time">Mon, 21 Sep 2026 08:06:00 GMT</span>
+            </div>
+            
+        </section>
+        
+
+        <!-- 푸터 -->
+        <footer class="footer">
+            <p>퇴직연금 & 자산배분 스마트 포트폴리오 매니저</p>
+            <p style="font-size: 11px; color: #475569;">본 리포트는 개인 자산관리 참고용이며 투자 권유가 아닙니다.</p>
+        </footer>
+    </div>
+</body>
+</html>

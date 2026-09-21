@@ -1,0 +1,26 @@
+# Environment variables
+.env
+
+# Database (portfolio.db is synchronized to GitHub for PC-off cloud reports)
+# *.db
+# portfolio.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Logs
+logs/
+*.log
+
+# Backups and Exports
+backup/
+exports/
+
+# PyInstaller
+build/
+dist/
+*.spec

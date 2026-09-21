@@ -1,0 +1,66 @@
+data_source: mock
+initial_capital: 100000000
+base_monthly: 10000000
+max_additional_monthly: 15000000
+news_filter_mode: all
+show_splash_screen: true
+morning_report:
+  enabled: false
+  send_time: 07:00
+  kakao_rest_api_key: ''
+  kakao_access_token: ''
+  kakao_refresh_token: ''
+  include_ai_briefing: true
+  include_news: true
+  include_summary: true
+  include_positions: true
+  include_market_indices: true
+  web_report_mode: local_browser
+  github_repo: taewook-3196/RetirementPortfolio
+  github_token: ''
+  github_workflow_id: morning_report.yml
+  github_cloud_enabled: false
+  gemini_enabled: true
+  gemini_api_key: ''
+  gemini_model: gemini-3.8-flash
+  ai_investment_stance: aggressive
+etfs:
+- ticker: '442560'
+  name: RISE TDF2040액티브
+  target_weight: 0.6
+  dividend_yield: 0.025
+- ticker: '488500'
+  name: TIGER 미국S&P500동일가중
+  target_weight: 0.25
+  dividend_yield: 0.015
+- ticker: '494840'
+  name: TIGER 미국나스닥TOP10
+  target_weight: 0.15
+  dividend_yield: 0.01
+watchlist:
+- ticker: 069500
+  name: KODEX 200
+drawdown_tiers:
+- min_drawdown: 0.0
+  max_drawdown: -0.05
+  additional_buy: 0
+  score: 0
+- min_drawdown: -0.05
+  max_drawdown: -0.1
+  additional_buy: 2000000
+  score: 1
+- min_drawdown: -0.1
+  max_drawdown: -0.15
+  additional_buy: 5000000
+  score: 2
+- min_drawdown: -0.15
+  max_drawdown: -0.2
+  additional_buy: 10000000
+  score: 3
+- min_drawdown: -0.2
+  max_drawdown: -1.0
+  additional_buy: 15000000
+  score: 4
+priority_weights:
+  drawdown: 0.7
+  weight_gap: 0.3

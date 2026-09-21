@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>모닝 포트폴리오 리포트 | 2026-09-21</title>
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-card: rgba(26, 34, 52, 0.85);
+            --bg-card-sub: rgba(36, 48, 74, 0.6);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-accent: rgba(99, 102, 241, 0.25);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --accent-primary: #6366f1;
+            --accent-success: #10b981;
+            --accent-danger: #ef4444;
+            --accent-warning: #f59e0b;
+            --accent-cyan: #06b6d4;
+            --gradient-header: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
+            --gradient-card: linear-gradient(180deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Segoe UI", Roboto, sans-serif;
+            line-height: 1.5;
+            letter-spacing: -0.015em;
+            padding: 0 0 40px 0;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
+                radial-gradient(circle at 85% 65%, rgba(16, 185, 129, 0.08) 0%, transparent 45%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 0 16px;
+        }
+
+        /* 헤더 스타일 */
+        .header {
+            padding: 28px 16px 20px 16px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 6px;
+        }
+
+        .header-meta {
+            font-size: 13px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .acc-pill {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-weight: 500;
+            color: #e2e8f0;
+        }
+
+        /* 공통 카드 */
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 18px;
+            padding: 20px;
+            margin-bottom: 18px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .card-title-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-icon {
+            font-size: 18px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.18);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.18);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .badge-info {
+            background: rgba(99, 102, 241, 0.18);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.18);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        /* KPI 요약 스타일 */
+        .kpi-main {
+            text-align: center;
+            padding: 12px 0 16px 0;
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 16px;
+        }
+
+        .kpi-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .kpi-value-huge {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            color: #ffffff;
+        }
+
+        .kpi-pl-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 6px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .pl-plus { color: #f87171; }
+        .pl-minus { color: #60a5fa; }
+        .pl-zero { color: var(--text-muted); }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .kpi-sub-item {
+            background: var(--bg-card-sub);
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .kpi-sub-label {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .kpi-sub-val {
+            font-size: 16px;
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+
+        /* AI 브리핑 카드 스타일 */
+        .ai-guide-box {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(59, 130, 246, 0.08) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 14px;
+        }
+
+        .ai-guide-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .ai-dday-badge {
+            font-size: 13px;
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 8px;
+            background: #6366f1;
+            color: #ffffff;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+        }
+
+        .ai-comment {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #e2e8f0;
+        }
+
+        .ai-comment strong {
+            color: #38bdf8;
+        }
+
+        .recom-item-card {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .recom-info-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .recom-info-ticker {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .recom-val-box {
+            text-align: right;
+        }
+
+        .recom-shares {
+            font-size: 14px;
+            font-weight: 700;
+            color: #a5b4fc;
+        }
+
+        .recom-amt {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* 보유 종목 테이블/카드 */
+        .pos-item {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .pos-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .pos-item:first-child {
+            padding-top: 0;
+        }
+
+        .pos-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .pos-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .pos-eval {
+            font-size: 14px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .pos-details {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .progress-bar-bg {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 9999px;
+            overflow: hidden;
+            margin-top: 8px;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #38bdf8);
+            border-radius: 9999px;
+        }
+
+        /* 계좌별 보유종목 그룹 스타일 */
+        .account-tabs {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .account-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .account-tab-btn {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 11.5px;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .account-tab-btn:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            color: #ffffff;
+        }
+
+        .account-tab-btn.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(59, 130, 246, 0.22) 100%);
+            border-color: var(--accent-primary);
+            color: #ffffff;
+            font-weight: 700;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+        }
+
+        .account-pos-group {
+            background: rgba(15, 23, 42, 0.55);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            transition: opacity 0.2s ease;
+        }
+
+        .account-pos-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .account-pos-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 8px;
+        }
+
+        .account-group-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .account-badge-pill {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.35);
+        }
+
+        .account-name-label {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .account-broker-label {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .account-group-kpi {
+            text-align: right;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .account-eval-amount {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .account-sub-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10.5px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+            padding: 0 2px;
+        }
+
+        /* AI briefing account tabs */
+        .ai-tabs {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .ai-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .ai-tab-btn {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 11.5px;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .ai-tab-btn:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            color: #ffffff;
+        }
+
+        .ai-tab-btn.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(59, 130, 246, 0.22) 100%);
+            border-color: var(--accent-primary);
+            color: #ffffff;
+            font-weight: 700;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+        }
+
+        .account-ai-group {
+            background: rgba(15, 23, 42, 0.55);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            transition: opacity 0.2s ease;
+        }
+
+        .account-ai-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .account-ai-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 10px;
+        }
+
+        /* 뉴스 카드 스타일 */
+        .news-item {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .news-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .news-item:first-child {
+            padding-top: 0;
+        }
+
+        .news-tag-box {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .news-tag {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(99, 102, 241, 0.15);
+            color: #818cf8;
+            border: 1px solid rgba(99, 102, 241, 0.25);
+        }
+
+        .news-media {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .news-title {
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.45;
+            color: #f1f5f9;
+            text-decoration: none;
+            display: block;
+            margin-bottom: 4px;
+            transition: color 0.2s;
+        }
+
+        .news-title:hover {
+            color: #60a5fa;
+        }
+
+        .news-time {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        /* 시장 지표 바 */
+        .market-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .market-item {
+            background: var(--bg-card-sub);
+            padding: 10px 8px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .market-name {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-bottom: 2px;
+        }
+
+        .market-val {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .market-change {
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        /* 10대 글로벌 매크로 대시보드 스타일 */
+        .macro-subgroup {
+            margin-bottom: 12px;
+        }
+
+        .macro-subgroup:last-child {
+            margin-bottom: 0;
+        }
+
+        .macro-group-title {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .macro-grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+        }
+
+        .macro-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+        }
+
+        .macro-card {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 8px 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .macro-card-name {
+            font-size: 11px;
+            font-weight: 600;
+            color: #cbd5e1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .macro-card-val {
+            font-size: 13px;
+            font-weight: 800;
+            color: #ffffff;
+            margin: 2px 0;
+            letter-spacing: -0.02em;
+        }
+
+        .macro-card-footer {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .trend-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9.5px;
+            font-weight: 700;
+            padding: 2px 5px;
+            border-radius: 5px;
+            line-height: 1.2;
+            width: fit-content;
+        }
+
+        .trend-badge-up {
+            background: rgba(248, 113, 113, 0.16);
+            color: #f87171;
+            border: 1px solid rgba(248, 113, 113, 0.35);
+        }
+
+        .trend-badge-down {
+            background: rgba(96, 165, 250, 0.16);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.35);
+        }
+
+        .trend-badge-flat {
+            background: rgba(148, 163, 184, 0.15);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        .macro-fund-item {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .macro-fund-info {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .macro-fund-name {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .macro-fund-desc {
+            font-size: 10px;
+            color: var(--text-dim);
+        }
+
+        .macro-fund-valbox {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .macro-fund-val {
+            font-size: 13px;
+            font-weight: 800;
+            color: #38bdf8;
+        }
+
+        /* Gemini AI 섹션 전용 스타일 */
+        .gemini-quote-box {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(168, 85, 247, 0.12) 100%);
+            border: 1px solid rgba(168, 85, 247, 0.35);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+        }
+
+        .gemini-quote-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: #f8fafc;
+            line-height: 1.6;
+        }
+
+        .gemini-block {
+            background: var(--bg-card-sub);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 13px 15px;
+            margin-bottom: 10px;
+        }
+
+        .gemini-block-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #38bdf8;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .gemini-block-content {
+            font-size: 13.5px;
+            line-height: 1.65;
+            color: #cbd5e1;
+        }
+
+        .gemini-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+        }
+
+        /* 푸터 */
+        .footer {
+            text-align: center;
+            padding: 20px 16px 0 16px;
+            font-size: 12px;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+
+        .footer p {
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 상단 헤더 -->
+        <header class="header">
+            <div class="header-badge">🌅 Morning Portfolio Brief</div>
+            <h1 class="header-title">오늘의 투자 리포트</h1>
+            <div class="header-meta">
+                <span>2026-09-21 (월) 22:15</span>
+                <span>•</span>
+                <span class="acc-pill">전체 통합 포트폴리오 (2개 계좌)</span>
+            </div>
+        </header>
+
+        
+        
+        <section class="card">
+            <div class="card-header">
+                <div class="card-title-group">
+                    <span class="card-icon">💰</span>
+                    <h2 class="card-title">내 계좌 자산 총괄</h2>
+                </div>
+                <span class="badge badge-success">
+                    0.00%
+                </span>
+            </div>
+
+            <div class="kpi-main">
+                <div class="kpi-label">총 평가자산</div>
+                <div class="kpi-value-huge">60,000,000원</div>
+                <div class="kpi-pl-group">
+                    <span class="kpi-label">평가손익:</span>
+                    <span class="pl-zero">0원 (0.00%)</span>
+                </div>
+            </div>
+
+            <div class="kpi-grid">
+                <div class="kpi-sub-item">
+                    <div class="kpi-sub-label">총 투자원금</div>
+                    <div class="kpi-sub-val">0원</div>
+                </div>
+                <div class="kpi-sub-item">
+                    <div class="kpi-sub-label">예수금 (현금 잔고)</div>
+                    <div class="kpi-sub-val">0원</div>
+                </div>
+            </div>
+            
+        </section>
+        
+        
+        
+        <section class="card">
+            <div class="card-header">
+                <div class="card-title-group">
+                    <span class="card-icon">🤖</span>
+                    <h2 class="card-title">AI 투자 가이드 & 매수 전략</h2>
+                </div>
+                <span class="ai-dday-badge">수시 매수</span>
+            </div>
+
+            <div class="ai-guide-box">
+                <div class="ai-comment">
+                    설정된 투자 주기에 맞춰 낙폭 과대 종목 및 목표 비중 부족 종목을 우선하여 추천합니다.
+                </div>
+            </div>
+
+            <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 13px; font-weight: 700; color: #cbd5e1;">🎯 이번 주기 추천 매수 종목</span>
+                <span style="font-size: 13px; font-weight: 700; color: #a5b4fc;">합계 0원</span>
+            </div>
+
+            
+            <div style="text-align: center; padding: 14px; font-size: 13px; color: var(--text-dim);">
+                현재 즉시 매수를 요하는 비중 불균형 종목이 없습니다. (포트폴리오 균형 양호)
+            </div>
+            
+        </section>
+        
+        
+                <section class="card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <span class="card-icon">📊</span>
+                            <h2 class="card-title">등록 및 보유 종목 세부 현황</h2>
+                        </div>
+                        <span style="font-size: 12px; color: var(--text-dim);">2개 계좌 · 2개 종목</span>
+                    </div>
+                    <div class="account-tabs"><button class="account-tab-btn active" onclick="filterAccountPositions('all', this)">🌐 전체 (2개)</button><button class="account-tab-btn" onclick="filterAccountPositions('acc-group-1', this)">🏢 기본 퇴직연금 (1개)</button><button class="account-tab-btn" onclick="filterAccountPositions('acc-group-2', this)">🏢 공격형 위탁 (1개)</button></div>
+                    
+                    <div class="account-pos-group" id="acc-group-1">
+                        <div class="account-pos-header">
+                            <div class="account-group-title">
+                                <span class="account-badge-pill">계좌 1</span>
+                                <span class="account-name-label">기본 퇴직연금</span>
+                                <span class="account-broker-label">• 신한투자</span>
+                            </div>
+                            <div class="account-group-kpi">
+                                <span class="account-eval-amount">40,000,000원</span>
+                                <span class="badge badge-success">+14.28%</span>
+                            </div>
+                        </div>
+                        <div class="account-sub-meta">
+                            <span>원금 35,000,000원</span>
+                            <span>•</span>
+                            <span>예수금 2,000,000원</span>
+                            <span>•</span>
+                            <span>종목 1개</span>
+                        </div>
+                        <div>
+                            
+            <div class="pos-item">
+                <div class="pos-header">
+                    <span class="pos-name">KODEX 200 <span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">(069500)</span></span>
+                    <span class="pos-eval">4,000,000원</span>
+                </div>
+                
+                <div class="pos-details">
+                    <span>100주 × 40,000원</span>
+                    <span class="pl-plus">+5.00%</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 6px;">
+                    <span>현재비중: 10.0%</span>
+                    <span>목표비중: 15.0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: 10.0%;"></div>
+                </div>
+            </div>
+            
+                        </div>
+                    </div>
+                    
+
+                    <div class="account-pos-group" id="acc-group-2">
+                        <div class="account-pos-header">
+                            <div class="account-group-title">
+                                <span class="account-badge-pill">계좌 2</span>
+                                <span class="account-name-label">공격형 위탁</span>
+                                <span class="account-broker-label">• 토스증권</span>
+                            </div>
+                            <div class="account-group-kpi">
+                                <span class="account-eval-amount">20,000,000원</span>
+                                <span class="badge badge-success">+11.11%</span>
+                            </div>
+                        </div>
+                        <div class="account-sub-meta">
+                            <span>원금 18,000,000원</span>
+                            <span>•</span>
+                            <span>예수금 500,000원</span>
+                            <span>•</span>
+                            <span>종목 1개</span>
+                        </div>
+                        <div>
+                            
+            <div class="pos-item">
+                <div class="pos-header">
+                    <span class="pos-name">TIGER 나스닥100 <span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">(133690)</span></span>
+                    <span class="pos-eval">5,000,000원</span>
+                </div>
+                
+                <div class="pos-details">
+                    <span>50주 × 100,000원</span>
+                    <span class="pl-plus">+12.00%</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 6px;">
+                    <span>현재비중: 25.0%</span>
+                    <span>목표비중: 30.0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: 25.0%;"></div>
+                </div>
+            </div>
+            
+                        </div>
+                    </div>
+                    
+                    
+                <script>
+                function filterAccountPositions(targetId, btnElement) {
+                    var groups = document.querySelectorAll('.account-pos-group');
+                    var btns = document.querySelectorAll('.account-tab-btn');
+                    for (var i = 0; i < btns.length; i++) {
+                        btns[i].classList.remove('active');
+                    }
+                    if (btnElement) {
+                        btnElement.classList.add('active');
+                    }
+                    for (var j = 0; j < groups.length; j++) {
+                        if (targetId === 'all' || groups[j].id === targetId) {
+                            groups[j].style.display = 'block';
+                        } else {
+                            groups[j].style.display = 'none';
+                        }
+                    }
+                }
+                </script>
+                
+                </section>
+                
+        
+
+        <!-- 푸터 -->
+        <footer class="footer">
+            <p>퇴직연금 & 자산배분 스마트 포트폴리오 매니저</p>
+            <p style="font-size: 11px; color: #475569;">본 리포트는 개인 자산관리 참고용이며 투자 권유가 아닙니다.</p>
+        </footer>
+    </div>
+</body>
+</html>
