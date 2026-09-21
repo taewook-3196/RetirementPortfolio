@@ -6,7 +6,7 @@ news_filter_mode: all
 show_splash_screen: true
 morning_report:
   enabled: false
-  send_time: 07:00
+  send_time: 06:32
   kakao_rest_api_key: ''
   kakao_access_token: ''
   kakao_refresh_token: ''
