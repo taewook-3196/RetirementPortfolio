@@ -23,7 +23,7 @@ morning_report:
   gemini_enabled: true
   gemini_api_key: ''
   gemini_model: gemini-3.8-flash
-  ai_investment_stance: aggressive
+  ai_investment_stance: balanced
 etfs:
 - ticker: '442560'
   name: RISE TDF2040액티브
