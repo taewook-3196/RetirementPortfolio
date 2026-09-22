@@ -176,20 +176,44 @@ class MacroIndicatorService:
             first = res_list[0]
             chart_meta = first.get("meta", {})
             current_price = chart_meta.get("regularMarketPrice", 0.0)
-            prev_close = chart_meta.get("chartPreviousClose", current_price)
-
-            # 전일 대비 등락률
-            change_pct = 0.0
-            if prev_close and prev_close > 0:
-                change_pct = ((current_price - prev_close) / prev_close) * 100.0
-
-            # 5일 종가 히스토리
+            
+            # 5일 종가 히스토리 추출 (None제외)
             closes: List[float] = []
             quotes = first.get("indicators", {}).get("quote", [])
             if quotes:
                 raw_closes = quotes[0].get("close", [])
                 closes = [c for c in raw_closes if c is not None]
 
+            # 정확한 직전 거래일 종가(prev_close) 및 당일 등락률(change_pct) 판별:
+            # 1순위: Yahoo Finance meta의 공식 거래소 피드(regularMaketChangePercent, fulldayChange) 직접 활용
+            reg_chg_pct = chart_meta.get("regularMarketChangePercent")
+            full_chg = chart_meta.get("fulldayChange")
+
+            if reg_chg_pct is not None:
+                change_pct = float(reg_chg_pct)
+                if full_chg is not None:
+                    prev_close = current_price - float(full_chg)
+                elif change_pct != -100.0:
+                    prev_close = current_price / (1.0 + (change_pct / 100.0))
+                else:
+                    prev_close = current_price
+            else:
+                # 2순위 Fallback : 5일 종가 히스토리 기반 직전 거래일 종가 추출
+                prev_close = 0.0
+                if len(closes) >= 2:
+                    if abs(current_price - closes[-1]) / max(current_price, 1e-6) < 0.0005:
+                        prev_close = closes[-2]
+                    else:
+                        prev_close = closes[-1]
+                elif len(closes) == 1:
+                    prev_close = closes[0]
+                else:
+                    prev_close = chart_meta.get("previousClose") or chart_meta.get("chartPreviousClose", current_price)
+
+                change_pct = 0.0
+                if prev_close and prev_close > 0:
+                    change_pct = ((current_price - prev_close) / prev_close) * 100.0
+                    
             # 트렌드 분석
             trend, trend_badge, five_d_pct = self._calculate_trend(current_price, closes, change_pct)
 
