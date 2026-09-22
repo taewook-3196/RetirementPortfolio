@@ -1,9 +1,9 @@
 name: Morning Portfolio Report & KakaoTalk Notification
 
 on:
-  # 매일 한국시간 11:31 (UTC 2:31) 정기 실행
+  # 매일 한국시간 6:34 (UTC 21:34) 정기 실행
   schedule:
-    - cron: '31 2 * * *'
+    - cron: '34 21 * * *'
   # GitHub API 또는 데스크톱 앱에서 원격 수동 즉시 실행 지원
   workflow_dispatch:
 
