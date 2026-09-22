@@ -42,6 +42,7 @@ jobs:
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          AI_INVESTMENT_STANCE: ${{ vars.AI_INVESTMENT_STANCE || '' }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_PAGES_BASE_URL: https://${{ github.repository_owner }}.github.io/RetirementPortfolio
