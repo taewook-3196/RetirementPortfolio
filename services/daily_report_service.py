@@ -13,7 +13,7 @@ import sys
 import logging
 import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple
 
 from core.config import AppConfig, MorningReportConfig, ETFConfig, load_config
 from core.paths import get_project_root, get_report_dir
@@ -94,7 +94,7 @@ class DailyReportService:
                     acc_sum = self.portfolio_service.get_summary(acc_pos_raw, account_id=acc.id)
                     acc_eval = getattr(acc_sum, "total_current_value", 0.0)
                     acc_cost = getattr(acc_sum, "total_invested", 0.0)
-                    acc_pl = getattr(acc_sum, "total_unrealized_pnl", 0.0)
+                    acc_pl = getattr(acc_sum, "total_pnl", getattr(acc_sum, "total_unrealized_pnl", 0.0))
                     acc_pl_pct = getattr(acc_sum, "total_roi", 0.0) * 100.0
                     acc_cash = getattr(acc_sum, "remaining_cash", 0.0)
 
@@ -248,7 +248,7 @@ class DailyReportService:
             summary = {
                 "total_eval": getattr(summary_raw, "total_current_value", 0),
                 "total_cost": getattr(summary_raw, "total_invested", 0),
-                "total_pl": getattr(summary_raw, "total_unrealized_pnl", 0),
+                "total_pl": getattr(summary_raw, "total_pnl", getattr(summary_raw, "total_unrealized_pnl", 0)),
                 "total_pl_pct": getattr(summary_raw, "total_roi", 0.0) * 100.0,
                 "cash_balance": getattr(summary_raw, "remaining_cash", 0),
             }
@@ -326,16 +326,20 @@ class DailyReportService:
             market_indices = {}
             if self.config.morning_report.include_market_indices:
                 # KOSPI 200 등 시세 조회
-                kodex_price = self.repo.get_latest_price("069500")
-                if kodex_price:
+                p_hist = self.repo.get_prices("069500", limit=2)
+                if p_hist:
+                    latest = p_hist[-1]
                     chg_pct = 0.0
-                    if kodex_price.open_price and kodex_price.open_price > 0:
-                        chg_pct = ((kodex_price.close_price - kodex_price.open_price) / kodex_price.open_price) * 100.0
+                    if len(p_hist) >= 2 and p_hist[-2].close_price > 0:
+                        prev_close = p_hist[-2].close_price
+                        chg_pct = ((latest.close_price - prev_close) / prev_close) * 100.0
+                    elif latest.open_price and latest.open_price > 0:
+                        chg_pct = ((latest.close_price - latest.open_price) / latest.open_price) * 100.0
                     market_indices["KODEX 200"] = {
-                        "price": f"{kodex_price.close_price:,.0f}원",
+                        "price": f"{latest.close_price:,.0f}원",
                         "change_pct": round(chg_pct, 2),
                     }
-
+                
             # 3-1. 글로벌 10대 거시경제 지표 및 5일 트렌드 데이터 수집
             macro_data = {}
             macro_summary = ""
