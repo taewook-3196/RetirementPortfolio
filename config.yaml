@@ -33,8 +33,8 @@ etfs:
   name: TIGER 미국S&P500동일가중
   target_weight: 0.25
   dividend_yield: 0.015
-- ticker: '494840'
-  name: TIGER 미국나스닥TOP10
+- ticker: '381170'
+  name: TIGER 미국테크TOP10 INDXX
   target_weight: 0.15
   dividend_yield: 0.01
 watchlist:
