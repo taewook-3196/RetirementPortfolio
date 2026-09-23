@@ -1,10 +1,10 @@
-name: Test Supabase Web Configuration
+name: Test Login Page
 
 on:
   workflow_dispatch:
 
 jobs:
-  test-web-config:
+  test-login-page:
     runs-on: ubuntu-latest
 
     env:
@@ -15,75 +15,116 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate Supabase web configuration
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Test login page
         run: |
           python - <<'PY'
-          import os
           import sys
 
           try:
-              print("1. Checking SUPABASE_URL...")
+              print("1. Importing web application...")
 
-              url = os.environ.get(
-                  "SUPABASE_URL",
-                  "",
-              ).strip()
-
-              if not url:
-                  raise RuntimeError(
-                      "SUPABASE_URL is missing."
-                  )
-
-              if not (
-                  url.startswith("https://")
-                  and url.endswith(".supabase.co")
-              ):
-                  raise RuntimeError(
-                      "SUPABASE_URL has an unexpected format."
-                  )
+              from web.app import app, home
 
               print(
-                  "   SUCCESS: SUPABASE_URL is configured."
+                  "   SUCCESS: web application imported."
               )
 
-              print("2. Checking browser API key...")
+              print("2. Generating login page...")
 
-              api_key = os.environ.get(
-                  "SUPABASE_ANON_KEY",
-                  "",
-              ).strip()
+              response = home()
 
-              if not api_key:
+              if response.status_code != 200:
                   raise RuntimeError(
-                      "SUPABASE_ANON_KEY is missing."
+                      "Login page returned "
+                      f"status {response.status_code}."
                   )
 
-              if not (
-                  api_key.startswith("eyJ")
-                  or api_key.startswith("sb_publishable_")
-              ):
+              html = response.body.decode("utf-8")
+
+              print(
+                  "   SUCCESS: login page generated."
+              )
+
+              print("3. Checking login form...")
+
+              required_text = [
+                  'id="login-form"',
+                  'id="email"',
+                  'id="password"',
+                  'id="login-button"',
+                  "/auth/v1/token",
+              ]
+
+              for text in required_text:
+                  if text not in html:
+                      raise RuntimeError(
+                          f"Missing login page element: "
+                          f"{text}"
+                      )
+
+              print(
+                  "   SUCCESS: login form is present."
+              )
+
+              print("4. Checking Supabase configuration...")
+
+              if "__SUPABASE_URL__" in html:
                   raise RuntimeError(
-                      "SUPABASE_ANON_KEY has an "
-                      "unexpected format."
+                      "SUPABASE_URL placeholder "
+                      "was not replaced."
+                  )
+
+              if "__SUPABASE_KEY__" in html:
+                  raise RuntimeError(
+                      "SUPABASE key placeholder "
+                      "was not replaced."
                   )
 
               print(
-                  "   SUCCESS: browser API key "
-                  "is configured."
+                  "   SUCCESS: Supabase browser "
+                  "configuration is injected."
+              )
+
+              print("5. Checking server secrets...")
+
+              forbidden_text = [
+                  "DATABASE_URL",
+                  "REPORT_USER_ID",
+                  "service_role",
+                  "postgresql+psycopg2://",
+              ]
+
+              for text in forbidden_text:
+                  if text in html:
+                      raise RuntimeError(
+                          "Server-only information "
+                          f"appeared in HTML: {text}"
+                      )
+
+              print(
+                  "   SUCCESS: server-only secrets "
+                  "are not present in the page."
               )
 
               print("")
               print(
-                  "SUCCESS: Supabase web "
-                  "configuration is ready."
+                  "SUCCESS: Supabase login page "
+                  "is ready for authentication testing."
               )
 
           except Exception as exc:
               print("")
-              print(
-                  "ERROR: Supabase web "
-                  "configuration test failed."
-              )
+              print("ERROR: Login page test failed.")
               print(
                   f"{type(exc).__name__}: {exc}"
               )
