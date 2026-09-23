@@ -243,6 +243,85 @@ def get_accounts_api(
         )
 
 
+@app.get(
+    "/api/accounts/{account_id}/targets"
+)
+def get_account_targets_api(
+    account_id: int,
+    authorization: str | None = Header(
+        default=None
+    ),
+):
+    """
+    로그인한 사용자의 특정 계좌
+    목표 투자 비중을 조회합니다.
+    """
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        targets = repo.get_account_targets(
+            account_id=account_id
+        )
+
+        return {
+            "account_id": account.id,
+            "account_name":
+                account.account_name,
+
+            "targets": [
+                {
+                    "ticker":
+                        target.ticker,
+
+                    "name":
+                        target.name,
+
+                    "target_weight":
+                        float(
+                            target.target_weight
+                            or 0
+                        ),
+
+                    "dividend_yield":
+                        float(
+                            target.dividend_yield
+                            or 0
+                        ),
+                }
+                for target in targets
+            ],
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "목표 투자 비중을 "
+                "불러오지 못했습니다."
+            ),
+        )
+        
+
 @app.post(
     "/api/accounts",
     status_code=201,
