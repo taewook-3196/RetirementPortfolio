@@ -25,7 +25,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Test investment profile operations
+      - name: Test watchlist operations
         run: |
           python - <<'PY'
           import os
@@ -36,7 +36,8 @@ jobs:
           from database.repository import Repository
 
           repo = None
-          created = False
+          test_ticker = None
+          added = False
 
           try:
               print("1. Testing database connection...")
@@ -56,193 +57,225 @@ jobs:
               user_id = UUID(user_id_text)
 
               print("2. Creating user-scoped Repository...")
+
               repo = Repository(
                   user_id=str(user_id)
               )
+
               print("   SUCCESS: Repository created.")
 
-              # 이전 실패 테스트의 임시 데이터가 있다면 정리
-              existing = repo.get_investment_profile()
+              print("3. Finding test asset...")
 
-              if existing is not None:
-                  print(
-                      "   Existing investment profile found."
+              assets = repo.search_etf_master(
+                  keyword="",
+                  limit=10,
+              )
+
+              if not assets:
+                  raise RuntimeError(
+                      "asset_master is empty. "
+                      "No asset is available for "
+                      "the watchlist test."
                   )
-                  print(
-                      "   Removing it before the test."
-                  )
-                  repo.delete_investment_profile()
 
-              print("3. Creating investment profile...")
+              test_ticker = assets[0]["ticker"]
+              test_name = assets[0]["name"]
 
-              profile = repo.save_investment_profile(
-                  risk_profile="balanced",
-                  investment_horizon_years=15,
-                  target_return=7.5,
-                  max_drawdown=20.0,
-                  monthly_investment=1000000,
-                  preferred_markets=[
-                      "KR",
-                      "US",
-                  ],
-                  excluded_assets=[
-                      "CRYPTO",
-                  ],
-                  ai_advice_enabled=True,
-                  ai_advice_style="balanced",
+              print(
+                  f"   Test asset: "
+                  f"{test_ticker} {test_name}"
+              )
+
+              # 이전 실패 테스트에서 같은 사용자의
+              # 임시 관심종목이 남아 있을 가능성을 정리
+              repo.remove_watchlist(
+                  test_ticker
+              )
+
+              print("4. Adding watchlist item...")
+
+              watch = repo.add_watchlist(
+                  ticker=test_ticker,
                   memo="GitHub Actions test",
-                  investment_preference_text=(
-                      "장기 투자와 ETF 중심 투자를 선호합니다."
-                  ),
               )
 
-              created = True
+              added = True
+
+              if watch.ticker != test_ticker:
+                  raise RuntimeError(
+                      "Wrong ticker was saved."
+                  )
 
               print(
-                  "   SUCCESS: investment profile created."
-              )
-              print(
-                  f"   Profile id: {profile.id}"
+                  "   SUCCESS: watchlist item added."
               )
 
-              print("4. Reading investment profile...")
+              print("5. Reading watchlist...")
 
-              saved = repo.get_investment_profile()
+              watchlist = repo.get_watchlist()
 
-              if saved is None:
+              matches = [
+                  item
+                  for item in watchlist
+                  if item["ticker"] == test_ticker
+              ]
+
+              if len(matches) != 1:
                   raise RuntimeError(
-                      "Investment profile could not be read."
+                      "Watchlist item could not be "
+                      "read correctly."
                   )
 
-              if saved.risk_profile != "balanced":
-                  raise RuntimeError(
-                      "risk_profile was not saved correctly."
-                  )
-
-              if list(saved.preferred_markets or []) != [
-                  "KR",
-                  "US",
-              ]:
-                  raise RuntimeError(
-                      "preferred_markets was not saved correctly."
-                  )
-
-              if (
-                  saved.investment_preference_text
-                  != "장기 투자와 ETF 중심 투자를 선호합니다."
+              if matches[0]["memo"] != (
+                  "GitHub Actions test"
               ):
                   raise RuntimeError(
-                      "investment_preference_text "
-                      "was not saved correctly."
+                      "Watchlist memo was not "
+                      "saved correctly."
                   )
 
               print(
-                  "   SUCCESS: investment profile read."
+                  "   SUCCESS: watchlist item read."
               )
 
-              print("5. Updating investment profile...")
+              print("6. Updating watchlist memo...")
 
-              updated = repo.save_investment_profile(
-                  risk_profile="growth",
-                  investment_horizon_years=20,
-                  target_return=9.0,
-                  max_drawdown=25.0,
-                  monthly_investment=1500000,
-                  preferred_markets=[
-                      "US",
-                      "KR",
-                  ],
-                  excluded_assets=[],
-                  ai_advice_enabled=True,
-                  ai_advice_style="detailed",
-                  memo="Updated GitHub Actions test",
-                  investment_preference_text=(
-                      "장기 투자하며 미국 시장 비중을 "
-                      "높이고 ETF 중심으로 운용합니다."
-                  ),
+              updated = repo.update_watchlist_memo(
+                  ticker=test_ticker,
+                  memo="Updated test memo",
               )
 
-              if updated.id != profile.id:
+              if not updated:
                   raise RuntimeError(
-                      "Update created a second profile."
+                      "Watchlist memo update failed."
                   )
 
-              check = repo.get_investment_profile()
+              watchlist = repo.get_watchlist()
 
-              if check is None:
-                  raise RuntimeError(
-                      "Updated investment profile "
-                      "could not be read."
-                  )
+              matches = [
+                  item
+                  for item in watchlist
+                  if item["ticker"] == test_ticker
+              ]
 
-              if check.risk_profile != "growth":
+              if (
+                  len(matches) != 1
+                  or matches[0]["memo"]
+                  != "Updated test memo"
+              ):
                   raise RuntimeError(
-                      "Investment profile update failed."
-                  )
-
-              if float(check.monthly_investment) != 1500000:
-                  raise RuntimeError(
-                      "monthly_investment update failed."
+                      "Updated memo could not be "
+                      "verified."
                   )
 
               print(
-                  "   SUCCESS: investment profile updated."
+                  "   SUCCESS: watchlist memo updated."
               )
 
-              print("6. Deleting investment profile...")
+              print("7. Testing duplicate handling...")
 
-              if not repo.delete_investment_profile():
-                  raise RuntimeError(
-                      "Investment profile deletion failed."
-                  )
-
-              created = False
-
-              print(
-                  "   SUCCESS: investment profile deleted."
+              duplicate = repo.add_watchlist(
+                  ticker=test_ticker,
+                  memo="Duplicate test memo",
               )
 
-              print("7. Verifying deletion...")
-
-              if repo.get_investment_profile() is not None:
+              if duplicate.ticker != test_ticker:
                   raise RuntimeError(
-                      "Investment profile still exists "
-                      "after deletion."
+                      "Duplicate handling returned "
+                      "the wrong item."
+                  )
+
+              watchlist = repo.get_watchlist()
+
+              matches = [
+                  item
+                  for item in watchlist
+                  if item["ticker"] == test_ticker
+              ]
+
+              if len(matches) != 1:
+                  raise RuntimeError(
+                      "Duplicate watchlist row "
+                      "was created."
+                  )
+
+              if matches[0]["memo"] != (
+                  "Duplicate test memo"
+              ):
+                  raise RuntimeError(
+                      "Duplicate add did not update "
+                      "the existing memo."
                   )
 
               print(
-                  "   SUCCESS: deletion verified."
+                  "   SUCCESS: duplicate handled "
+                  "without creating another row."
+              )
+
+              print("8. Removing watchlist item...")
+
+              removed = repo.remove_watchlist(
+                  test_ticker
+              )
+
+              if not removed:
+                  raise RuntimeError(
+                      "Watchlist removal failed."
+                  )
+
+              added = False
+
+              print(
+                  "   SUCCESS: watchlist item removed."
+              )
+
+              print("9. Verifying removal...")
+
+              remaining = repo.get_watchlist()
+
+              if any(
+                  item["ticker"] == test_ticker
+                  for item in remaining
+              ):
+                  raise RuntimeError(
+                      "Watchlist item still exists "
+                      "after removal."
+                  )
+
+              print(
+                  "   SUCCESS: removal verified."
               )
 
               print("")
               print(
-                  "SUCCESS: User investment profile "
-                  "operations are working with Supabase."
+                  "SUCCESS: User watchlist operations "
+                  "are working with Supabase."
               )
 
           except Exception as exc:
               print("")
               print(
-                  "ERROR: Investment profile test failed."
+                  "ERROR: Watchlist test failed."
               )
               print(
                   f"{type(exc).__name__}: {exc}"
               )
 
-              if created and repo is not None:
+              if (
+                  added
+                  and repo is not None
+                  and test_ticker
+              ):
                   print(
                       "Attempting cleanup of temporary "
-                      "investment profile..."
+                      "watchlist item..."
                   )
 
                   try:
-                      if repo.delete_investment_profile():
-                          print("Cleanup successful.")
-                      else:
-                          print(
-                              "No temporary profile "
-                              "was found."
-                          )
+                      repo.remove_watchlist(
+                          test_ticker
+                      )
+                      print("Cleanup completed.")
                   except Exception as cleanup_exc:
                       print(
                           "Cleanup failed: "
