@@ -101,6 +101,20 @@ class ETFSearchDialog(QDialog):
         kw = self.search_input.text().strip()
         results = self.repo.search_etf_master(keyword=kw, limit=100)
 
+        # 6자리 종목코드 입력 시 DB에 없으면 네이버에서 실시간 공식 명칭 조회 및 자동 등록
+        if kw.isdigit() and len(kw) == 6:
+            existing_tickers = {r["ticker"] for r in results}
+            if kw not in existing_tickers:
+                try:
+                    from data.naver_client import NaverFinanceClient
+                    client = NaverFinanceClient()
+                    online_name = client._fetch_stock_name(kw)
+                    if online_name:
+                        self.repo.save_etf_master([{"ticker": kw, "name": online_name}])
+                        results.insert(0, {"ticker": kw, "name": online_name})
+                except Exception:
+                    pass
+
         self.table.blockSignals(True)
         self.table.setRowCount(len(results))
         for row, it in enumerate(results):
