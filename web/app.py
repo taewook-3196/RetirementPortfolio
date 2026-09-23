@@ -1,10 +1,12 @@
 """
 web/app.py
 
-RetirementPortfolio 모바일 웹 애플리케이션의 시작점.
+RetirementPortfolio 모바일 웹 애플리케이션.
 """
 
 from __future__ import annotations
+
+import os
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
@@ -12,7 +14,7 @@ from fastapi.responses import HTMLResponse
 
 app = FastAPI(
     title="RetirementPortfolio",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 
@@ -27,17 +29,41 @@ def health_check():
 
 @app.get("/", response_class=HTMLResponse)
 def home():
-    """모바일 웹 첫 화면."""
-    return """
+    """모바일 로그인 화면."""
+
+    supabase_url = os.getenv(
+        "SUPABASE_URL",
+        "",
+    ).strip()
+
+    supabase_key = os.getenv(
+        "SUPABASE_ANON_KEY",
+        "",
+    ).strip()
+
+    if not supabase_url or not supabase_key:
+        return HTMLResponse(
+            content="""
+            <h1>웹 설정 오류</h1>
+            <p>
+                Supabase 웹 인증 설정이 없습니다.
+            </p>
+            """,
+            status_code=500,
+        )
+
+    html = """
     <!DOCTYPE html>
     <html lang="ko">
     <head>
         <meta charset="UTF-8">
+
         <meta
             name="viewport"
             content="width=device-width, initial-scale=1.0"
         >
-        <title>RetirementPortfolio</title>
+
+        <title>RetirementPortfolio 로그인</title>
 
         <style>
             * {
@@ -58,40 +84,82 @@ def home():
 
             .container {
                 width: 100%;
-                max-width: 520px;
-                margin: 0 auto;
+                max-width: 480px;
+                margin: 40px auto;
             }
 
             .card {
                 background: white;
-                border-radius: 16px;
-                padding: 24px;
+                border-radius: 18px;
+                padding: 26px 22px;
                 box-shadow:
-                    0 2px 12px rgba(0, 0, 0, 0.08);
+                    0 2px 14px rgba(0, 0, 0, 0.08);
             }
 
             h1 {
                 margin: 0 0 8px;
-                font-size: 24px;
+                font-size: 25px;
             }
 
             .subtitle {
-                margin: 0 0 24px;
+                margin: 0 0 26px;
                 color: #666;
                 line-height: 1.5;
             }
 
-            .status {
-                padding: 16px;
-                border-radius: 12px;
-                background: #f0f4f8;
-                line-height: 1.6;
+            label {
+                display: block;
+                margin: 18px 0 7px;
+                font-weight: 600;
             }
 
-            .next {
-                margin-top: 20px;
+            input {
+                width: 100%;
+                min-height: 48px;
+                padding: 12px;
+                border: 1px solid #d5d9df;
+                border-radius: 10px;
+                font-size: 16px;
+            }
+
+            button {
+                width: 100%;
+                min-height: 50px;
+                margin-top: 24px;
+                border: 0;
+                border-radius: 10px;
+                background: #202124;
+                color: white;
+                font-size: 16px;
+                font-weight: 700;
+                cursor: pointer;
+            }
+
+            button:disabled {
+                opacity: 0.55;
+            }
+
+            #message {
+                min-height: 24px;
+                margin-top: 18px;
+                line-height: 1.5;
                 font-size: 14px;
-                color: #666;
+            }
+
+            .success {
+                color: #137333;
+            }
+
+            .error {
+                color: #b3261e;
+            }
+
+            .security {
+                margin-top: 24px;
+                padding-top: 18px;
+                border-top: 1px solid #eee;
+                color: #777;
+                font-size: 13px;
                 line-height: 1.6;
             }
         </style>
@@ -100,24 +168,171 @@ def home():
     <body>
         <main class="container">
             <section class="card">
+
                 <h1>RetirementPortfolio</h1>
 
                 <p class="subtitle">
-                    스마트폰·태블릿용
-                    포트폴리오 관리 서비스
+                    포트폴리오 관리를 위해 로그인하세요.
                 </p>
 
-                <div class="status">
-                    웹 애플리케이션이 정상적으로
-                    실행되고 있습니다.
+                <form id="login-form">
+
+                    <label for="email">
+                        이메일
+                    </label>
+
+                    <input
+                        id="email"
+                        type="email"
+                        autocomplete="email"
+                        required
+                    >
+
+                    <label for="password">
+                        비밀번호
+                    </label>
+
+                    <input
+                        id="password"
+                        type="password"
+                        autocomplete="current-password"
+                        required
+                    >
+
+                    <button
+                        id="login-button"
+                        type="submit"
+                    >
+                        로그인
+                    </button>
+
+                </form>
+
+                <div id="message"></div>
+
+                <div class="security">
+                    비밀번호 인증은 Supabase Auth가
+                    처리하며 포트폴리오 데이터베이스에
+                    비밀번호를 저장하지 않습니다.
                 </div>
 
-                <div class="next">
-                    다음 단계에서 로그인과
-                    계좌 관리 화면을 연결합니다.
-                </div>
             </section>
         </main>
+
+        <script>
+            const SUPABASE_URL = "__SUPABASE_URL__";
+            const SUPABASE_KEY = "__SUPABASE_KEY__";
+
+            const form =
+                document.getElementById("login-form");
+
+            const button =
+                document.getElementById("login-button");
+
+            const message =
+                document.getElementById("message");
+
+            form.addEventListener(
+                "submit",
+                async (event) => {
+                    event.preventDefault();
+
+                    message.textContent = "";
+                    message.className = "";
+
+                    button.disabled = true;
+                    button.textContent = "로그인 중...";
+
+                    const email =
+                        document.getElementById(
+                            "email"
+                        ).value.trim();
+
+                    const password =
+                        document.getElementById(
+                            "password"
+                        ).value;
+
+                    try {
+                        const response = await fetch(
+                            SUPABASE_URL
+                            + "/auth/v1/token"
+                            + "?grant_type=password",
+                            {
+                                method: "POST",
+
+                                headers: {
+                                    "Content-Type":
+                                        "application/json",
+
+                                    "apikey":
+                                        SUPABASE_KEY,
+                                },
+
+                                body: JSON.stringify({
+                                    email: email,
+                                    password: password,
+                                }),
+                            }
+                        );
+
+                        const data =
+                            await response.json();
+
+                        if (
+                            !response.ok
+                            || !data.access_token
+                        ) {
+                            throw new Error(
+                                data.error_description
+                                || data.msg
+                                || "로그인에 실패했습니다."
+                            );
+                        }
+
+                        sessionStorage.setItem(
+                            "access_token",
+                            data.access_token
+                        );
+
+                        sessionStorage.setItem(
+                            "refresh_token",
+                            data.refresh_token || ""
+                        );
+
+                        message.textContent =
+                            "로그인에 성공했습니다.";
+
+                        message.className =
+                            "success";
+
+                    } catch (error) {
+                        message.textContent =
+                            error.message
+                            || "로그인에 실패했습니다.";
+
+                        message.className =
+                            "error";
+
+                    } finally {
+                        button.disabled = false;
+                        button.textContent = "로그인";
+                    }
+                }
+            );
+        </script>
     </body>
     </html>
     """
+
+    html = html.replace(
+        "__SUPABASE_URL__",
+        supabase_url,
+    )
+
+    html = html.replace(
+        "__SUPABASE_KEY__",
+        supabase_key,
+    )
+
+    return HTMLResponse(content=html)
