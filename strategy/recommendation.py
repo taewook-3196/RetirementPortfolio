@@ -1,29 +1,34 @@
 """
 strategy/recommendation.py
-개인 퇴직연금 ETF 월간 매수 의사결정 추천 엔진.
-- 기본 매수금(1,000만원) 배분
-- 하락률 구간별 추가 매수금(200만~1,500만) 산정
-- 월간 추가매수 한도(1,500만원) 준수 (월 최대 매수: 2,500만원)
-- 총 투자원금(1억원) 잔액 한도 체크 및 자동 조정
+
+개인 퇴직연금/투자 포트폴리오 매수 의사결정 추천 엔진.
+
+- 기본 매수금 배분
+- 하락률 구간별 추가 매수금 산정
+- 주기별 추가매수 한도 적용
+- 전체 투자 가능 원금 한도 적용
 - 목표비중 초과 종목 추가매수 제한
+- 목표비중 0 이하 종목 매수 제외
 - 매수 후 예상 비중 계산
-- 친절하고 직관적인 자연어 추천 사유 자동 생성
+- 추천 사유 생성
+- 소수점 보유 수량 및 float 기반 금액 처리
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List
+
+from strategy.allocation import (
+    calculate_weight_gap,
+    calculate_weight_gap_score,
+)
+from strategy.buy_signal import calculate_priority_score
 from strategy.drawdown import (
     calculate_drawdown,
     calculate_drawdown_score,
     get_additional_buy_by_tier,
 )
-from strategy.allocation import (
-    calculate_weight_gap,
-    calculate_weight_gap_score,
-    calculate_current_weights,
-)
-from strategy.buy_signal import calculate_priority_score
 
 
 @dataclass
@@ -33,7 +38,11 @@ class ETFRecommendationInput:
     target_weight: float
     current_price: float
     recent_3m_high: float
-    holding_quantity: int = 0
+
+    # 미국 주식 등의 소수점 보유 수량도 지원
+    holding_quantity: float = 0.0
+
+    # 현재 해당 종목의 평가금액
     current_asset_value: float = 0.0
 
 
@@ -41,205 +50,716 @@ class ETFRecommendationInput:
 class ETFRecommendationResult:
     ticker: str
     name: str
+
     target_weight: float
     current_weight: float
     weight_gap: float
+
     recent_high: float
     current_price: float
+
     drawdown: float
     drawdown_score: int
     weight_gap_score: float
     priority_score: float
-    base_buy: int
-    additional_buy: int
-    recommended_buy: int
+
+    base_buy: float
+    additional_buy: float
+    recommended_buy: float
+
     expected_weight_after: float
     reason: str
 
 
+def _round_buy_amount(
+    amount: float,
+) -> float:
+    """
+    추천 매수 금액을 1만원 단위로 반올림합니다.
+
+    기존 추천 엔진의 동작을 유지하되
+    내부 계산은 float 기반으로 처리합니다.
+    """
+    return float(
+        round(
+            float(amount),
+            -4,
+        )
+    )
+
+
 def generate_recommendations(
     inputs: List[ETFRecommendationInput],
-    initial_capital: int = 100000000,
-    base_monthly: int = 10000000,
-    max_additional_monthly: int = 15000000,
-    total_invested_so_far: int = 0,
+    initial_capital: float = 100_000_000.0,
+    base_monthly: float = 10_000_000.0,
+    max_additional_monthly: float = 15_000_000.0,
+    total_invested_so_far: float = 0.0,
     already_invested_in_cycle: bool = False,
     cycle_desc: str = "",
 ) -> Dict[str, Any]:
     """
-    모든 포트폴리오 데이터를 종합하여 종목별 최종 매수 추천 결과를 산출합니다.
-    - already_invested_in_cycle=True인 경우 해당 주기에 이미 납입(매수)한 이력이 있으므로 추가 매수 추천을 0원으로 제한합니다.
+    포트폴리오 데이터를 종합하여
+    종목별 매수 추천 결과를 계산합니다.
+
+    already_invested_in_cycle=True이면
+    해당 주기에 이미 납입/매수한 것으로 보고
+    추가 매수 추천을 제한합니다.
     """
+
+    # -------------------------------------------------------------
+    # 입력값 정규화
+    # -------------------------------------------------------------
+
+    initial_capital = max(
+        0.0,
+        float(initial_capital or 0),
+    )
+
+    base_monthly = max(
+        0.0,
+        float(base_monthly or 0),
+    )
+
+    max_additional_monthly = max(
+        0.0,
+        float(max_additional_monthly or 0),
+    )
+
+    total_invested_so_far = max(
+        0.0,
+        float(total_invested_so_far or 0),
+    )
+
+    remaining_cash = max(
+        0.0,
+        initial_capital - total_invested_so_far,
+    )
+
+    # -------------------------------------------------------------
+    # 추천 대상이 없는 경우
+    # -------------------------------------------------------------
+
     if not inputs:
-        remaining_cash = max(0, initial_capital - total_invested_so_far)
         summary = {
             "initial_capital": initial_capital,
             "total_invested_so_far": total_invested_so_far,
             "remaining_cash": remaining_cash,
             "base_monthly_budget": base_monthly,
-            "total_additional_buy": 0,
-            "total_recommended_buy": 0,
+            "total_additional_buy": 0.0,
+            "total_recommended_buy": 0.0,
             "total_portfolio_value_now": 0.0,
             "total_portfolio_value_expected": 0.0,
             "already_invested_in_cycle": already_invested_in_cycle,
             "cycle_desc": cycle_desc,
         }
-        return {"summary": summary, "recommendations": []}
 
-    # 1. 포트폴리오 총 평가액 및 현재 비중 계산
-    total_portfolio_value = sum(item.current_asset_value for item in inputs)
-    weights_map = {}
-    if total_portfolio_value > 0:
-        for item in inputs:
-            weights_map[item.ticker] = item.current_asset_value / total_portfolio_value
-    else:
-        for item in inputs:
-            weights_map[item.ticker] = 0.0
+        return {
+            "summary": summary,
+            "recommendations": [],
+        }
 
-    # 2. 1차 분석: 낙폭, 스코어, 추가매수 요구액 계산
-    parsed_items = []
-    total_requested_additional = 0
+    # -------------------------------------------------------------
+    # 1. 현재 포트폴리오 총 평가액 및 비중 계산
+    # -------------------------------------------------------------
+
+    total_portfolio_value = sum(
+        max(
+            0.0,
+            float(
+                item.current_asset_value
+                or 0
+            ),
+        )
+        for item in inputs
+    )
+
+    weights_map: Dict[str, float] = {}
 
     for item in inputs:
-        cur_weight = weights_map[item.ticker]
-        weight_gap = calculate_weight_gap(item.target_weight, cur_weight)
-        drawdown = calculate_drawdown(item.current_price, item.recent_3m_high)
-        dd_score = calculate_drawdown_score(drawdown)
-        wg_score = calculate_weight_gap_score(weight_gap)
-        priority_score = calculate_priority_score(dd_score, wg_score, weight_gap)
+        current_asset_value = max(
+            0.0,
+            float(
+                item.current_asset_value
+                or 0
+            ),
+        )
 
-        # 추가매수 금액 결정
-        # 단, 목표비중 초과(weight_gap <= 0)이거나 이미 이번 주기에 납입(매수)한 경우 추가매수 제외
-        if weight_gap <= 0 or already_invested_in_cycle:
-            raw_additional = 0
+        if total_portfolio_value > 0:
+            weights_map[item.ticker] = (
+                current_asset_value
+                / total_portfolio_value
+            )
         else:
-            raw_additional = get_additional_buy_by_tier(drawdown)
+            weights_map[item.ticker] = 0.0
 
-        total_requested_additional += raw_additional
+    # -------------------------------------------------------------
+    # 2. 낙폭, 비중 부족, 우선순위 및 추가매수 요구액 계산
+    # -------------------------------------------------------------
 
-        parsed_items.append({
-            "item": item,
-            "cur_weight": cur_weight,
-            "weight_gap": weight_gap,
-            "drawdown": drawdown,
-            "dd_score": dd_score,
-            "wg_score": wg_score,
-            "priority_score": priority_score,
-            "raw_additional": raw_additional,
-        })
+    parsed_items: List[
+        Dict[str, Any]
+    ] = []
 
-    # 3. 월간 추가매수 한도(max_additional_monthly) 적용
-    # 만약 각 종목 추가매수 합계가 한도를 넘으면 우선순위 점수 비례 배분
-    effective_max_additional = 0 if already_invested_in_cycle else max_additional_monthly
-    if total_requested_additional > effective_max_additional:
-        total_p_score = sum(p["priority_score"] for p in parsed_items if p["raw_additional"] > 0)
-        for p in parsed_items:
-            if p["raw_additional"] > 0 and total_p_score > 0 and effective_max_additional > 0:
-                ratio = p["priority_score"] / total_p_score
-                p["capped_additional"] = int(round(effective_max_additional * ratio, -4))
+    total_requested_additional = 0.0
+
+    for item in inputs:
+        target_weight = float(
+            item.target_weight or 0
+        )
+
+        current_price = float(
+            item.current_price or 0
+        )
+
+        recent_high = float(
+            item.recent_3m_high or 0
+        )
+
+        current_asset_value = max(
+            0.0,
+            float(
+                item.current_asset_value
+                or 0
+            ),
+        )
+
+        current_weight = weights_map.get(
+            item.ticker,
+            0.0,
+        )
+
+        weight_gap = calculate_weight_gap(
+            target_weight,
+            current_weight,
+        )
+
+        drawdown = calculate_drawdown(
+            current_price,
+            recent_high,
+        )
+
+        drawdown_score = (
+            calculate_drawdown_score(
+                drawdown
+            )
+        )
+
+        weight_gap_score = (
+            calculate_weight_gap_score(
+                weight_gap
+            )
+        )
+
+        priority_score = (
+            calculate_priority_score(
+                drawdown_score,
+                weight_gap_score,
+                weight_gap,
+            )
+        )
+
+        # 목표 비중이 없거나 초과한 종목,
+        # 또는 이번 주기에 이미 매수한 경우
+        # 추가매수를 하지 않습니다.
+        if (
+            target_weight <= 0
+            or weight_gap <= 0
+            or already_invested_in_cycle
+        ):
+            raw_additional = 0.0
+
+        else:
+            raw_additional = max(
+                0.0,
+                float(
+                    get_additional_buy_by_tier(
+                        drawdown
+                    )
+                    or 0
+                ),
+            )
+
+        total_requested_additional += (
+            raw_additional
+        )
+
+        parsed_items.append(
+            {
+                "item": item,
+                "target_weight": target_weight,
+                "current_price": current_price,
+                "recent_high": recent_high,
+                "current_asset_value": current_asset_value,
+                "cur_weight": current_weight,
+                "weight_gap": float(
+                    weight_gap
+                ),
+                "drawdown": float(
+                    drawdown
+                ),
+                "dd_score": int(
+                    drawdown_score
+                ),
+                "wg_score": float(
+                    weight_gap_score
+                ),
+                "priority_score": float(
+                    priority_score
+                ),
+                "raw_additional": raw_additional,
+            }
+        )
+
+    # -------------------------------------------------------------
+    # 3. 주기별 추가매수 한도 적용
+    # -------------------------------------------------------------
+
+    effective_max_additional = (
+        0.0
+        if already_invested_in_cycle
+        else max_additional_monthly
+    )
+
+    if (
+        total_requested_additional
+        > effective_max_additional
+    ):
+        total_priority_score = sum(
+            max(
+                0.0,
+                float(
+                    item[
+                        "priority_score"
+                    ]
+                ),
+            )
+            for item in parsed_items
+            if item["raw_additional"] > 0
+        )
+
+        for parsed in parsed_items:
+            if (
+                parsed["raw_additional"] > 0
+                and total_priority_score > 0
+                and effective_max_additional > 0
+            ):
+                ratio = (
+                    max(
+                        0.0,
+                        parsed[
+                            "priority_score"
+                        ],
+                    )
+                    / total_priority_score
+                )
+
+                capped = (
+                    effective_max_additional
+                    * ratio
+                )
+
+                parsed[
+                    "capped_additional"
+                ] = _round_buy_amount(
+                    capped
+                )
+
             else:
-                p["capped_additional"] = 0
-        actual_total_additional = min(sum(p["capped_additional"] for p in parsed_items), effective_max_additional)
+                parsed[
+                    "capped_additional"
+                ] = 0.0
+
+        # 반올림 때문에 총액이 한도를 초과할 수 있으므로
+        # 초과분을 다시 비례 축소합니다.
+        rounded_total = sum(
+            parsed[
+                "capped_additional"
+            ]
+            for parsed in parsed_items
+        )
+
+        if (
+            rounded_total
+            > effective_max_additional
+            and rounded_total > 0
+        ):
+            scale = (
+                effective_max_additional
+                / rounded_total
+            )
+
+            for parsed in parsed_items:
+                parsed[
+                    "capped_additional"
+                ] = (
+                    _round_buy_amount(
+                        parsed[
+                            "capped_additional"
+                        ]
+                        * scale
+                    )
+                )
+
     else:
-        for p in parsed_items:
-            p["capped_additional"] = p["raw_additional"]
-        actual_total_additional = total_requested_additional
-
-    # 4. 기본 매수금(base_monthly) 배분
-    # 기본 매수금은 목표비중에 맞추어 분배 (비중 부족분 우선 또는 목표비중 비례)
-    # 초기 진입이거나 고른 비중 유지를 위해 target_weight 비례를 기본으로 하되 부족분 가중
-    total_base_budget = base_monthly
-    for p in parsed_items:
-        item = p["item"]
-        # 목표비중 초과 시 기본 매수 비중을 축소하고 부족한 곳에 더 배정
-        p["base_buy"] = int(round(total_base_budget * item.target_weight, -4))
-
-    # 5. 투자금 한도 체크 (remaining_cash = initial_capital - total_invested_so_far)
-    remaining_cash = max(0, initial_capital - total_invested_so_far)
-    total_planned_buy = sum(p["base_buy"] + p["capped_additional"] for p in parsed_items)
-
-    cash_scale_factor = 1.0
-    if total_planned_buy > remaining_cash:
-        cash_scale_factor = remaining_cash / total_planned_buy if total_planned_buy > 0 else 0.0
-
-    # 6. 최종 추천 결과 리스트 생성 및 추천 사유 작성
-    results: List[ETFRecommendationResult] = []
-    final_total_recommended = 0
-    final_total_portfolio_post = total_portfolio_value + min(total_planned_buy, remaining_cash)
-
-    for p in parsed_items:
-        item: ETFRecommendationInput = p["item"]
-        base_b = int(round(p["base_buy"] * cash_scale_factor, -4))
-        add_b = int(round(p["capped_additional"] * cash_scale_factor, -4))
-        final_buy = base_b + add_b
-        final_total_recommended += final_buy
-
-        post_asset_val = item.current_asset_value + final_buy
-        expected_weight = (post_asset_val / final_total_portfolio_post) if final_total_portfolio_post > 0 else item.target_weight
-
-        # 자연어 추천 사유 생성 (프롬프트 47번)
-        reasons = []
-        wg_pct = round(p["weight_gap"] * 100, 1)
-        dd_pct = round(p["drawdown"] * 100, 1)
-
-        if item.target_weight <= 0:
-            reasons.append("목표 비중이 미설정(0.0%)된 종목으로, 정량 매수 추천에서 제외됩니다.")
-        elif p["weight_gap"] <= 0:
-            reasons.append(
-                f"현재 비중({round(p['cur_weight']*100, 1)}%)이 목표비중({round(item.target_weight*100, 1)}%)을 초과하여 추가매수를 제한합니다."
+        for parsed in parsed_items:
+            parsed[
+                "capped_additional"
+            ] = float(
+                parsed[
+                    "raw_additional"
+                ]
             )
-        elif already_invested_in_cycle:
-            p_desc = cycle_desc if cycle_desc else "이번 주기"
-            reasons.append(
-                f"목표비중 대비 {abs(wg_pct)}%p 부족하나, {p_desc}에 이미 납입(매수) 이력이 있어 이번 주기 추가 매수를 추천하지 않습니다."
-            )
+
+    # -------------------------------------------------------------
+    # 4. 기본 매수금 배분
+    # -------------------------------------------------------------
+
+    for parsed in parsed_items:
+        target_weight = parsed[
+            "target_weight"
+        ]
+
+        # 목표 비중이 0 이하인 종목에는
+        # 기본 매수금도 배정하지 않습니다.
+        if target_weight <= 0:
+            parsed[
+                "base_buy"
+            ] = 0.0
+
         else:
-            reasons.append(
-                f"목표비중 대비 {abs(wg_pct)}%p 부족하며 최근 3개월 고점 대비 {abs(dd_pct)}% 하락했습니다."
+            parsed[
+                "base_buy"
+            ] = _round_buy_amount(
+                base_monthly
+                * target_weight
             )
 
-        if add_b > 0:
-            reasons.append(f"낙폭 구간에 따른 추가 매수금 {add_b:,}원이 가산되었습니다.")
-        elif p["raw_additional"] > 0 and add_b == 0 and cash_scale_factor < 1.0:
-            reasons.append("투자 가능 원금 잔액 한도로 인해 추가 매수가 제한되었습니다.")
+    # -------------------------------------------------------------
+    # 5. 전체 투자 가능 원금 한도 적용
+    # -------------------------------------------------------------
 
-        if cash_scale_factor < 1.0 and final_buy < (p["base_buy"] + p["capped_additional"]):
-            reasons.append(f"남은 투자 원금({remaining_cash:,}원)에 맞추어 매수 금액이 자동 조정되었습니다.")
+    total_planned_buy = sum(
+        float(
+            parsed[
+                "base_buy"
+            ]
+        )
+        + float(
+            parsed[
+                "capped_additional"
+            ]
+        )
+        for parsed in parsed_items
+    )
 
-        reason_text = " ".join(reasons)
+    if (
+        total_planned_buy > remaining_cash
+        and total_planned_buy > 0
+    ):
+        cash_scale_factor = (
+            remaining_cash
+            / total_planned_buy
+        )
+    else:
+        cash_scale_factor = 1.0
 
+    # -------------------------------------------------------------
+    # 6. 최종 추천 결과 생성
+    # -------------------------------------------------------------
+
+    results: List[
+        ETFRecommendationResult
+    ] = []
+
+    final_total_recommended = 0.0
+
+    for parsed in parsed_items:
+        item: ETFRecommendationInput = (
+            parsed["item"]
+        )
+
+        original_base = float(
+            parsed["base_buy"]
+        )
+
+        original_additional = float(
+            parsed[
+                "capped_additional"
+            ]
+        )
+
+        base_buy = _round_buy_amount(
+            original_base
+            * cash_scale_factor
+        )
+
+        additional_buy = (
+            _round_buy_amount(
+                original_additional
+                * cash_scale_factor
+            )
+        )
+
+        final_buy = (
+            base_buy
+            + additional_buy
+        )
+
+        # 반올림으로 인해 남은 현금을 초과하지 않도록
+        # 마지막 단계에서 다시 제한합니다.
+        available_for_this_item = max(
+            0.0,
+            remaining_cash
+            - final_total_recommended,
+        )
+
+        if final_buy > available_for_this_item:
+            final_buy = available_for_this_item
+
+            if final_buy < base_buy:
+                base_buy = final_buy
+                additional_buy = 0.0
+            else:
+                additional_buy = max(
+                    0.0,
+                    final_buy - base_buy,
+                )
+
+        final_total_recommended += (
+            final_buy
+        )
+
+        post_asset_value = (
+            parsed[
+                "current_asset_value"
+            ]
+            + final_buy
+        )
+
+        # 모든 종목의 최종 추천 금액이 결정되기 전에는
+        # 정확한 최종 포트폴리오 총액을 알 수 없으므로
+        # 우선 아래에서 결과를 만든 뒤 한 번 더 계산합니다.
         results.append(
             ETFRecommendationResult(
                 ticker=item.ticker,
                 name=item.name,
-                target_weight=item.target_weight,
-                current_weight=p["cur_weight"],
-                weight_gap=p["weight_gap"],
-                recent_high=item.recent_3m_high,
-                current_price=item.current_price,
-                drawdown=p["drawdown"],
-                drawdown_score=p["dd_score"],
-                weight_gap_score=p["wg_score"],
-                priority_score=p["priority_score"],
-                base_buy=base_b,
-                additional_buy=add_b,
+                target_weight=parsed[
+                    "target_weight"
+                ],
+                current_weight=parsed[
+                    "cur_weight"
+                ],
+                weight_gap=parsed[
+                    "weight_gap"
+                ],
+                recent_high=parsed[
+                    "recent_high"
+                ],
+                current_price=parsed[
+                    "current_price"
+                ],
+                drawdown=parsed[
+                    "drawdown"
+                ],
+                drawdown_score=parsed[
+                    "dd_score"
+                ],
+                weight_gap_score=parsed[
+                    "wg_score"
+                ],
+                priority_score=parsed[
+                    "priority_score"
+                ],
+                base_buy=base_buy,
+                additional_buy=additional_buy,
                 recommended_buy=final_buy,
-                expected_weight_after=expected_weight,
-                reason=reason_text,
+                expected_weight_after=post_asset_value,
+                reason="",
             )
         )
+
+    # -------------------------------------------------------------
+    # 7. 실제 최종 추천 총액 기준 예상 비중 및 사유 계산
+    # -------------------------------------------------------------
+
+    final_total_portfolio_post = (
+        total_portfolio_value
+        + final_total_recommended
+    )
+
+    for result, parsed in zip(
+        results,
+        parsed_items,
+    ):
+        item: ETFRecommendationInput = (
+            parsed["item"]
+        )
+
+        post_asset_value = (
+            parsed[
+                "current_asset_value"
+            ]
+            + result.recommended_buy
+        )
+
+        if final_total_portfolio_post > 0:
+            expected_weight = (
+                post_asset_value
+                / final_total_portfolio_post
+            )
+        else:
+            expected_weight = (
+                parsed[
+                    "target_weight"
+                ]
+            )
+
+        result.expected_weight_after = (
+            expected_weight
+        )
+
+        reasons: List[str] = []
+
+        weight_gap_pct = round(
+            parsed[
+                "weight_gap"
+            ]
+            * 100,
+            1,
+        )
+
+        drawdown_pct = round(
+            parsed[
+                "drawdown"
+            ]
+            * 100,
+            1,
+        )
+
+        current_weight_pct = round(
+            parsed[
+                "cur_weight"
+            ]
+            * 100,
+            1,
+        )
+
+        target_weight_pct = round(
+            parsed[
+                "target_weight"
+            ]
+            * 100,
+            1,
+        )
+
+        if parsed["target_weight"] <= 0:
+            reasons.append(
+                "목표 비중이 0%인 종목으로 "
+                "정량 매수 추천에서 제외됩니다."
+            )
+
+        elif parsed["weight_gap"] <= 0:
+            reasons.append(
+                f"현재 비중({current_weight_pct}%)이 "
+                f"목표 비중({target_weight_pct}%) 이상입니다."
+            )
+
+        elif already_invested_in_cycle:
+            description = (
+                cycle_desc
+                if cycle_desc
+                else "이번 주기"
+            )
+
+            reasons.append(
+                f"목표 비중 대비 "
+                f"{abs(weight_gap_pct)}%p 부족하지만, "
+                f"{description}에 이미 매수 이력이 있어 "
+                "추가 매수를 제한합니다."
+            )
+
+        else:
+            reasons.append(
+                f"목표 비중 대비 "
+                f"{abs(weight_gap_pct)}%p 부족하며 "
+                f"최근 3개월 고점 대비 "
+                f"{abs(drawdown_pct)}% 하락했습니다."
+            )
+
+        if result.additional_buy > 0:
+            reasons.append(
+                "낙폭 구간에 따른 추가 매수금 "
+                f"{result.additional_buy:,.0f}원이 "
+                "반영되었습니다."
+            )
+
+        elif (
+            parsed["raw_additional"] > 0
+            and result.additional_buy == 0
+            and cash_scale_factor < 1.0
+        ):
+            reasons.append(
+                "남은 투자 가능 원금 한도로 인해 "
+                "추가 매수가 제한되었습니다."
+            )
+
+        original_planned = (
+            float(
+                parsed[
+                    "base_buy"
+                ]
+            )
+            + float(
+                parsed[
+                    "capped_additional"
+                ]
+            )
+        )
+
+        if (
+            cash_scale_factor < 1.0
+            and result.recommended_buy
+            < original_planned
+        ):
+            reasons.append(
+                "남은 투자 가능 원금 "
+                f"({remaining_cash:,.0f}원)에 맞추어 "
+                "매수 금액이 조정되었습니다."
+            )
+
+        result.reason = " ".join(
+            reasons
+        )
+
+    # -------------------------------------------------------------
+    # 8. 요약
+    # -------------------------------------------------------------
 
     summary = {
         "initial_capital": initial_capital,
         "total_invested_so_far": total_invested_so_far,
         "remaining_cash": remaining_cash,
         "base_monthly_budget": base_monthly,
-        "total_additional_buy": sum(r.additional_buy for r in results),
-        "total_recommended_buy": final_total_recommended,
-        "total_portfolio_value_now": total_portfolio_value,
-        "total_portfolio_value_expected": final_total_portfolio_post,
-        "already_invested_in_cycle": already_invested_in_cycle,
+        "total_additional_buy": sum(
+            result.additional_buy
+            for result in results
+        ),
+        "total_recommended_buy": (
+            final_total_recommended
+        ),
+        "total_portfolio_value_now": (
+            total_portfolio_value
+        ),
+        "total_portfolio_value_expected": (
+            final_total_portfolio_post
+        ),
+        "already_invested_in_cycle": (
+            already_invested_in_cycle
+        ),
         "cycle_desc": cycle_desc,
     }
 
-    return {"summary": summary, "recommendations": results}
+    return {
+        "summary": summary,
+        "recommendations": results,
+    }
