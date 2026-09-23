@@ -11,3 +11,4 @@ pytest>=8.0.0
 pyinstaller>=6.0.0
 truststore>=0.10.0
 krx-openapi>=0.1.0
+psycopg2-binary>=2.9.9
