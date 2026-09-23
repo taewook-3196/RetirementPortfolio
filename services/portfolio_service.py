@@ -24,7 +24,9 @@ class PortfolioService:
         targets = self.repo.get_account_targets(account_id)
         if targets:
             return targets
-        return self.config.etfs
+        if account_id is None and not self.repo.get_accounts():
+            return self.config.etfs
+        return []
 
     def get_positions(
         self,
@@ -41,9 +43,12 @@ class PortfolioService:
         target_etfs = self.get_target_etfs(account_id)
         names = {e.ticker: e.name for e in target_etfs}
 
-        for e in self.config.etfs:
-            if e.ticker not in names:
-                names[e.ticker] = e.name
+        # 단일 계좌 조회 시 타 계좌/전역 config.etfs를 주입하지 않고,
+        # 전체 통합 조회이면서 DB에 계좌가 전혀 없는 레거시 환경에서만 fallback으로 사용합니다.
+        if account_id is None and not self.repo.get_accounts():
+            for e in self.config.etfs:
+                if e.ticker not in names:
+                    names[e.ticker] = e.name
 
         for tx in txs:
             if tx.ticker not in names:
