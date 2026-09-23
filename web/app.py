@@ -19,7 +19,7 @@ from database.repository import Repository
 
 app = FastAPI(
     title="RetirementPortfolio",
-    version="0.5.0",
+    version="0.6.0",
 )
 
 
@@ -37,10 +37,7 @@ def health_check():
 def get_current_user(
     authorization: str | None = Header(default=None),
 ):
-    """
-    Supabase access token을 검증하고
-    로그인한 사용자 정보를 반환합니다.
-    """
+    """로그인한 Supabase 사용자를 확인합니다."""
 
     if not authorization:
         raise HTTPException(
@@ -194,10 +191,7 @@ def get_account_targets_api(
     account_id: int,
     authorization: str | None = Header(default=None),
 ):
-    """
-    로그인한 사용자의 특정 계좌
-    목표 투자 비중을 조회합니다.
-    """
+    """특정 계좌의 목표 투자 비중을 조회합니다."""
 
     user_id = get_verified_user_id(
         authorization
@@ -253,11 +247,9 @@ def get_account_targets_api(
     except Exception:
         raise HTTPException(
             status_code=500,
-            detail=(
-                "목표 투자 비중을 "
-                "불러오지 못했습니다."
-            ),
+            detail="목표 투자 비중을 불러오지 못했습니다.",
         )
+
 
 class TransactionCreateRequest(BaseModel):
     """매수/매도 거래 등록 요청."""
@@ -306,11 +298,9 @@ class TransactionCreateRequest(BaseModel):
 )
 def get_transactions_api(
     account_id: int,
-    authorization: str | None = Header(
-        default=None
-    ),
+    authorization: str | None = Header(default=None),
 ):
-    """로그인 사용자의 특정 계좌 거래를 조회합니다."""
+    """특정 계좌의 거래 내역을 조회합니다."""
 
     user_id = get_verified_user_id(
         authorization
@@ -397,11 +387,9 @@ def get_transactions_api(
 def create_transaction_api(
     account_id: int,
     request: TransactionCreateRequest,
-    authorization: str | None = Header(
-        default=None
-    ),
+    authorization: str | None = Header(default=None),
 ):
-    """로그인 사용자의 특정 계좌에 거래를 등록합니다."""
+    """특정 계좌에 매수/매도 거래를 등록합니다."""
 
     user_id = get_verified_user_id(
         authorization
@@ -423,13 +411,9 @@ def create_transaction_api(
             )
 
         transaction = repo.add_transaction(
-            transaction_date=(
-                request.transaction_date
-            ),
+            transaction_date=request.transaction_date,
             ticker=request.ticker,
-            transaction_type=(
-                request.transaction_type
-            ),
+            transaction_type=request.transaction_type,
             quantity=request.quantity,
             price=request.price,
             fee=request.fee,
@@ -582,11 +566,14 @@ def home():
 
             label {
                 display: block;
-                margin: 16px 0 7px;
+                margin: 14px 0 7px;
                 font-weight: 600;
+                font-size: 14px;
             }
 
-            input {
+            input,
+            select,
+            textarea {
                 width: 100%;
                 min-height: 48px;
                 padding: 12px;
@@ -596,10 +583,15 @@ def home():
                 font-size: 16px;
             }
 
+            textarea {
+                min-height: 72px;
+                resize: vertical;
+            }
+
             button {
                 width: 100%;
                 min-height: 50px;
-                margin-top: 22px;
+                margin-top: 18px;
                 border: 0;
                 border-radius: 10px;
                 background: #202124;
@@ -618,6 +610,10 @@ def home():
                 margin-top: 16px;
                 line-height: 1.5;
                 font-size: 14px;
+            }
+
+            .success {
+                color: #137333;
             }
 
             .error {
@@ -655,7 +651,7 @@ def home():
                 font-size: 14px;
             }
 
-            .targets-title {
+            .section-title {
                 margin-top: 18px;
                 padding-top: 15px;
                 border-top: 1px solid #eee;
@@ -701,20 +697,66 @@ def home():
                 font-weight: 700;
             }
 
-            .target-loading,
-            .target-error {
-                padding: 10px 0 2px;
-                color: #777;
+            .transaction-form {
+                margin-top: 10px;
+                padding: 14px;
+                background: #f8f9fa;
+                border-radius: 12px;
+            }
+
+            .form-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+
+            .transaction-message {
+                min-height: 20px;
+                margin-top: 12px;
+                font-size: 13px;
+                line-height: 1.5;
+            }
+
+            .transaction-list {
+                margin-top: 8px;
+            }
+
+            .transaction-row {
+                padding: 11px 0;
+                border-bottom: 1px solid #eee;
+            }
+
+            .transaction-row:last-child {
+                border-bottom: 0;
+            }
+
+            .transaction-main {
+                display: flex;
+                justify-content: space-between;
+                gap: 10px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+
+            .transaction-detail {
+                margin-top: 3px;
+                color: #666;
                 font-size: 13px;
             }
 
-            .target-error {
+            .buy {
                 color: #b3261e;
             }
 
+            .sell {
+                color: #137333;
+            }
+
+            .loading,
             .empty {
-                padding: 16px 0 4px;
+                padding: 10px 0 2px;
                 color: #777;
+                font-size: 13px;
                 line-height: 1.6;
             }
 
@@ -725,6 +767,13 @@ def home():
                 color: #777;
                 font-size: 13px;
                 line-height: 1.6;
+            }
+
+            @media (max-width: 380px) {
+                .form-row {
+                    grid-template-columns: 1fr;
+                    gap: 0;
+                }
             }
         </style>
     </head>
@@ -862,6 +911,18 @@ def home():
             }
 
 
+            function formatNumber(value) {
+                return new Intl.NumberFormat(
+                    "ko-KR",
+                    {
+                        maximumFractionDigits: 6,
+                    }
+                ).format(
+                    Number(value || 0)
+                );
+            }
+
+
             function formatPercent(value) {
                 const number =
                     Number(value || 0);
@@ -880,54 +941,52 @@ def home():
             }
 
 
-            async function verifyUser(
-                accessToken
-            ) {
-                const response = await fetch(
-                    "/api/me",
-                    {
-                        method: "GET",
+            function todayString() {
+                const date =
+                    new Date();
 
-                        headers: {
-                            "Authorization":
-                                "Bearer "
-                                + accessToken,
-                        },
-                    }
+                const year =
+                    date.getFullYear();
+
+                const month =
+                    String(
+                        date.getMonth() + 1
+                    ).padStart(2, "0");
+
+                const day =
+                    String(
+                        date.getDate()
+                    ).padStart(2, "0");
+
+                return (
+                    year
+                    + "-"
+                    + month
+                    + "-"
+                    + day
                 );
-
-                const data =
-                    await response.json();
-
-                if (
-                    !response.ok
-                    || !data.authenticated
-                ) {
-                    throw new Error(
-                        data.detail
-                        || "사용자 인증에 실패했습니다."
-                    );
-                }
-
-                return data;
             }
 
 
-            async function loadAccounts(
-                accessToken
+            async function apiRequest(
+                url,
+                accessToken,
+                options = {}
             ) {
-                const response = await fetch(
-                    "/api/accounts",
-                    {
-                        method: "GET",
+                const headers = {
+                    ...(options.headers || {}),
+                    "Authorization":
+                        "Bearer " + accessToken,
+                };
 
-                        headers: {
-                            "Authorization":
-                                "Bearer "
-                                + accessToken,
-                        },
-                    }
-                );
+                const response =
+                    await fetch(
+                        url,
+                        {
+                            ...options,
+                            headers: headers,
+                        }
+                    );
 
                 const data =
                     await response.json();
@@ -935,9 +994,32 @@ def home():
                 if (!response.ok) {
                     throw new Error(
                         data.detail
-                        || "계좌 정보를 불러오지 못했습니다."
+                        || "요청을 처리하지 못했습니다."
                     );
                 }
+
+                return data;
+            }
+
+
+            async function verifyUser(
+                accessToken
+            ) {
+                return await apiRequest(
+                    "/api/me",
+                    accessToken
+                );
+            }
+
+
+            async function loadAccounts(
+                accessToken
+            ) {
+                const data =
+                    await apiRequest(
+                        "/api/accounts",
+                        accessToken
+                    );
 
                 return data.accounts || [];
             }
@@ -947,38 +1029,35 @@ def home():
                 accessToken,
                 accountId
             ) {
-                const response = await fetch(
-                    "/api/accounts/"
-                    + accountId
-                    + "/targets",
-                    {
-                        method: "GET",
-
-                        headers: {
-                            "Authorization":
-                                "Bearer "
-                                + accessToken,
-                        },
-                    }
-                );
-
                 const data =
-                    await response.json();
-
-                if (!response.ok) {
-                    throw new Error(
-                        data.detail
-                        || "목표 비중을 불러오지 못했습니다."
+                    await apiRequest(
+                        "/api/accounts/"
+                        + accountId
+                        + "/targets",
+                        accessToken
                     );
-                }
 
                 return data.targets || [];
             }
 
 
-            function createDetail(
-                text
+            async function loadTransactions(
+                accessToken,
+                accountId
             ) {
+                const data =
+                    await apiRequest(
+                        "/api/accounts/"
+                        + accountId
+                        + "/transactions",
+                        accessToken
+                    );
+
+                return data.transactions || [];
+            }
+
+
+            function createDetail(text) {
                 const element =
                     document.createElement(
                         "div"
@@ -1001,20 +1080,11 @@ def home():
                 container.innerHTML = "";
 
                 if (targets.length === 0) {
-                    const empty =
-                        document.createElement(
-                            "div"
-                        );
-
-                    empty.className =
-                        "target-loading";
-
-                    empty.textContent =
+                    container.textContent =
                         "등록된 목표 ETF가 없습니다.";
 
-                    container.appendChild(
-                        empty
-                    );
+                    container.className =
+                        "empty";
 
                     return;
                 }
@@ -1081,6 +1151,583 @@ def home():
                         row
                     );
                 }
+            }
+
+
+            function renderTransactions(
+                container,
+                transactions
+            ) {
+                container.innerHTML = "";
+
+                if (transactions.length === 0) {
+                    const empty =
+                        document.createElement(
+                            "div"
+                        );
+
+                    empty.className =
+                        "empty";
+
+                    empty.textContent =
+                        "아직 등록된 거래가 없습니다.";
+
+                    container.appendChild(
+                        empty
+                    );
+
+                    return;
+                }
+
+                const newestFirst =
+                    [...transactions].reverse();
+
+                for (
+                    const transaction
+                    of newestFirst
+                ) {
+                    const row =
+                        document.createElement(
+                            "div"
+                        );
+
+                    row.className =
+                        "transaction-row";
+
+                    const main =
+                        document.createElement(
+                            "div"
+                        );
+
+                    main.className =
+                        "transaction-main";
+
+                    const left =
+                        document.createElement(
+                            "div"
+                        );
+
+                    const typeText =
+                        transaction.transaction_type
+                        === "BUY"
+                        ? "매수"
+                        : "매도";
+
+                    left.textContent =
+                        transaction.transaction_date
+                        + " · "
+                        + transaction.ticker
+                        + " · "
+                        + typeText;
+
+                    left.className =
+                        transaction.transaction_type
+                        === "BUY"
+                        ? "buy"
+                        : "sell";
+
+                    const amount =
+                        document.createElement(
+                            "div"
+                        );
+
+                    amount.textContent =
+                        formatWon(
+                            Number(
+                                transaction.quantity
+                            )
+                            * Number(
+                                transaction.price
+                            )
+                        );
+
+                    main.appendChild(left);
+                    main.appendChild(amount);
+
+                    const detail =
+                        document.createElement(
+                            "div"
+                        );
+
+                    detail.className =
+                        "transaction-detail";
+
+                    detail.textContent =
+                        "수량 "
+                        + formatNumber(
+                            transaction.quantity
+                        )
+                        + " · 체결가 "
+                        + formatWon(
+                            transaction.price
+                        )
+                        + " · 수수료 "
+                        + formatWon(
+                            transaction.fee
+                        )
+                        + " · 세금 "
+                        + formatWon(
+                            transaction.tax
+                        );
+
+                    row.appendChild(main);
+                    row.appendChild(detail);
+
+                    if (transaction.memo) {
+                        const memo =
+                            document.createElement(
+                                "div"
+                            );
+
+                        memo.className =
+                            "transaction-detail";
+
+                        memo.textContent =
+                            "메모: "
+                            + transaction.memo;
+
+                        row.appendChild(memo);
+                    }
+
+                    container.appendChild(
+                        row
+                    );
+                }
+            }
+
+
+            function createTransactionForm(
+                account,
+                targets,
+                accessToken,
+                transactionsList
+            ) {
+                const form =
+                    document.createElement(
+                        "form"
+                    );
+
+                form.className =
+                    "transaction-form";
+
+                const typeLabel =
+                    document.createElement(
+                        "label"
+                    );
+
+                typeLabel.textContent =
+                    "거래 유형";
+
+                const typeSelect =
+                    document.createElement(
+                        "select"
+                    );
+
+                const buyOption =
+                    document.createElement(
+                        "option"
+                    );
+
+                buyOption.value = "BUY";
+                buyOption.textContent = "매수";
+
+                const sellOption =
+                    document.createElement(
+                        "option"
+                    );
+
+                sellOption.value = "SELL";
+                sellOption.textContent = "매도";
+
+                typeSelect.appendChild(
+                    buyOption
+                );
+
+                typeSelect.appendChild(
+                    sellOption
+                );
+
+                const dateLabel =
+                    document.createElement(
+                        "label"
+                    );
+
+                dateLabel.textContent =
+                    "거래일";
+
+                const dateInput =
+                    document.createElement(
+                        "input"
+                    );
+
+                dateInput.type = "date";
+                dateInput.required = true;
+                dateInput.value =
+                    todayString();
+
+                const tickerLabel =
+                    document.createElement(
+                        "label"
+                    );
+
+                tickerLabel.textContent =
+                    "종목";
+
+                const tickerSelect =
+                    document.createElement(
+                        "select"
+                    );
+
+                tickerSelect.required = true;
+
+                for (const target of targets) {
+                    const option =
+                        document.createElement(
+                            "option"
+                        );
+
+                    option.value =
+                        target.ticker;
+
+                    option.textContent =
+                        target.ticker
+                        + " · "
+                        + target.name;
+
+                    tickerSelect.appendChild(
+                        option
+                    );
+                }
+
+                const quantityLabel =
+                    document.createElement(
+                        "label"
+                    );
+
+                quantityLabel.textContent =
+                    "수량";
+
+                const quantityInput =
+                    document.createElement(
+                        "input"
+                    );
+
+                quantityInput.type = "number";
+                quantityInput.min = "0.000001";
+                quantityInput.step = "any";
+                quantityInput.required = true;
+                quantityInput.placeholder =
+                    "예: 10";
+
+                const priceLabel =
+                    document.createElement(
+                        "label"
+                    );
+
+                priceLabel.textContent =
+                    "체결가격";
+
+                const priceInput =
+                    document.createElement(
+                        "input"
+                    );
+
+                priceInput.type = "number";
+                priceInput.min = "0";
+                priceInput.step = "any";
+                priceInput.required = true;
+                priceInput.placeholder =
+                    "1주당 체결가격";
+
+                const feeLabel =
+                    document.createElement(
+                        "label"
+                    );
+
+                feeLabel.textContent =
+                    "수수료";
+
+                const feeInput =
+                    document.createElement(
+                        "input"
+                    );
+
+                feeInput.type = "number";
+                feeInput.min = "0";
+                feeInput.step = "any";
+                feeInput.value = "0";
+
+                const taxLabel =
+                    document.createElement(
+                        "label"
+                    );
+
+                taxLabel.textContent =
+                    "세금";
+
+                const taxInput =
+                    document.createElement(
+                        "input"
+                    );
+
+                taxInput.type = "number";
+                taxInput.min = "0";
+                taxInput.step = "any";
+                taxInput.value = "0";
+
+                const memoLabel =
+                    document.createElement(
+                        "label"
+                    );
+
+                memoLabel.textContent =
+                    "메모";
+
+                const memoInput =
+                    document.createElement(
+                        "textarea"
+                    );
+
+                memoInput.placeholder =
+                    "선택사항";
+
+                const button =
+                    document.createElement(
+                        "button"
+                    );
+
+                button.type = "submit";
+                button.textContent =
+                    "거래 저장";
+
+                if (targets.length === 0) {
+                    button.disabled = true;
+                }
+
+                const result =
+                    document.createElement(
+                        "div"
+                    );
+
+                result.className =
+                    "transaction-message";
+
+                form.appendChild(typeLabel);
+                form.appendChild(typeSelect);
+                form.appendChild(dateLabel);
+                form.appendChild(dateInput);
+                form.appendChild(tickerLabel);
+                form.appendChild(tickerSelect);
+
+                const firstRow =
+                    document.createElement(
+                        "div"
+                    );
+
+                firstRow.className =
+                    "form-row";
+
+                const quantityBox =
+                    document.createElement(
+                        "div"
+                    );
+
+                quantityBox.appendChild(
+                    quantityLabel
+                );
+
+                quantityBox.appendChild(
+                    quantityInput
+                );
+
+                const priceBox =
+                    document.createElement(
+                        "div"
+                    );
+
+                priceBox.appendChild(
+                    priceLabel
+                );
+
+                priceBox.appendChild(
+                    priceInput
+                );
+
+                firstRow.appendChild(
+                    quantityBox
+                );
+
+                firstRow.appendChild(
+                    priceBox
+                );
+
+                form.appendChild(firstRow);
+
+                const secondRow =
+                    document.createElement(
+                        "div"
+                    );
+
+                secondRow.className =
+                    "form-row";
+
+                const feeBox =
+                    document.createElement(
+                        "div"
+                    );
+
+                feeBox.appendChild(
+                    feeLabel
+                );
+
+                feeBox.appendChild(
+                    feeInput
+                );
+
+                const taxBox =
+                    document.createElement(
+                        "div"
+                    );
+
+                taxBox.appendChild(
+                    taxLabel
+                );
+
+                taxBox.appendChild(
+                    taxInput
+                );
+
+                secondRow.appendChild(
+                    feeBox
+                );
+
+                secondRow.appendChild(
+                    taxBox
+                );
+
+                form.appendChild(secondRow);
+                form.appendChild(memoLabel);
+                form.appendChild(memoInput);
+                form.appendChild(button);
+                form.appendChild(result);
+
+                form.addEventListener(
+                    "submit",
+                    async (event) => {
+                        event.preventDefault();
+
+                        result.textContent = "";
+                        result.className =
+                            "transaction-message";
+
+                        button.disabled = true;
+                        button.textContent =
+                            "저장 중...";
+
+                        const payload = {
+                            transaction_date:
+                                dateInput.value,
+
+                            ticker:
+                                tickerSelect.value,
+
+                            transaction_type:
+                                typeSelect.value,
+
+                            quantity:
+                                Number(
+                                    quantityInput.value
+                                ),
+
+                            price:
+                                Number(
+                                    priceInput.value
+                                ),
+
+                            fee:
+                                Number(
+                                    feeInput.value || 0
+                                ),
+
+                            tax:
+                                Number(
+                                    taxInput.value || 0
+                                ),
+
+                            memo:
+                                memoInput.value.trim(),
+                        };
+
+                        try {
+                            const data =
+                                await apiRequest(
+                                    "/api/accounts/"
+                                    + account.id
+                                    + "/transactions",
+                                    accessToken,
+                                    {
+                                        method: "POST",
+
+                                        headers: {
+                                            "Content-Type":
+                                                "application/json",
+                                        },
+
+                                        body:
+                                            JSON.stringify(
+                                                payload
+                                            ),
+                                    }
+                                );
+
+                            if (!data.created) {
+                                throw new Error(
+                                    "거래 저장에 실패했습니다."
+                                );
+                            }
+
+                            result.textContent =
+                                "거래가 저장되었습니다.";
+
+                            result.className =
+                                "transaction-message success";
+
+                            quantityInput.value = "";
+                            priceInput.value = "";
+                            feeInput.value = "0";
+                            taxInput.value = "0";
+                            memoInput.value = "";
+
+                            const transactions =
+                                await loadTransactions(
+                                    accessToken,
+                                    account.id
+                                );
+
+                            renderTransactions(
+                                transactionsList,
+                                transactions
+                            );
+
+                        } catch (error) {
+                            result.textContent =
+                                error.message
+                                || "거래 저장에 실패했습니다.";
+
+                            result.className =
+                                "transaction-message error";
+
+                        } finally {
+                            button.disabled =
+                                targets.length === 0;
+
+                            button.textContent =
+                                "거래 저장";
+                        }
+                    }
+                );
+
+                return form;
             }
 
 
@@ -1201,7 +1848,7 @@ def home():
                         );
 
                     targetsTitle.className =
-                        "targets-title";
+                        "section-title";
 
                     targetsTitle.textContent =
                         "목표 포트폴리오";
@@ -1216,22 +1863,10 @@ def home():
                         );
 
                     targetsList.className =
-                        "targets-list";
+                        "targets-list loading";
 
-                    const loading =
-                        document.createElement(
-                            "div"
-                        );
-
-                    loading.className =
-                        "target-loading";
-
-                    loading.textContent =
+                    targetsList.textContent =
                         "목표 비중을 불러오는 중...";
-
-                    targetsList.appendChild(
-                        loading
-                    );
 
                     card.appendChild(
                         targetsList
@@ -1248,33 +1883,117 @@ def home():
                                 account.id
                             );
 
+                        targetsList.className =
+                            "targets-list";
+
                         renderTargets(
                             targetsList,
                             targets
                         );
 
-                    } catch (error) {
-                        targetsList.innerHTML =
-                            "";
-
-                        const errorElement =
+                        const formTitle =
                             document.createElement(
                                 "div"
                             );
 
-                        errorElement.className =
-                            "target-error";
+                        formTitle.className =
+                            "section-title";
 
-                        errorElement.textContent =
+                        formTitle.textContent =
+                            "매수 / 매도 입력";
+
+                        card.appendChild(
+                            formTitle
+                        );
+
+                        const transactionsTitle =
+                            document.createElement(
+                                "div"
+                            );
+
+                        transactionsTitle.className =
+                            "section-title";
+
+                        transactionsTitle.textContent =
+                            "거래 내역";
+
+                        const transactionsList =
+                            document.createElement(
+                                "div"
+                            );
+
+                        transactionsList.className =
+                            "transaction-list";
+
+                        transactionsList.textContent =
+                            "거래 내역을 불러오는 중...";
+
+                        const transactionForm =
+                            createTransactionForm(
+                                account,
+                                targets,
+                                accessToken,
+                                transactionsList
+                            );
+
+                        card.appendChild(
+                            transactionForm
+                        );
+
+                        card.appendChild(
+                            transactionsTitle
+                        );
+
+                        card.appendChild(
+                            transactionsList
+                        );
+
+                        try {
+                            const transactions =
+                                await loadTransactions(
+                                    accessToken,
+                                    account.id
+                                );
+
+                            renderTransactions(
+                                transactionsList,
+                                transactions
+                            );
+
+                        } catch (error) {
+                            transactionsList.innerHTML =
+                                "";
+
+                            const errorElement =
+                                document.createElement(
+                                    "div"
+                                );
+
+                            errorElement.className =
+                                "error";
+
+                            errorElement.textContent =
+                                error.message
+                                || (
+                                    "거래 내역을 "
+                                    + "불러오지 못했습니다."
+                                );
+
+                            transactionsList.appendChild(
+                                errorElement
+                            );
+                        }
+
+                    } catch (error) {
+                        targetsList.className =
+                            "error";
+
+                        targetsList.textContent =
                             error.message
                             || (
                                 "목표 비중을 "
                                 + "불러오지 못했습니다."
                             );
-
-                        targetsList.appendChild(
-                            errorElement
-                        );
                     }
                 }
             }
