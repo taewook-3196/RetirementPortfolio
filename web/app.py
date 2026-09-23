@@ -479,6 +479,161 @@ def create_transaction_api(
             detail="거래를 저장하지 못했습니다.",
         )
 
+@app.put(
+    "/api/accounts/{account_id}/transactions/{tx_id}"
+)
+def update_transaction_api(
+    account_id: int,
+    tx_id: int,
+    request: TransactionCreateRequest,
+    authorization: str | None = Header(default=None),
+):
+    """특정 계좌의 거래 내역을 수정합니다."""
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        # tx_id가 실제로 이 계좌에 속하는지 먼저 확인합니다.
+        transactions = repo.get_transactions(
+            account_id=account_id
+        )
+
+        transaction_exists = any(
+            transaction.id == tx_id
+            for transaction in transactions
+        )
+
+        if not transaction_exists:
+            raise HTTPException(
+                status_code=404,
+                detail="거래 내역을 찾을 수 없습니다.",
+            )
+
+        updated = repo.update_transaction(
+            tx_id=tx_id,
+            transaction_date=request.transaction_date,
+            ticker=request.ticker,
+            transaction_type=request.transaction_type,
+            quantity=request.quantity,
+            price=request.price,
+            fee=request.fee,
+            tax=request.tax,
+            memo=request.memo,
+            account_id=account_id,
+        )
+
+        if not updated:
+            raise HTTPException(
+                status_code=404,
+                detail="거래 내역을 찾을 수 없습니다.",
+            )
+
+        return {
+            "updated": True,
+            "transaction_id": tx_id,
+        }
+
+    except HTTPException:
+        raise
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="거래 내역을 수정하지 못했습니다.",
+        )
+
+
+@app.delete(
+    "/api/accounts/{account_id}/transactions/{tx_id}"
+)
+def delete_transaction_api(
+    account_id: int,
+    tx_id: int,
+    authorization: str | None = Header(default=None),
+):
+    """특정 계좌의 거래 내역을 삭제합니다."""
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        # 다른 계좌의 거래 ID를 넘겨 삭제하는 것을 막습니다.
+        transactions = repo.get_transactions(
+            account_id=account_id
+        )
+
+        transaction_exists = any(
+            transaction.id == tx_id
+            for transaction in transactions
+        )
+
+        if not transaction_exists:
+            raise HTTPException(
+                status_code=404,
+                detail="거래 내역을 찾을 수 없습니다.",
+            )
+
+        deleted = repo.delete_transaction(
+            tx_id=tx_id
+        )
+
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail="거래 내역을 찾을 수 없습니다.",
+            )
+
+        return {
+            "deleted": True,
+            "transaction_id": tx_id,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="거래 내역을 삭제하지 못했습니다.",
+        )
+
 @app.get(
     "/api/accounts/{account_id}/positions"
 )
