@@ -15,7 +15,7 @@ POPULAR_ETF_SEEDS = [
     {"ticker": "442550", "name": "RISE TDF2030액티브"},
     {"ticker": "442570", "name": "RISE TDF2050액티브"},
     {"ticker": "442540", "name": "RISE TDF2020액티브"},
-    {"ticker": "442580", "name": "RISE TDF2060액티브"},
+    {"ticker": "442580", "name": "PLUS 글로벌HBM반도체"},
     {"ticker": "439220", "name": "KODEX TDF2040액티브"},
     {"ticker": "439210", "name": "KODEX TDF2030액티브"},
     {"ticker": "439230", "name": "KODEX TDF2050액티브"},
