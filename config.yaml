@@ -1,4 +1,4 @@
-data_source: mock
+data_source: krx
 initial_capital: 100000000
 base_monthly: 10000000
 max_additional_monthly: 15000000
