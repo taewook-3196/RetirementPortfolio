@@ -27,8 +27,8 @@ from database.models import (
     Price,
     RecommendationLog,
     Transaction,
+    Watchlist,
 )
-
 class Repository:
     def __init__(self, user_id: Optional[str] = None):
         init_db()
@@ -2239,5 +2239,192 @@ class Repository:
                 return False
 
             session.delete(profile)
+
+            return True
+    # -------------------------------------------------------------
+    # 관심종목 (Watchlist) 관리
+    # -------------------------------------------------------------
+
+    def get_watchlist(
+        self,
+    ) -> List[Dict[str, Any]]:
+        """현재 사용자의 관심종목 목록을 조회합니다."""
+        if not self.user_id:
+            return []
+
+        with get_db_session() as session:
+            rows = (
+                session.query(
+                    Watchlist,
+                    AssetMaster,
+                )
+                .join(
+                    AssetMaster,
+                    AssetMaster.ticker
+                    == Watchlist.ticker,
+                )
+                .filter(
+                    Watchlist.user_id
+                    == self.user_id
+                )
+                .order_by(
+                    Watchlist.id.asc()
+                )
+                .all()
+            )
+
+            return [
+                {
+                    "id": watch.id,
+                    "ticker": watch.ticker,
+                    "name": asset.name,
+                    "market": asset.market,
+                    "exchange": asset.exchange,
+                    "asset_type": asset.asset_type,
+                    "currency": asset.currency,
+                    "memo": watch.memo or "",
+                }
+                for watch, asset in rows
+            ]
+
+    def add_watchlist(
+        self,
+        ticker: str,
+        memo: str = "",
+    ) -> Watchlist:
+        """현재 사용자의 관심종목을 추가합니다."""
+        if not self.user_id:
+            raise ValueError(
+                "관심종목을 저장하려면 user_id가 필요합니다."
+            )
+
+        clean_ticker = str(
+            ticker
+        ).strip()
+
+        if not clean_ticker:
+            raise ValueError(
+                "종목코드를 입력해야 합니다."
+            )
+
+        with get_db_session() as session:
+            asset = (
+                session.query(AssetMaster)
+                .filter(
+                    AssetMaster.ticker
+                    == clean_ticker,
+                    AssetMaster.is_active.is_(
+                        True
+                    ),
+                )
+                .first()
+            )
+
+            if not asset:
+                raise ValueError(
+                    "asset_master에 등록되지 않은 "
+                    f"종목입니다: {clean_ticker}"
+                )
+
+            existing = (
+                session.query(Watchlist)
+                .filter(
+                    Watchlist.user_id
+                    == self.user_id,
+                    Watchlist.ticker
+                    == clean_ticker,
+                )
+                .first()
+            )
+
+            if existing:
+                existing.memo = str(
+                    memo or ""
+                ).strip()
+
+                return existing
+
+            watch = Watchlist(
+                user_id=self.user_id,
+                ticker=clean_ticker,
+                memo=str(
+                    memo or ""
+                ).strip(),
+            )
+
+            session.add(watch)
+            session.flush()
+            session.refresh(watch)
+
+            return watch
+
+    def update_watchlist_memo(
+        self,
+        ticker: str,
+        memo: str = "",
+    ) -> bool:
+        """현재 사용자의 관심종목 메모를 수정합니다."""
+        if not self.user_id:
+            return False
+
+        clean_ticker = str(
+            ticker
+        ).strip()
+
+        if not clean_ticker:
+            return False
+
+        with get_db_session() as session:
+            watch = (
+                session.query(Watchlist)
+                .filter(
+                    Watchlist.user_id
+                    == self.user_id,
+                    Watchlist.ticker
+                    == clean_ticker,
+                )
+                .first()
+            )
+
+            if not watch:
+                return False
+
+            watch.memo = str(
+                memo or ""
+            ).strip()
+
+            return True
+
+    def remove_watchlist(
+        self,
+        ticker: str,
+    ) -> bool:
+        """현재 사용자의 관심종목을 삭제합니다."""
+        if not self.user_id:
+            return False
+
+        clean_ticker = str(
+            ticker
+        ).strip()
+
+        if not clean_ticker:
+            return False
+
+        with get_db_session() as session:
+            watch = (
+                session.query(Watchlist)
+                .filter(
+                    Watchlist.user_id
+                    == self.user_id,
+                    Watchlist.ticker
+                    == clean_ticker,
+                )
+                .first()
+            )
+
+            if not watch:
+                return False
+
+            session.delete(watch)
 
             return True
