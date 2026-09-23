@@ -12,6 +12,7 @@ import os
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
 from supabase import create_client
+from database.repository import Repository
 
 
 app = FastAPI(
@@ -112,6 +113,96 @@ def get_current_user(
             ),
         )
 
+def get_verified_user_id(
+    authorization: str | None,
+) -> str:
+    """
+    검증된 Supabase 로그인 사용자의
+    user_id를 반환합니다.
+    """
+
+    user = get_current_user(
+        authorization=authorization
+    )
+
+    return user["user_id"]
+
+
+@app.get("/api/accounts")
+def get_accounts_api(
+    authorization: str | None = Header(
+        default=None
+    ),
+):
+    """
+    로그인한 사용자의 계좌만 조회합니다.
+    """
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        accounts = repo.get_accounts()
+
+        return {
+            "accounts": [
+                {
+                    "id": account.id,
+                    "account_name":
+                        account.account_name,
+
+                    "account_number":
+                        account.account_number,
+
+                    "broker":
+                        account.broker,
+
+                    "initial_capital":
+                        float(
+                            account.initial_capital
+                            or 0
+                        ),
+
+                    "base_monthly":
+                        float(
+                            account.base_monthly
+                            or 0
+                        ),
+
+                    "max_additional_monthly":
+                        float(
+                            account.max_additional_monthly
+                            or 0
+                        ),
+
+                    "buy_cycle_type":
+                        account.buy_cycle_type,
+
+                    "buy_cycle_detail":
+                        account.buy_cycle_detail,
+
+                    "is_default":
+                        bool(
+                            account.is_default
+                        ),
+
+                    "memo":
+                        account.memo,
+                }
+                for account in accounts
+            ]
+        }
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="계좌 정보를 불러오지 못했습니다.",
+        )        
 
 @app.get("/", response_class=HTMLResponse)
 def home():
