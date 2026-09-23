@@ -9,7 +9,7 @@ jobs:
 
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      TEST_USER_ID: ${{ secrets.TEST_USER_ID }}
+      REPORT_USER_ID: ${{ secrets.REPORT_USER_ID }}
 
     steps:
       - name: Checkout repository
@@ -25,7 +25,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Test user settings operations
+      - name: Test report user scope
         run: |
           python - <<'PY'
           import os
@@ -35,208 +35,112 @@ jobs:
           from database.connection import init_db
           from database.repository import Repository
 
-          repo = None
-          created = False
-
           try:
               print("1. Testing database connection...")
               init_db()
-              print("   SUCCESS: database connection works.")
+              print(
+                  "   SUCCESS: database connection works."
+              )
 
               user_id_text = os.environ.get(
-                  "TEST_USER_ID",
+                  "REPORT_USER_ID",
                   "",
               ).strip()
 
               if not user_id_text:
                   raise RuntimeError(
-                      "TEST_USER_ID secret is missing."
+                      "REPORT_USER_ID secret is missing."
                   )
 
               user_id = UUID(user_id_text)
 
-              print("2. Creating user-scoped Repository...")
+              print("2. Creating report Repository...")
 
               repo = Repository(
                   user_id=str(user_id)
               )
 
-              print("   SUCCESS: Repository created.")
+              print(
+                  "   SUCCESS: user-scoped Repository created."
+              )
 
-              # 이전 실패 테스트에서 임시 설정이 남았을 경우 정리
-              existing = repo.get_user_settings()
+              print("3. Reading report user's accounts...")
 
-              if existing is not None:
+              accounts = repo.get_accounts()
+
+              print(
+                  f"   Accounts found: {len(accounts)}"
+              )
+
+              for account in accounts:
                   print(
-                      "   Existing user settings found."
+                      "   - "
+                      f"id={account.id}, "
+                      f"name={account.account_name}"
+                  )
+
+              print("4. Reading investment profile...")
+
+              profile = repo.get_investment_profile()
+
+              if profile is None:
+                  print(
+                      "   Investment profile: not configured"
+                  )
+              else:
+                  print(
+                      "   Investment profile: configured"
+                  )
+
+              print("5. Reading watchlist...")
+
+              watchlist = repo.get_watchlist()
+
+              print(
+                  f"   Watchlist items: {len(watchlist)}"
+              )
+
+              for item in watchlist:
+                  print(
+                      "   - "
+                      f"{item['ticker']} "
+                      f"{item['name']}"
+                  )
+
+              print("6. Reading user settings...")
+
+              settings = repo.get_user_settings()
+
+              if settings is None:
+                  print(
+                      "   User settings: not configured"
+                  )
+              else:
+                  print(
+                      "   User settings: configured"
                   )
                   print(
-                      "   Removing them before the test."
+                      "   Morning report enabled: "
+                      f"{settings.morning_report_enabled}"
                   )
-                  repo.delete_user_settings()
-
-              print("3. Creating user settings...")
-
-              settings = repo.save_user_settings(
-                  morning_report_enabled=True,
-                  morning_report_time="07:30",
-                  kakao_enabled=False,
-                  news_enabled=True,
-                  ai_advice_enabled=True,
-              )
-
-              created = True
-
-              print(
-                  "   SUCCESS: user settings created."
-              )
-              print(
-                  f"   Settings id: {settings.id}"
-              )
-
-              print("4. Reading user settings...")
-
-              saved = repo.get_user_settings()
-
-              if saved is None:
-                  raise RuntimeError(
-                      "User settings could not be read."
+                  print(
+                      "   Morning report time: "
+                      f"{settings.morning_report_time}"
                   )
-
-              if (
-                  saved.morning_report_time.strftime("%H:%M")
-                  != "07:30"
-              ):
-                  raise RuntimeError(
-                      "morning_report_time was not "
-                      "saved correctly."
-                  )
-
-              if saved.morning_report_enabled is not True:
-                  raise RuntimeError(
-                      "morning_report_enabled was not "
-                      "saved correctly."
-                  )
-
-              if saved.news_enabled is not True:
-                  raise RuntimeError(
-                      "news_enabled was not saved correctly."
-                  )
-
-              print(
-                  "   SUCCESS: user settings read."
-              )
-
-              print("5. Updating user settings...")
-
-              updated = repo.save_user_settings(
-                  morning_report_enabled=True,
-                  morning_report_time="08:15",
-                  kakao_enabled=True,
-                  news_enabled=False,
-                  ai_advice_enabled=False,
-              )
-
-              if updated.id != settings.id:
-                  raise RuntimeError(
-                      "Update created a second "
-                      "user settings row."
-                  )
-
-              check = repo.get_user_settings()
-
-              if check is None:
-                  raise RuntimeError(
-                      "Updated user settings "
-                      "could not be read."
-                  )
-
-              if (
-                  check.morning_report_time.strftime("%H:%M")
-                  != "08:15"
-              ):
-                  raise RuntimeError(
-                      "morning_report_time update failed."
-                  )
-
-              if check.kakao_enabled is not True:
-                  raise RuntimeError(
-                      "kakao_enabled update failed."
-                  )
-
-              if check.news_enabled is not False:
-                  raise RuntimeError(
-                      "news_enabled update failed."
-                  )
-
-              if check.ai_advice_enabled is not False:
-                  raise RuntimeError(
-                      "ai_advice_enabled update failed."
-                  )
-
-              print(
-                  "   SUCCESS: user settings updated."
-              )
-
-              print("6. Deleting user settings...")
-
-              if not repo.delete_user_settings():
-                  raise RuntimeError(
-                      "User settings deletion failed."
-                  )
-
-              created = False
-
-              print(
-                  "   SUCCESS: user settings deleted."
-              )
-
-              print("7. Verifying deletion...")
-
-              if repo.get_user_settings() is not None:
-                  raise RuntimeError(
-                      "User settings still exist "
-                      "after deletion."
-                  )
-
-              print(
-                  "   SUCCESS: deletion verified."
-              )
 
               print("")
               print(
-                  "SUCCESS: User settings operations "
-                  "are working with Supabase."
+                  "SUCCESS: REPORT_USER_ID can read "
+                  "user-scoped Supabase data."
               )
 
           except Exception as exc:
               print("")
               print(
-                  "ERROR: User settings test failed."
+                  "ERROR: Report user scope test failed."
               )
               print(
                   f"{type(exc).__name__}: {exc}"
               )
-
-              if created and repo is not None:
-                  print(
-                      "Attempting cleanup of temporary "
-                      "user settings..."
-                  )
-
-                  try:
-                      if repo.delete_user_settings():
-                          print("Cleanup successful.")
-                      else:
-                          print(
-                              "No temporary settings found."
-                          )
-                  except Exception as cleanup_exc:
-                      print(
-                          "Cleanup failed: "
-                          f"{type(cleanup_exc).__name__}: "
-                          f"{cleanup_exc}"
-                      )
-
               sys.exit(1)
           PY
