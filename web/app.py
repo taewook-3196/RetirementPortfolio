@@ -4,6 +4,7 @@ web/app.py
 RetirementPortfolio 모바일 웹 애플리케이션.
 """
 
+
 from __future__ import annotations
 
 import os
