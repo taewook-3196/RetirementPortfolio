@@ -27,8 +27,10 @@ from database.models import (
     Price,
     RecommendationLog,
     Transaction,
+    UserSetting,
     Watchlist,
 )
+
 class Repository:
     def __init__(self, user_id: Optional[str] = None):
         init_db()
@@ -2428,3 +2430,128 @@ class Repository:
             session.delete(watch)
 
             return True
+
+    # -------------------------------------------------------------
+    # 사용자 설정 (UserSetting) 관리
+    # -------------------------------------------------------------
+
+    def get_user_settings(
+        self,
+    ) -> Optional[UserSetting]:
+        """현재 사용자의 설정을 조회합니다."""
+        if not self.user_id:
+            return None
+
+        with get_db_session() as session:
+            return (
+                session.query(UserSetting)
+                .filter(
+                    UserSetting.user_id
+                    == self.user_id
+                )
+                .first()
+            )
+
+    def save_user_settings(
+        self,
+        morning_report_enabled: bool = True,
+        morning_report_time: str = "07:30",
+        kakao_enabled: bool = False,
+        news_enabled: bool = True,
+        ai_advice_enabled: bool = True,
+    ) -> UserSetting:
+        """
+        현재 사용자의 설정을 저장합니다.
+
+        기존 설정이 있으면 수정하고,
+        없으면 새로 생성합니다.
+        """
+        if not self.user_id:
+            raise ValueError(
+                "사용자 설정을 저장하려면 user_id가 필요합니다."
+            )
+
+        clean_time = str(
+            morning_report_time
+        ).strip()
+
+        try:
+            report_time = datetime.strptime(
+                clean_time,
+                "%H:%M",
+            ).time()
+        except ValueError as exc:
+            raise ValueError(
+                "morning_report_time은 "
+                "HH:MM 형식이어야 합니다."
+            ) from exc
+
+        with get_db_session() as session:
+            settings = (
+                session.query(UserSetting)
+                .filter(
+                    UserSetting.user_id
+                    == self.user_id
+                )
+                .first()
+            )
+
+            if settings is None:
+                settings = UserSetting(
+                    user_id=self.user_id,
+                    morning_report_time=report_time,
+                )
+
+                session.add(settings)
+
+            settings.morning_report_enabled = bool(
+                morning_report_enabled
+            )
+
+            settings.morning_report_time = (
+                report_time
+            )
+
+            settings.kakao_enabled = bool(
+                kakao_enabled
+            )
+
+            settings.news_enabled = bool(
+                news_enabled
+            )
+
+            settings.ai_advice_enabled = bool(
+                ai_advice_enabled
+            )
+
+            settings.updated_at = datetime.now()
+
+            session.flush()
+            session.refresh(settings)
+
+            return settings
+
+    def delete_user_settings(
+        self,
+    ) -> bool:
+        """현재 사용자의 설정을 삭제합니다."""
+        if not self.user_id:
+            return False
+
+        with get_db_session() as session:
+            settings = (
+                session.query(UserSetting)
+                .filter(
+                    UserSetting.user_id
+                    == self.user_id
+                )
+                .first()
+            )
+
+            if not settings:
+                return False
+
+            session.delete(settings)
+
+            return True
+    
