@@ -1,94 +1,88 @@
-name: Test Web Application
+name: Test Supabase Web Configuration
 
 on:
   workflow_dispatch:
 
 jobs:
-  test-web:
+  test-web-config:
     runs-on: ubuntu-latest
+
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install project dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Test FastAPI application
+      - name: Validate Supabase web configuration
         run: |
           python - <<'PY'
+          import os
           import sys
 
           try:
-              print("1. Importing FastAPI application...")
+              print("1. Checking SUPABASE_URL...")
 
-              from web.app import app
+              url = os.environ.get(
+                  "SUPABASE_URL",
+                  "",
+              ).strip()
 
-              print("   SUCCESS: web.app imported.")
-
-              print("2. Checking application metadata...")
-
-              if app.title != "RetirementPortfolio":
+              if not url:
                   raise RuntimeError(
-                      "Unexpected FastAPI application title."
+                      "SUPABASE_URL is missing."
+                  )
+
+              if not (
+                  url.startswith("https://")
+                  and url.endswith(".supabase.co")
+              ):
+                  raise RuntimeError(
+                      "SUPABASE_URL has an unexpected format."
                   )
 
               print(
-                  "   SUCCESS: FastAPI application created."
+                  "   SUCCESS: SUPABASE_URL is configured."
               )
 
-              print("3. Checking registered routes...")
+              print("2. Checking browser API key...")
 
-              routes = {
-                  route.path
-                  for route in app.routes
-              }
+              api_key = os.environ.get(
+                  "SUPABASE_ANON_KEY",
+                  "",
+              ).strip()
 
-              if "/" not in routes:
+              if not api_key:
                   raise RuntimeError(
-                      "Home route '/' is missing."
+                      "SUPABASE_ANON_KEY is missing."
                   )
 
-              if "/health" not in routes:
+              if not (
+                  api_key.startswith("eyJ")
+                  or api_key.startswith("sb_publishable_")
+              ):
                   raise RuntimeError(
-                      "Health route '/health' is missing."
-                  )
-
-              print("   SUCCESS: required routes exist.")
-
-              print("4. Testing /health response...")
-
-              from web.app import health_check
-
-              result = health_check()
-
-              if result.get("status") != "ok":
-                  raise RuntimeError(
-                      "Health check did not return status=ok."
+                      "SUPABASE_ANON_KEY has an "
+                      "unexpected format."
                   )
 
               print(
-                  "   SUCCESS: /health response is valid."
+                  "   SUCCESS: browser API key "
+                  "is configured."
               )
 
               print("")
               print(
-                  "SUCCESS: FastAPI web application "
-                  "is ready."
+                  "SUCCESS: Supabase web "
+                  "configuration is ready."
               )
 
           except Exception as exc:
               print("")
               print(
-                  "ERROR: FastAPI web application "
-                  "test failed."
+                  "ERROR: Supabase web "
+                  "configuration test failed."
               )
               print(
                   f"{type(exc).__name__}: {exc}"
