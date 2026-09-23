@@ -43,8 +43,7 @@ class Account(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("profiles.id", ondelete="CASCADE"),
+        UUID(as_uuid=True),        
         nullable=False,
         index=True,
     )
@@ -197,8 +196,7 @@ class InvestmentProfile(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("profiles.id", ondelete="CASCADE"),
+        UUID(as_uuid=True),        
         nullable=False,
         unique=True,
     )
@@ -222,8 +220,7 @@ class Watchlist(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("profiles.id", ondelete="CASCADE"),
+        UUID(as_uuid=True),        
         nullable=False,
     )
     ticker = Column(
@@ -263,8 +260,7 @@ class UserSetting(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("profiles.id", ondelete="CASCADE"),
+        UUID(as_uuid=True),        
         nullable=False,
         unique=True,
     )
@@ -281,8 +277,7 @@ class RecommendationLog(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("profiles.id", ondelete="CASCADE"),
+        UUID(as_uuid=True),        
         nullable=False,
         index=True,
     )
