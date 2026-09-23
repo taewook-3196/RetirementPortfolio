@@ -11,6 +11,7 @@ import json
 import logging
 import urllib.request
 import urllib.parse
+import ssl
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
@@ -26,6 +27,9 @@ class NaverFinanceClient:
         "Referer": "https://m.stock.naver.com/",
         "Accept": "application/json, text/plain, */*",
     }
+
+    def __init__(self):
+        self.ssl_context = ssl._create_unverified_context()
 
     def fetch_historical_prices(
         self,
@@ -54,7 +58,7 @@ class NaverFinanceClient:
                 for page in range(1, max_pages + 1):
                     url = f"{self.BASE_URL}/{t_clean}/price?page={page}&pageSize={page_size}"
                     req = urllib.request.Request(url, headers=self.HEADERS)
-                    with urllib.request.urlopen(req, timeout=8) as resp:
+                    with urllib.request.urlopen(req, context=self.ssl_context, timeout=8) as resp:
                         data = json.loads(resp.read().decode("utf-8"))
 
                     if not isinstance(data, list) or not data:
@@ -113,7 +117,7 @@ class NaverFinanceClient:
         try:
             url = f"{self.BASE_URL}/{ticker}/basic"
             req = urllib.request.Request(url, headers=self.HEADERS)
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, context=self.ssl_context, timeout=5) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 return data.get("stockName")
         except Exception:
