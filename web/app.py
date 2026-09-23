@@ -998,6 +998,36 @@ def home():
                 font-size: 13px;
             }
 
+            .transaction-actions {
+                display: flex;
+                gap: 8px;
+                margin-top: 9px;
+            }
+            
+            .transaction-actions button {
+                width: auto;
+                min-height: 36px;
+                margin-top: 0;
+                padding: 7px 14px;
+                font-size: 13px;
+            }
+            
+            .edit-button {
+                background: #4b5563;
+            }
+            
+            .delete-button {
+                background: #b3261e;
+            }
+            
+            .cancel-button {
+                background: #777;
+            }
+            
+            .editing {
+                background: #fff8e8;
+            }
+
             .buy {
                 color: #b3261e;
             }
@@ -1519,81 +1549,91 @@ def home():
 
             function renderTransactions(
                 container,
-                transactions
+                transactions,
+                targets,
+                account,
+                accessToken,
+                positionsList
             ) {
                 container.innerHTML = "";
-
+            
+                const targetNameMap = {};
+            
+                for (const target of targets) {
+                    targetNameMap[target.ticker] =
+                        target.name;
+                }
+            
                 if (transactions.length === 0) {
                     const empty =
                         document.createElement(
                             "div"
                         );
-
-                    empty.className =
-                        "empty";
-
+            
+                    empty.className = "empty";
                     empty.textContent =
                         "아직 등록된 거래가 없습니다.";
-
-                    container.appendChild(
-                        empty
-                    );
-
+            
+                    container.appendChild(empty);
                     return;
                 }
-
+            
                 const newestFirst =
                     [...transactions].reverse();
-
-                for (
-                    const transaction
-                    of newestFirst
-                ) {
+            
+                for (const transaction of newestFirst) {
                     const row =
                         document.createElement(
                             "div"
                         );
-
+            
                     row.className =
                         "transaction-row";
-
+            
                     const main =
                         document.createElement(
                             "div"
                         );
-
+            
                     main.className =
                         "transaction-main";
-
+            
                     const left =
                         document.createElement(
                             "div"
                         );
-
+            
                     const typeText =
                         transaction.transaction_type
                         === "BUY"
                         ? "매수"
                         : "매도";
-
+            
+                    const assetName =
+                        targetNameMap[
+                            transaction.ticker
+                        ] || transaction.ticker;
+            
                     left.textContent =
                         transaction.transaction_date
                         + " · "
+                        + assetName
+                        + " ("
                         + transaction.ticker
-                        + " · "
+                        + ") · "
                         + typeText;
-
+            
                     left.className =
                         transaction.transaction_type
                         === "BUY"
                         ? "buy"
                         : "sell";
-
+            
                     const amount =
                         document.createElement(
                             "div"
                         );
-
+            
                     amount.textContent =
                         formatWon(
                             Number(
@@ -1603,18 +1643,18 @@ def home():
                                 transaction.price
                             )
                         );
-
+            
                     main.appendChild(left);
                     main.appendChild(amount);
-
+            
                     const detail =
                         document.createElement(
                             "div"
                         );
-
+            
                     detail.className =
                         "transaction-detail";
-
+            
                     detail.textContent =
                         "수량 "
                         + formatNumber(
@@ -1632,38 +1672,585 @@ def home():
                         + formatWon(
                             transaction.tax
                         );
-
+            
                     row.appendChild(main);
                     row.appendChild(detail);
-
+            
                     if (transaction.memo) {
                         const memo =
                             document.createElement(
                                 "div"
                             );
-
+            
                         memo.className =
                             "transaction-detail";
-
+            
                         memo.textContent =
                             "메모: "
                             + transaction.memo;
-
+            
                         row.appendChild(memo);
                     }
-
-                    container.appendChild(
-                        row
+            
+                    const actions =
+                        document.createElement(
+                            "div"
+                        );
+            
+                    actions.className =
+                        "transaction-actions";
+            
+                    const editButton =
+                        document.createElement(
+                            "button"
+                        );
+            
+                    editButton.type = "button";
+                    editButton.className =
+                        "edit-button";
+            
+                    editButton.textContent =
+                        "수정";
+            
+                    const deleteButton =
+                        document.createElement(
+                            "button"
+                        );
+            
+                    deleteButton.type = "button";
+                    deleteButton.className =
+                        "delete-button";
+            
+                    deleteButton.textContent =
+                        "삭제";
+            
+                    actions.appendChild(
+                        editButton
                     );
+            
+                    actions.appendChild(
+                        deleteButton
+                    );
+            
+                    row.appendChild(actions);
+            
+                    editButton.addEventListener(
+                        "click",
+                        () => {
+                            showTransactionEditor(
+                                row,
+                                transaction,
+                                targets,
+                                account,
+                                accessToken,
+                                container,
+                                positionsList
+                            );
+                        }
+                    );
+            
+                    deleteButton.addEventListener(
+                        "click",
+                        async () => {
+                            const confirmed =
+                                window.confirm(
+                                    assetName
+                                    + " 거래를 삭제할까요?\\n"
+                                    + transaction.transaction_date
+                                    + " · "
+                                    + typeText
+                                    + " · "
+                                    + formatNumber(
+                                        transaction.quantity
+                                    )
+                                    + "주"
+                                );
+            
+                            if (!confirmed) {
+                                return;
+                            }
+            
+                            deleteButton.disabled =
+                                true;
+            
+                            deleteButton.textContent =
+                                "삭제 중...";
+            
+                            try {
+                                const data =
+                                    await apiRequest(
+                                        "/api/accounts/"
+                                        + account.id
+                                        + "/transactions/"
+                                        + transaction.id,
+                                        accessToken,
+                                        {
+                                            method:
+                                                "DELETE",
+                                        }
+                                    );
+            
+                                if (!data.deleted) {
+                                    throw new Error(
+                                        "거래 삭제에 실패했습니다."
+                                    );
+                                }
+            
+                                await refreshPortfolioData(
+                                    account,
+                                    targets,
+                                    accessToken,
+                                    container,
+                                    positionsList
+                                );
+            
+                            } catch (error) {
+                                window.alert(
+                                    error.message
+                                    || "거래 삭제에 실패했습니다."
+                                );
+            
+                                deleteButton.disabled =
+                                    false;
+            
+                                deleteButton.textContent =
+                                    "삭제";
+                            }
+                        }
+                    );
+            
+                    container.appendChild(row);
                 }
             }
 
+            async function refreshPortfolioData(
+                account,
+                targets,
+                accessToken,
+                transactionsList,
+                positionsList
+            ) {
+                const [
+                    transactions,
+                    positions
+                ] = await Promise.all([
+                    loadTransactions(
+                        accessToken,
+                        account.id
+                    ),
+            
+                    loadPositions(
+                        accessToken,
+                        account.id
+                    ),
+                ]);
+            
+                renderTransactions(
+                    transactionsList,
+                    transactions,
+                    targets,
+                    account,
+                    accessToken,
+                    positionsList
+                );
+            
+                renderPositions(
+                    positionsList,
+                    positions
+                );
+            }
+            
+            
+            function showTransactionEditor(
+                row,
+                transaction,
+                targets,
+                account,
+                accessToken,
+                transactionsList,
+                positionsList
+            ) {
+                row.innerHTML = "";
+                row.className =
+                    "transaction-row editing";
+            
+                const form =
+                    document.createElement(
+                        "form"
+                    );
+            
+                const typeLabel =
+                    document.createElement(
+                        "label"
+                    );
+            
+                typeLabel.textContent =
+                    "거래 유형";
+            
+                const typeSelect =
+                    document.createElement(
+                        "select"
+                    );
+            
+                for (
+                    const [value, text]
+                    of [
+                        ["BUY", "매수"],
+                        ["SELL", "매도"],
+                    ]
+                ) {
+                    const option =
+                        document.createElement(
+                            "option"
+                        );
+            
+                    option.value = value;
+                    option.textContent = text;
+            
+                    if (
+                        transaction.transaction_type
+                        === value
+                    ) {
+                        option.selected = true;
+                    }
+            
+                    typeSelect.appendChild(
+                        option
+                    );
+                }
+            
+                const dateLabel =
+                    document.createElement(
+                        "label"
+                    );
+            
+                dateLabel.textContent =
+                    "거래일";
+            
+                const dateInput =
+                    document.createElement(
+                        "input"
+                    );
+            
+                dateInput.type = "date";
+                dateInput.required = true;
+                dateInput.value =
+                    transaction.transaction_date;
+            
+                const tickerLabel =
+                    document.createElement(
+                        "label"
+                    );
+            
+                tickerLabel.textContent =
+                    "종목";
+            
+                const tickerSelect =
+                    document.createElement(
+                        "select"
+                    );
+            
+                for (const target of targets) {
+                    const option =
+                        document.createElement(
+                            "option"
+                        );
+            
+                    option.value =
+                        target.ticker;
+            
+                    option.textContent =
+                        target.ticker
+                        + " · "
+                        + target.name;
+            
+                    if (
+                        target.ticker
+                        === transaction.ticker
+                    ) {
+                        option.selected = true;
+                    }
+            
+                    tickerSelect.appendChild(
+                        option
+                    );
+                }
+            
+                const quantityLabel =
+                    document.createElement(
+                        "label"
+                    );
+            
+                quantityLabel.textContent =
+                    "수량";
+            
+                const quantityInput =
+                    document.createElement(
+                        "input"
+                    );
+            
+                quantityInput.type = "number";
+                quantityInput.min = "0.000001";
+                quantityInput.step = "any";
+                quantityInput.required = true;
+                quantityInput.value =
+                    transaction.quantity;
+            
+                const priceLabel =
+                    document.createElement(
+                        "label"
+                    );
+            
+                priceLabel.textContent =
+                    "체결가격";
+            
+                const priceInput =
+                    document.createElement(
+                        "input"
+                    );
+            
+                priceInput.type = "number";
+                priceInput.min = "0";
+                priceInput.step = "any";
+                priceInput.required = true;
+                priceInput.value =
+                    transaction.price;
+            
+                const feeLabel =
+                    document.createElement(
+                        "label"
+                    );
+            
+                feeLabel.textContent =
+                    "수수료";
+            
+                const feeInput =
+                    document.createElement(
+                        "input"
+                    );
+            
+                feeInput.type = "number";
+                feeInput.min = "0";
+                feeInput.step = "any";
+                feeInput.value =
+                    transaction.fee || 0;
+            
+                const taxLabel =
+                    document.createElement(
+                        "label"
+                    );
+            
+                taxLabel.textContent =
+                    "세금";
+            
+                const taxInput =
+                    document.createElement(
+                        "input"
+                    );
+            
+                taxInput.type = "number";
+                taxInput.min = "0";
+                taxInput.step = "any";
+                taxInput.value =
+                    transaction.tax || 0;
+            
+                const memoLabel =
+                    document.createElement(
+                        "label"
+                    );
+            
+                memoLabel.textContent =
+                    "메모";
+            
+                const memoInput =
+                    document.createElement(
+                        "textarea"
+                    );
+            
+                memoInput.value =
+                    transaction.memo || "";
+            
+                const saveButton =
+                    document.createElement(
+                        "button"
+                    );
+            
+                saveButton.type = "submit";
+                saveButton.textContent =
+                    "수정 저장";
+            
+                const cancelButton =
+                    document.createElement(
+                        "button"
+                    );
+            
+                cancelButton.type = "button";
+                cancelButton.className =
+                    "cancel-button";
+            
+                cancelButton.textContent =
+                    "취소";
+            
+                const result =
+                    document.createElement(
+                        "div"
+                    );
+            
+                result.className =
+                    "transaction-message";
+            
+                form.appendChild(typeLabel);
+                form.appendChild(typeSelect);
+                form.appendChild(dateLabel);
+                form.appendChild(dateInput);
+                form.appendChild(tickerLabel);
+                form.appendChild(tickerSelect);
+                form.appendChild(quantityLabel);
+                form.appendChild(quantityInput);
+                form.appendChild(priceLabel);
+                form.appendChild(priceInput);
+                form.appendChild(feeLabel);
+                form.appendChild(feeInput);
+                form.appendChild(taxLabel);
+                form.appendChild(taxInput);
+                form.appendChild(memoLabel);
+                form.appendChild(memoInput);
+                form.appendChild(saveButton);
+                form.appendChild(cancelButton);
+                form.appendChild(result);
+            
+                row.appendChild(form);
+            
+                cancelButton.addEventListener(
+                    "click",
+                    async () => {
+                        try {
+                            await refreshPortfolioData(
+                                account,
+                                targets,
+                                accessToken,
+                                transactionsList,
+                                positionsList
+                            );
+            
+                        } catch (error) {
+                            window.alert(
+                                error.message
+                                || "거래 내역을 다시 불러오지 못했습니다."
+                            );
+                        }
+                    }
+                );
+            
+                form.addEventListener(
+                    "submit",
+                    async (event) => {
+                        event.preventDefault();
+            
+                        saveButton.disabled =
+                            true;
+            
+                        saveButton.textContent =
+                            "수정 중...";
+            
+                        result.textContent = "";
+            
+                        const payload = {
+                            transaction_date:
+                                dateInput.value,
+            
+                            ticker:
+                                tickerSelect.value,
+            
+                            transaction_type:
+                                typeSelect.value,
+            
+                            quantity:
+                                Number(
+                                    quantityInput.value
+                                ),
+            
+                            price:
+                                Number(
+                                    priceInput.value
+                                ),
+            
+                            fee:
+                                Number(
+                                    feeInput.value || 0
+                                ),
+            
+                            tax:
+                                Number(
+                                    taxInput.value || 0
+                                ),
+            
+                            memo:
+                                memoInput.value.trim(),
+                        };
+            
+                        try {
+                            const data =
+                                await apiRequest(
+                                    "/api/accounts/"
+                                    + account.id
+                                    + "/transactions/"
+                                    + transaction.id,
+                                    accessToken,
+                                    {
+                                        method: "PUT",
+            
+                                        headers: {
+                                            "Content-Type":
+                                                "application/json",
+                                        },
+            
+                                        body:
+                                            JSON.stringify(
+                                                payload
+                                            ),
+                                    }
+                                );
+            
+                            if (!data.updated) {
+                                throw new Error(
+                                    "거래 수정에 실패했습니다."
+                                );
+                            }
+            
+                            await refreshPortfolioData(
+                                account,
+                                targets,
+                                accessToken,
+                                transactionsList,
+                                positionsList
+                            );
+            
+                        } catch (error) {
+                            result.textContent =
+                                error.message
+                                || "거래 수정에 실패했습니다.";
+            
+                            result.className =
+                                "transaction-message error";
+            
+                            saveButton.disabled =
+                                false;
+            
+                            saveButton.textContent =
+                                "수정 저장";
+                        }
+                    }
+                );
+            }
+            
 
             function createTransactionForm(
                 account,
                 targets,
                 accessToken,
-                transactionsList
+                transactionsList,
+                positionsList
             ) {
                 const form =
                     document.createElement(
@@ -2061,15 +2648,12 @@ def home():
                             taxInput.value = "0";
                             memoInput.value = "";
 
-                            const transactions =
-                                await loadTransactions(
-                                    accessToken,
-                                    account.id
-                                );
-
-                            renderTransactions(
+                            await refreshPortfolioData(
+                                account,
+                                targets,
+                                accessToken,
                                 transactionsList,
-                                transactions
+                                positionsList
                             );
 
                         } catch (error) {
@@ -2350,7 +2934,8 @@ def home():
                                 account,
                                 targets,
                                 accessToken,
-                                transactionsList
+                                transactionsList,
+                                positionsList
                             );
 
                         card.appendChild(
@@ -2374,7 +2959,11 @@ def home():
 
                             renderTransactions(
                                 transactionsList,
-                                transactions
+                                transactions,
+                                targets,
+                                account,
+                                accessToken,
+                                positionsList
                             );
 
                         } catch (error) {
