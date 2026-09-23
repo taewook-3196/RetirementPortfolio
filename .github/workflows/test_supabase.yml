@@ -25,7 +25,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Test watchlist operations
+      - name: Test user settings operations
         run: |
           python - <<'PY'
           import os
@@ -36,8 +36,7 @@ jobs:
           from database.repository import Repository
 
           repo = None
-          test_ticker = None
-          added = False
+          created = False
 
           try:
               print("1. Testing database connection...")
@@ -64,218 +63,174 @@ jobs:
 
               print("   SUCCESS: Repository created.")
 
-              print("3. Finding test asset...")
+              # 이전 실패 테스트에서 임시 설정이 남았을 경우 정리
+              existing = repo.get_user_settings()
 
-              assets = repo.search_etf_master(
-                  keyword="",
-                  limit=10,
+              if existing is not None:
+                  print(
+                      "   Existing user settings found."
+                  )
+                  print(
+                      "   Removing them before the test."
+                  )
+                  repo.delete_user_settings()
+
+              print("3. Creating user settings...")
+
+              settings = repo.save_user_settings(
+                  morning_report_enabled=True,
+                  morning_report_time="07:30",
+                  kakao_enabled=False,
+                  news_enabled=True,
+                  ai_advice_enabled=True,
               )
 
-              if not assets:
-                  raise RuntimeError(
-                      "asset_master is empty. "
-                      "No asset is available for "
-                      "the watchlist test."
-                  )
-
-              test_ticker = assets[0]["ticker"]
-              test_name = assets[0]["name"]
+              created = True
 
               print(
-                  f"   Test asset: "
-                  f"{test_ticker} {test_name}"
+                  "   SUCCESS: user settings created."
               )
-
-              # 이전 실패 테스트에서 같은 사용자의
-              # 임시 관심종목이 남아 있을 가능성을 정리
-              repo.remove_watchlist(
-                  test_ticker
-              )
-
-              print("4. Adding watchlist item...")
-
-              watch = repo.add_watchlist(
-                  ticker=test_ticker,
-                  memo="GitHub Actions test",
-              )
-
-              added = True
-
-              if watch.ticker != test_ticker:
-                  raise RuntimeError(
-                      "Wrong ticker was saved."
-                  )
-
               print(
-                  "   SUCCESS: watchlist item added."
+                  f"   Settings id: {settings.id}"
               )
 
-              print("5. Reading watchlist...")
+              print("4. Reading user settings...")
 
-              watchlist = repo.get_watchlist()
+              saved = repo.get_user_settings()
 
-              matches = [
-                  item
-                  for item in watchlist
-                  if item["ticker"] == test_ticker
-              ]
-
-              if len(matches) != 1:
+              if saved is None:
                   raise RuntimeError(
-                      "Watchlist item could not be "
-                      "read correctly."
+                      "User settings could not be read."
                   )
 
-              if matches[0]["memo"] != (
-                  "GitHub Actions test"
+              if (
+                  saved.morning_report_time.strftime("%H:%M")
+                  != "07:30"
               ):
                   raise RuntimeError(
-                      "Watchlist memo was not "
+                      "morning_report_time was not "
                       "saved correctly."
                   )
 
-              print(
-                  "   SUCCESS: watchlist item read."
-              )
-
-              print("6. Updating watchlist memo...")
-
-              updated = repo.update_watchlist_memo(
-                  ticker=test_ticker,
-                  memo="Updated test memo",
-              )
-
-              if not updated:
+              if saved.morning_report_enabled is not True:
                   raise RuntimeError(
-                      "Watchlist memo update failed."
+                      "morning_report_enabled was not "
+                      "saved correctly."
                   )
 
-              watchlist = repo.get_watchlist()
+              if saved.news_enabled is not True:
+                  raise RuntimeError(
+                      "news_enabled was not saved correctly."
+                  )
 
-              matches = [
-                  item
-                  for item in watchlist
-                  if item["ticker"] == test_ticker
-              ]
+              print(
+                  "   SUCCESS: user settings read."
+              )
+
+              print("5. Updating user settings...")
+
+              updated = repo.save_user_settings(
+                  morning_report_enabled=True,
+                  morning_report_time="08:15",
+                  kakao_enabled=True,
+                  news_enabled=False,
+                  ai_advice_enabled=False,
+              )
+
+              if updated.id != settings.id:
+                  raise RuntimeError(
+                      "Update created a second "
+                      "user settings row."
+                  )
+
+              check = repo.get_user_settings()
+
+              if check is None:
+                  raise RuntimeError(
+                      "Updated user settings "
+                      "could not be read."
+                  )
 
               if (
-                  len(matches) != 1
-                  or matches[0]["memo"]
-                  != "Updated test memo"
+                  check.morning_report_time.strftime("%H:%M")
+                  != "08:15"
               ):
                   raise RuntimeError(
-                      "Updated memo could not be "
-                      "verified."
+                      "morning_report_time update failed."
+                  )
+
+              if check.kakao_enabled is not True:
+                  raise RuntimeError(
+                      "kakao_enabled update failed."
+                  )
+
+              if check.news_enabled is not False:
+                  raise RuntimeError(
+                      "news_enabled update failed."
+                  )
+
+              if check.ai_advice_enabled is not False:
+                  raise RuntimeError(
+                      "ai_advice_enabled update failed."
                   )
 
               print(
-                  "   SUCCESS: watchlist memo updated."
+                  "   SUCCESS: user settings updated."
               )
 
-              print("7. Testing duplicate handling...")
+              print("6. Deleting user settings...")
 
-              duplicate = repo.add_watchlist(
-                  ticker=test_ticker,
-                  memo="Duplicate test memo",
+              if not repo.delete_user_settings():
+                  raise RuntimeError(
+                      "User settings deletion failed."
+                  )
+
+              created = False
+
+              print(
+                  "   SUCCESS: user settings deleted."
               )
 
-              if duplicate.ticker != test_ticker:
+              print("7. Verifying deletion...")
+
+              if repo.get_user_settings() is not None:
                   raise RuntimeError(
-                      "Duplicate handling returned "
-                      "the wrong item."
-                  )
-
-              watchlist = repo.get_watchlist()
-
-              matches = [
-                  item
-                  for item in watchlist
-                  if item["ticker"] == test_ticker
-              ]
-
-              if len(matches) != 1:
-                  raise RuntimeError(
-                      "Duplicate watchlist row "
-                      "was created."
-                  )
-
-              if matches[0]["memo"] != (
-                  "Duplicate test memo"
-              ):
-                  raise RuntimeError(
-                      "Duplicate add did not update "
-                      "the existing memo."
+                      "User settings still exist "
+                      "after deletion."
                   )
 
               print(
-                  "   SUCCESS: duplicate handled "
-                  "without creating another row."
-              )
-
-              print("8. Removing watchlist item...")
-
-              removed = repo.remove_watchlist(
-                  test_ticker
-              )
-
-              if not removed:
-                  raise RuntimeError(
-                      "Watchlist removal failed."
-                  )
-
-              added = False
-
-              print(
-                  "   SUCCESS: watchlist item removed."
-              )
-
-              print("9. Verifying removal...")
-
-              remaining = repo.get_watchlist()
-
-              if any(
-                  item["ticker"] == test_ticker
-                  for item in remaining
-              ):
-                  raise RuntimeError(
-                      "Watchlist item still exists "
-                      "after removal."
-                  )
-
-              print(
-                  "   SUCCESS: removal verified."
+                  "   SUCCESS: deletion verified."
               )
 
               print("")
               print(
-                  "SUCCESS: User watchlist operations "
+                  "SUCCESS: User settings operations "
                   "are working with Supabase."
               )
 
           except Exception as exc:
               print("")
               print(
-                  "ERROR: Watchlist test failed."
+                  "ERROR: User settings test failed."
               )
               print(
                   f"{type(exc).__name__}: {exc}"
               )
 
-              if (
-                  added
-                  and repo is not None
-                  and test_ticker
-              ):
+              if created and repo is not None:
                   print(
                       "Attempting cleanup of temporary "
-                      "watchlist item..."
+                      "user settings..."
                   )
 
                   try:
-                      repo.remove_watchlist(
-                          test_ticker
-                      )
-                      print("Cleanup completed.")
+                      if repo.delete_user_settings():
+                          print("Cleanup successful.")
+                      else:
+                          print(
+                              "No temporary settings found."
+                          )
                   except Exception as cleanup_exc:
                       print(
                           "Cleanup failed: "
