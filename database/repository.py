@@ -23,11 +23,11 @@ from database.models import (
     AccountTarget,
     AssetMaster,
     Dividend,
+    InvestmentProfile,
     Price,
     RecommendationLog,
     Transaction,
 )
-
 
 class Repository:
     def __init__(self, user_id: Optional[str] = None):
@@ -2071,3 +2071,173 @@ class Repository:
                 )
                 .first()
             )
+
+    # -------------------------------------------------------------
+    # 투자 성향 (InvestmentProfile) 관리
+    # -------------------------------------------------------------
+
+    def get_investment_profile(
+        self,
+    ) -> Optional[InvestmentProfile]:
+        """현재 사용자의 투자 성향을 조회합니다."""
+        if not self.user_id:
+            return None
+
+        with get_db_session() as session:
+            return (
+                session.query(InvestmentProfile)
+                .filter(
+                    InvestmentProfile.user_id
+                    == self.user_id
+                )
+                .first()
+            )
+
+    def save_investment_profile(
+        self,
+        risk_profile: str = "balanced",
+        investment_horizon_years: Optional[int] = None,
+        target_return: Optional[float] = None,
+        max_drawdown: Optional[float] = None,
+        monthly_investment: float = 0.0,
+        preferred_markets: Optional[List[str]] = None,
+        excluded_assets: Optional[List[str]] = None,
+        ai_advice_enabled: bool = True,
+        ai_advice_style: str = "balanced",
+        memo: str = "",
+        investment_preference_text: str = "",
+    ) -> InvestmentProfile:
+        """
+        현재 사용자의 투자 성향을 저장합니다.
+
+        이미 투자 성향이 존재하면 수정하고,
+        없으면 새로 생성합니다.
+        """
+        if not self.user_id:
+            raise ValueError(
+                "투자 성향을 저장하려면 user_id가 필요합니다."
+            )
+
+        clean_risk_profile = str(
+            risk_profile or "balanced"
+        ).strip()
+
+        clean_ai_advice_style = str(
+            ai_advice_style or "balanced"
+        ).strip()
+
+        clean_preferred_markets = [
+            str(value).strip()
+            for value in (
+                preferred_markets or []
+            )
+            if str(value).strip()
+        ]
+
+        clean_excluded_assets = [
+            str(value).strip()
+            for value in (
+                excluded_assets or []
+            )
+            if str(value).strip()
+        ]
+
+        with get_db_session() as session:
+            profile = (
+                session.query(InvestmentProfile)
+                .filter(
+                    InvestmentProfile.user_id
+                    == self.user_id
+                )
+                .first()
+            )
+
+            if profile is None:
+                profile = InvestmentProfile(
+                    user_id=self.user_id,
+                )
+
+                session.add(profile)
+
+            profile.risk_profile = (
+                clean_risk_profile
+            )
+
+            profile.investment_horizon_years = (
+                int(investment_horizon_years)
+                if investment_horizon_years
+                is not None
+                else None
+            )
+
+            profile.target_return = (
+                float(target_return)
+                if target_return is not None
+                else None
+            )
+
+            profile.max_drawdown = (
+                float(max_drawdown)
+                if max_drawdown is not None
+                else None
+            )
+
+            profile.monthly_investment = float(
+                monthly_investment or 0
+            )
+
+            profile.preferred_markets = (
+                clean_preferred_markets
+            )
+
+            profile.excluded_assets = (
+                clean_excluded_assets
+            )
+
+            profile.ai_advice_enabled = bool(
+                ai_advice_enabled
+            )
+
+            profile.ai_advice_style = (
+                clean_ai_advice_style
+            )
+
+            profile.memo = str(
+                memo or ""
+            ).strip()
+
+            profile.investment_preference_text = str(
+                investment_preference_text
+                or ""
+            ).strip()
+
+            profile.updated_at = datetime.now()
+
+            session.flush()
+            session.refresh(profile)
+
+            return profile
+
+    def delete_investment_profile(
+        self,
+    ) -> bool:
+        """현재 사용자의 투자 성향을 삭제합니다."""
+        if not self.user_id:
+            return False
+
+        with get_db_session() as session:
+            profile = (
+                session.query(InvestmentProfile)
+                .filter(
+                    InvestmentProfile.user_id
+                    == self.user_id
+                )
+                .first()
+            )
+
+            if not profile:
+                return False
+
+            session.delete(profile)
+
+            return True
