@@ -6,6 +6,7 @@ UI 동결 방지(QThread) 비동기 데이터 작업자.
 
 from __future__ import annotations
 import logging
+from typing import Any
 from PySide6.QtCore import QThread, Signal
 from services.market_data_service import MarketDataService
 
