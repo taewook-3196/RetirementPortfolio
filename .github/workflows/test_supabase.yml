@@ -9,6 +9,7 @@ jobs:
 
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TEST_USER_ID: ${{ secrets.TEST_USER_ID }}
 
     steps:
       - name: Checkout repository
@@ -24,54 +25,175 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Test project database layer
+      - name: Test user account database operations
         run: |
           python - <<'PY'
+          import os
           import sys
+          from uuid import UUID
 
-          from database.connection import init_db
+          from database.connection import init_db, get_db_session
+          from database.models import Account, AccountTarget
           from database.repository import Repository
 
-          try:
-              print("1. Testing database.connection...")
-              init_db()
-              print("   SUCCESS: database.connection works.")
+          account_id = None
+          repo = None
 
-              print("2. Creating Repository...")
-              repo = Repository()
+          try:
+              print("1. Testing database connection...")
+              init_db()
+              print("   SUCCESS: database connection works.")
+
+              user_id_text = os.environ.get(
+                  "TEST_USER_ID",
+                  "",
+              ).strip()
+
+              if not user_id_text:
+                  raise RuntimeError(
+                      "TEST_USER_ID secret is missing."
+                  )
+
+              user_id = UUID(user_id_text)
+
+              print("2. Creating user-scoped Repository...")
+              repo = Repository(
+                  user_id=str(user_id)
+              )
               print("   SUCCESS: Repository created.")
 
-              print("3. Reading asset_master...")
-              assets = repo.search_etf_master(
-                  keyword="",
-                  limit=10,
+              print("3. Creating test account...")
+              account = repo.create_account(
+                  account_name="GitHub Actions Test Account",
+                  account_number="TEST",
+                  broker="TEST",
+                  initial_capital=1000000,
+                  base_monthly=100000,
+                  max_additional_monthly=50000,
+                  buy_cycle_type="monthly",
+                  buy_cycle_detail="25",
+                  memo="Temporary automated test account",
               )
 
-              print("   SUCCESS: asset_master query works.")
-              print(f"   Assets found: {len(assets)}")
+              account_id = account.id
 
-              for asset in assets:
-                  print(
-                      "   -",
-                      asset["ticker"],
-                      asset["name"],
-                      asset["market"],
+              print(
+                  f"   SUCCESS: test account created. "
+                  f"id={account_id}"
+              )
+
+              print("4. Verifying account ownership...")
+
+              with get_db_session() as session:
+                  saved_account = (
+                      session.query(Account)
+                      .filter(
+                          Account.id == account_id,
+                          Account.user_id == user_id,
+                      )
+                      .first()
                   )
+
+                  if saved_account is None:
+                      raise RuntimeError(
+                          "Created account could not be found "
+                          "for TEST_USER_ID."
+                      )
+
+                  target_count = (
+                      session.query(AccountTarget)
+                      .filter(
+                          AccountTarget.account_id
+                          == account_id
+                      )
+                      .count()
+                  )
+
+              print(
+                  "   SUCCESS: account belongs to "
+                  "TEST_USER_ID."
+              )
+              print(
+                  f"   Seeded account targets: "
+                  f"{target_count}"
+              )
+
+              print("5. Deleting test account...")
+
+              deleted = repo.delete_account(
+                  account_id
+              )
+
+              if not deleted:
+                  raise RuntimeError(
+                      "Repository.delete_account() "
+                      "returned False."
+                  )
+
+              print("   SUCCESS: test account deleted.")
+
+              print("6. Verifying deletion...")
+
+              with get_db_session() as session:
+                  remaining = (
+                      session.query(Account)
+                      .filter(
+                          Account.id == account_id,
+                          Account.user_id == user_id,
+                      )
+                      .first()
+                  )
+
+              if remaining is not None:
+                  raise RuntimeError(
+                      "Test account still exists "
+                      "after deletion."
+                  )
+
+              account_id = None
+
+              print(
+                  "   SUCCESS: deletion verified."
+              )
 
               print("")
               print(
-                  "SUCCESS: Project database layer "
-                  "is working with Supabase."
+                  "SUCCESS: User-scoped Supabase "
+                  "account operations are working."
               )
 
           except Exception as exc:
               print("")
               print(
-                  "ERROR: Project database layer "
+                  "ERROR: User account database "
                   "test failed."
               )
               print(
                   f"{type(exc).__name__}: {exc}"
               )
+
+              if account_id is not None and repo is not None:
+                  print(
+                      "Attempting cleanup of "
+                      "temporary test account..."
+                  )
+
+                  try:
+                      if repo.delete_account(account_id):
+                          print(
+                              "Cleanup successful."
+                          )
+                      else:
+                          print(
+                              "Cleanup could not find "
+                              "the test account."
+                          )
+                  except Exception as cleanup_exc:
+                      print(
+                          "Cleanup failed: "
+                          f"{type(cleanup_exc).__name__}: "
+                          f"{cleanup_exc}"
+                      )
+
               sys.exit(1)
           PY
