@@ -1,10 +1,10 @@
-name: Test Login Page
+name: Test Web Authentication API
 
 on:
   workflow_dispatch:
 
 jobs:
-  test-login-page:
+  test-web-auth:
     runs-on: ubuntu-latest
 
     env:
@@ -25,106 +25,103 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Test login page
+      - name: Test authentication API
         run: |
           python - <<'PY'
+          import asyncio
           import sys
 
+          from fastapi import HTTPException
+
           try:
-              print("1. Importing web application...")
+              print("1. Importing authentication API...")
 
-              from web.app import app, home
+              from web.app import app, get_current_user
 
-              print(
-                  "   SUCCESS: web application imported."
-              )
+              routes = {
+                  route.path
+                  for route in app.routes
+              }
 
-              print("2. Generating login page...")
-
-              response = home()
-
-              if response.status_code != 200:
+              if "/api/me" not in routes:
                   raise RuntimeError(
-                      "Login page returned "
-                      f"status {response.status_code}."
+                      "/api/me route is missing."
                   )
 
-              html = response.body.decode("utf-8")
-
               print(
-                  "   SUCCESS: login page generated."
+                  "   SUCCESS: /api/me route exists."
               )
 
-              print("3. Checking login form...")
+              print("2. Testing missing token...")
 
-              required_text = [
-                  'id="login-form"',
-                  'id="email"',
-                  'id="password"',
-                  'id="login-button"',
-                  "/auth/v1/token",
-              ]
+              try:
+                  get_current_user(
+                      authorization=None
+                  )
+                  raise RuntimeError(
+                      "Missing token was accepted."
+                  )
 
-              for text in required_text:
-                  if text not in html:
-                      raise RuntimeError(
-                          f"Missing login page element: "
-                          f"{text}"
+              except HTTPException as exc:
+                  if exc.status_code != 401:
+                      raise
+
+              print(
+                  "   SUCCESS: missing token rejected."
+              )
+
+              print("3. Testing malformed token...")
+
+              try:
+                  get_current_user(
+                      authorization="not-a-bearer-token"
+                  )
+                  raise RuntimeError(
+                      "Malformed token was accepted."
+                  )
+
+              except HTTPException as exc:
+                  if exc.status_code != 401:
+                      raise
+
+              print(
+                  "   SUCCESS: malformed token rejected."
+              )
+
+              print("4. Testing fake Bearer token...")
+
+              try:
+                  get_current_user(
+                      authorization=(
+                          "Bearer "
+                          "this-is-not-a-valid-token"
                       )
-
-              print(
-                  "   SUCCESS: login form is present."
-              )
-
-              print("4. Checking Supabase configuration...")
-
-              if "__SUPABASE_URL__" in html:
-                  raise RuntimeError(
-                      "SUPABASE_URL placeholder "
-                      "was not replaced."
                   )
 
-              if "__SUPABASE_KEY__" in html:
                   raise RuntimeError(
-                      "SUPABASE key placeholder "
-                      "was not replaced."
+                      "Fake token was accepted."
                   )
 
-              print(
-                  "   SUCCESS: Supabase browser "
-                  "configuration is injected."
-              )
-
-              print("5. Checking server secrets...")
-
-              forbidden_text = [
-                  "DATABASE_URL",
-                  "REPORT_USER_ID",
-                  "service_role",
-                  "postgresql+psycopg2://",
-              ]
-
-              for text in forbidden_text:
-                  if text in html:
-                      raise RuntimeError(
-                          "Server-only information "
-                          f"appeared in HTML: {text}"
-                      )
+              except HTTPException as exc:
+                  if exc.status_code != 401:
+                      raise
 
               print(
-                  "   SUCCESS: server-only secrets "
-                  "are not present in the page."
+                  "   SUCCESS: fake token rejected."
               )
 
               print("")
               print(
-                  "SUCCESS: Supabase login page "
-                  "is ready for authentication testing."
+                  "SUCCESS: Authentication API rejects "
+                  "unauthenticated requests."
               )
 
           except Exception as exc:
               print("")
-              print("ERROR: Login page test failed.")
+              print(
+                  "ERROR: Authentication API "
+                  "test failed."
+              )
               print(
                   f"{type(exc).__name__}: {exc}"
               )
