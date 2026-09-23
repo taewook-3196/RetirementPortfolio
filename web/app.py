@@ -10,10 +10,60 @@ from __future__ import annotations
 import os
 
 from fastapi import FastAPI, Header, HTTPException
+from pydantic import BaseModel, Field
 from fastapi.responses import HTMLResponse
 from supabase import create_client
 from database.repository import Repository
 
+class AccountCreateRequest(BaseModel):
+    """신규 계좌 생성 요청."""
+
+    account_name: str = Field(
+        min_length=1,
+        max_length=100,
+    )
+
+    account_number: str = Field(
+        default="",
+        max_length=100,
+    )
+
+    broker: str = Field(
+        default="",
+        max_length=100,
+    )
+
+    initial_capital: float = Field(
+        default=0,
+        ge=0,
+    )
+
+    base_monthly: float = Field(
+        default=0,
+        ge=0,
+    )
+
+    max_additional_monthly: float = Field(
+        default=0,
+        ge=0,
+    )
+
+    buy_cycle_type: str = Field(
+        default="monthly",
+        max_length=50,
+    )
+
+    buy_cycle_detail: str = Field(
+        default="25",
+        max_length=50,
+    )
+
+    is_default: bool = False
+
+    memo: str = Field(
+        default="",
+        max_length=1000,
+    )
 
 app = FastAPI(
     title="RetirementPortfolio",
@@ -203,6 +253,106 @@ def get_accounts_api(
             status_code=500,
             detail="계좌 정보를 불러오지 못했습니다.",
         )        
+
+@app.post(
+    "/api/accounts",
+    status_code=201,
+)
+def create_account_api(
+    request: AccountCreateRequest,
+    authorization: str | None = Header(
+        default=None
+    ),
+):
+    """
+    로그인한 사용자의 신규 계좌를 생성합니다.
+    """
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.create_account(
+            account_name=request.account_name,
+            account_number=request.account_number,
+            broker=request.broker,
+            initial_capital=request.initial_capital,
+            base_monthly=request.base_monthly,
+            max_additional_monthly=(
+                request.max_additional_monthly
+            ),
+            buy_cycle_type=request.buy_cycle_type,
+            buy_cycle_detail=request.buy_cycle_detail,
+            is_default=int(
+                request.is_default
+            ),
+            memo=request.memo,
+        )
+
+        return {
+            "created": True,
+            "account": {
+                "id": account.id,
+                "account_name":
+                    account.account_name,
+
+                "account_number":
+                    account.account_number,
+
+                "broker":
+                    account.broker,
+
+                "initial_capital":
+                    float(
+                        account.initial_capital
+                        or 0
+                    ),
+
+                "base_monthly":
+                    float(
+                        account.base_monthly
+                        or 0
+                    ),
+
+                "max_additional_monthly":
+                    float(
+                        account.max_additional_monthly
+                        or 0
+                    ),
+
+                "buy_cycle_type":
+                    account.buy_cycle_type,
+
+                "buy_cycle_detail":
+                    account.buy_cycle_detail,
+
+                "is_default":
+                    bool(
+                        account.is_default
+                    ),
+
+                "memo":
+                    account.memo,
+            },
+        }
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="계좌를 생성하지 못했습니다.",
+        )
+
 
 @app.get("/", response_class=HTMLResponse)
 def home():
