@@ -275,3 +275,33 @@ class UserSetting(Base):
     ai_advice_enabled = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.now)
     updated_at = Column(DateTime(timezone=True), default=datetime.now)
+
+class RecommendationLog(Base):
+    __tablename__ = "recommendation_logs"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    recommendation_date = Column(Date, nullable=False, index=True)
+    ticker = Column(
+        Text,
+        ForeignKey("asset_master.ticker"),
+        nullable=False,
+    )
+    name = Column(Text, nullable=True)
+    target_weight = Column(Numeric, nullable=False, default=0)
+    current_weight = Column(Numeric, nullable=False, default=0)
+    weight_gap = Column(Numeric, nullable=False, default=0)
+    recent_high = Column(Numeric, nullable=False, default=0)
+    current_price = Column(Numeric, nullable=False, default=0)
+    drawdown = Column(Numeric, nullable=False, default=0)
+    drawdown_score = Column(Integer, nullable=False, default=0)
+    priority_score = Column(Numeric, nullable=False, default=0)
+    recommended_buy = Column(Numeric, nullable=False, default=0)
+    expected_weight_after = Column(Numeric, nullable=False, default=0)
+    reason = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.now)
