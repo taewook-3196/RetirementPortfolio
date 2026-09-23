@@ -1,0 +1,50 @@
+name: Update Market Prices
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+
+    env:
+      TZ: Asia/Seoul
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TEST_USER_ID: ${{ secrets.TEST_USER_ID }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Update market prices
+        run: |
+          python - <<'PY'
+          import os
+
+          from data.price_updater import update_market_prices
+
+          user_id = os.environ["TEST_USER_ID"]
+
+          result = update_market_prices(
+              user_id=user_id,
+              days=90,
+          )
+
+          print("Price update result:")
+          print(result)
+
+          if result.get("saved_count", 0) <= 0:
+              raise RuntimeError(
+                  "No market prices were saved."
+              )
+          PY
