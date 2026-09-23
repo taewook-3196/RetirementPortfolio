@@ -40,8 +40,28 @@ class DailyReportService:
         repo: Optional[Repository] = None,
     ):
         self.config = config or load_config()
-        self.repo = repo or Repository()
-        self.portfolio_service = PortfolioService(self.repo, self.config)
+        
+        if repo is not None:
+            self.repo = repo
+        else:
+            report_user_id = os.getenv(
+                "REPORT_USER_ID",
+                "",
+            ).strip()
+        
+            if not report_user_id:
+                raise RuntimeError(
+                    "REPORT_USER_ID 환경변수가 설정되지 않았습니다."
+                )
+        
+            self.repo = Repository(
+                user_id=report_user_id
+            )
+        
+        self.portfolio_service = PortfolioService(
+            self.repo,
+            self.config,
+        )
         self.recommendation_service = RecommendationService(self.repo, self.config, portfolio_service=self.portfolio_service)
         self.news_service = NewsService()
         self.html_generator = ReportHtmlGenerator(self.config.morning_report)
