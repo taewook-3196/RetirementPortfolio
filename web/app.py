@@ -15,7 +15,7 @@ from supabase import create_client
 
 app = FastAPI(
     title="RetirementPortfolio",
-    version="0.2.0",
+    version="0.3.0",
 )
 
 
@@ -26,6 +26,7 @@ def health_check():
         "status": "ok",
         "service": "RetirementPortfolio",
     }
+
 
 @app.get("/api/me")
 def get_current_user(
@@ -110,6 +111,7 @@ def get_current_user(
             ),
         )
 
+
 @app.get("/", response_class=HTMLResponse)
 def home():
     """모바일 로그인 화면."""
@@ -138,6 +140,7 @@ def home():
     html = """
     <!DOCTYPE html>
     <html lang="ko">
+
     <head>
         <meta charset="UTF-8">
 
@@ -237,6 +240,26 @@ def home():
                 color: #b3261e;
             }
 
+            .user-box {
+                display: none;
+                margin-top: 20px;
+                padding: 16px;
+                background: #f1f8f4;
+                border-radius: 10px;
+                line-height: 1.7;
+                font-size: 14px;
+            }
+
+            .user-box strong {
+                display: block;
+                margin-bottom: 4px;
+            }
+
+            .user-id {
+                overflow-wrap: anywhere;
+                color: #555;
+            }
+
             .security {
                 margin-top: 24px;
                 padding-top: 18px;
@@ -293,6 +316,22 @@ def home():
 
                 <div id="message"></div>
 
+                <div
+                    id="user-box"
+                    class="user-box"
+                >
+                    <strong>
+                        사용자 인증 완료
+                    </strong>
+
+                    <div id="user-email"></div>
+
+                    <div
+                        id="user-id"
+                        class="user-id"
+                    ></div>
+                </div>
+
                 <div class="security">
                     비밀번호 인증은 Supabase Auth가
                     처리하며 포트폴리오 데이터베이스에
@@ -307,13 +346,68 @@ def home():
             const SUPABASE_KEY = "__SUPABASE_KEY__";
 
             const form =
-                document.getElementById("login-form");
+                document.getElementById(
+                    "login-form"
+                );
 
             const button =
-                document.getElementById("login-button");
+                document.getElementById(
+                    "login-button"
+                );
 
             const message =
-                document.getElementById("message");
+                document.getElementById(
+                    "message"
+                );
+
+            const userBox =
+                document.getElementById(
+                    "user-box"
+                );
+
+            const userEmail =
+                document.getElementById(
+                    "user-email"
+                );
+
+            const userId =
+                document.getElementById(
+                    "user-id"
+                );
+
+
+            async function verifyUser(
+                accessToken
+            ) {
+                const response = await fetch(
+                    "/api/me",
+                    {
+                        method: "GET",
+
+                        headers: {
+                            "Authorization":
+                                "Bearer "
+                                + accessToken,
+                        },
+                    }
+                );
+
+                const data =
+                    await response.json();
+
+                if (
+                    !response.ok
+                    || !data.authenticated
+                ) {
+                    throw new Error(
+                        data.detail
+                        || "사용자 인증에 실패했습니다."
+                    );
+                }
+
+                return data;
+            }
+
 
             form.addEventListener(
                 "submit",
@@ -323,8 +417,13 @@ def home():
                     message.textContent = "";
                     message.className = "";
 
+                    userBox.style.display =
+                        "none";
+
                     button.disabled = true;
-                    button.textContent = "로그인 중...";
+
+                    button.textContent =
+                        "로그인 중...";
 
                     const email =
                         document.getElementById(
@@ -337,27 +436,32 @@ def home():
                         ).value;
 
                     try {
-                        const response = await fetch(
-                            SUPABASE_URL
-                            + "/auth/v1/token"
-                            + "?grant_type=password",
-                            {
-                                method: "POST",
+                        const response =
+                            await fetch(
+                                SUPABASE_URL
+                                + "/auth/v1/token"
+                                + "?grant_type=password",
+                                {
+                                    method: "POST",
 
-                                headers: {
-                                    "Content-Type":
-                                        "application/json",
+                                    headers: {
+                                        "Content-Type":
+                                            "application/json",
 
-                                    "apikey":
-                                        SUPABASE_KEY,
-                                },
+                                        "apikey":
+                                            SUPABASE_KEY,
+                                    },
 
-                                body: JSON.stringify({
-                                    email: email,
-                                    password: password,
-                                }),
-                            }
-                        );
+                                    body:
+                                        JSON.stringify({
+                                            email:
+                                                email,
+
+                                            password:
+                                                password,
+                                        }),
+                                }
+                            );
 
                         const data =
                             await response.json();
@@ -383,13 +487,44 @@ def home():
                             data.refresh_token || ""
                         );
 
+                        button.textContent =
+                            "사용자 확인 중...";
+
+                        const user =
+                            await verifyUser(
+                                data.access_token
+                            );
+
                         message.textContent =
-                            "로그인에 성공했습니다.";
+                            "로그인 및 사용자 인증에 "
+                            + "성공했습니다.";
 
                         message.className =
                             "success";
 
+                        userEmail.textContent =
+                            "이메일: "
+                            + (user.email || "");
+
+                        userId.textContent =
+                            "사용자 ID: "
+                            + user.user_id;
+
+                        userBox.style.display =
+                            "block";
+
+                        form.style.display =
+                            "none";
+
                     } catch (error) {
+                        sessionStorage.removeItem(
+                            "access_token"
+                        );
+
+                        sessionStorage.removeItem(
+                            "refresh_token"
+                        );
+
                         message.textContent =
                             error.message
                             || "로그인에 실패했습니다.";
@@ -399,12 +534,15 @@ def home():
 
                     } finally {
                         button.disabled = false;
-                        button.textContent = "로그인";
+
+                        button.textContent =
+                            "로그인";
                     }
                 }
             );
         </script>
     </body>
+
     </html>
     """
 
@@ -418,4 +556,6 @@ def home():
         supabase_key,
     )
 
-    return HTMLResponse(content=html)
+    return HTMLResponse(
+        content=html
+    )
