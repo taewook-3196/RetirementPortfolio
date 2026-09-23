@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
+from supabase import create_client
 
 
 app = FastAPI(
@@ -26,6 +27,88 @@ def health_check():
         "service": "RetirementPortfolio",
     }
 
+@app.get("/api/me")
+def get_current_user(
+    authorization: str | None = Header(
+        default=None
+    ),
+):
+    """
+    Supabase access token을 검증하고
+    로그인한 사용자 정보를 반환합니다.
+    """
+
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="로그인이 필요합니다.",
+        )
+
+    scheme, separator, token = (
+        authorization.partition(" ")
+    )
+
+    if (
+        not separator
+        or scheme.lower() != "bearer"
+        or not token.strip()
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="올바른 인증 토큰이 필요합니다.",
+        )
+
+    supabase_url = os.getenv(
+        "SUPABASE_URL",
+        "",
+    ).strip()
+
+    supabase_key = os.getenv(
+        "SUPABASE_ANON_KEY",
+        "",
+    ).strip()
+
+    if not supabase_url or not supabase_key:
+        raise HTTPException(
+            status_code=500,
+            detail="Supabase 인증 설정이 없습니다.",
+        )
+
+    try:
+        supabase = create_client(
+            supabase_url,
+            supabase_key,
+        )
+
+        response = supabase.auth.get_user(
+            token.strip()
+        )
+
+        user = response.user
+
+        if user is None:
+            raise HTTPException(
+                status_code=401,
+                detail="유효하지 않은 로그인입니다.",
+            )
+
+        return {
+            "authenticated": True,
+            "user_id": str(user.id),
+            "email": user.email,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "로그인이 만료되었거나 "
+                "유효하지 않습니다."
+            ),
+        )
 
 @app.get("/", response_class=HTMLResponse)
 def home():
