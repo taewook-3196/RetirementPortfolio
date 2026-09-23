@@ -37,20 +37,41 @@ jobs:
               init_db()
               print("   SUCCESS: database.connection works.")
 
-              print("2. Testing Repository...")
+              print("2. Creating Repository...")
               repo = Repository()
+              print("   SUCCESS: Repository created.")
 
-              assets = repo.get_asset_master()
+              print("3. Reading asset_master...")
+              assets = repo.search_etf_master(
+                  keyword="",
+                  limit=10,
+              )
 
-              print("   SUCCESS: Repository works.")
-              print(f"   Shared assets found: {len(assets)}")
+              print("   SUCCESS: asset_master query works.")
+              print(f"   Assets found: {len(assets)}")
+
+              for asset in assets:
+                  print(
+                      "   -",
+                      asset["ticker"],
+                      asset["name"],
+                      asset["market"],
+                  )
 
               print("")
-              print("SUCCESS: Project database layer is connected to Supabase.")
+              print(
+                  "SUCCESS: Project database layer "
+                  "is working with Supabase."
+              )
 
           except Exception as exc:
               print("")
-              print("ERROR: Project database layer test failed.")
-              print(f"{type(exc).__name__}: {exc}")
+              print(
+                  "ERROR: Project database layer "
+                  "test failed."
+              )
+              print(
+                  f"{type(exc).__name__}: {exc}"
+              )
               sys.exit(1)
           PY
