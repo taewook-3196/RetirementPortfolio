@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from supabase import create_client
 
 from database.repository import Repository
+from portfolio.holdings import calculate_etf_positions
 
 
 app = FastAPI(
@@ -478,6 +479,104 @@ def create_transaction_api(
             detail="거래를 저장하지 못했습니다.",
         )
 
+@app.get(
+    "/api/accounts/{account_id}/positions"
+)
+def get_account_positions_api(
+    account_id: int,
+    authorization: str | None = Header(default=None),
+):
+    """특정 계좌의 현재 보유현황을 계산합니다."""
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        transactions = repo.get_transactions(
+            account_id=account_id
+        )
+
+        dividends = repo.get_dividends(
+            account_id=account_id
+        )
+
+        targets = repo.get_account_targets(
+            account_id=account_id
+        )
+
+        ticker_names = {
+            target.ticker: target.name
+            for target in targets
+        }
+
+        positions = calculate_etf_positions(
+            transactions=transactions,
+            dividends=dividends,
+            latest_prices={},
+            ticker_names=ticker_names,
+        )
+
+        position_list = []
+
+        for position in positions.values():
+            position_list.append(
+                {
+                    "ticker":
+                        position.ticker,
+                    "name":
+                        position.name,
+                    "quantity":
+                        float(
+                            position.quantity
+                            or 0
+                        ),
+                    "average_buy_price":
+                        float(
+                            position.average_buy_price
+                            or 0
+                        ),
+                    "total_buy_cost":
+                        float(
+                            position.total_buy_cost
+                            or 0
+                        ),
+                }
+            )
+
+        position_list.sort(
+            key=lambda item: item["ticker"]
+        )
+
+        return {
+            "account_id": account.id,
+            "account_name":
+                account.account_name,
+            "positions": position_list,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="보유현황을 계산하지 못했습니다.",
+        )
 
 @app.get("/", response_class=HTMLResponse)
 def home():
