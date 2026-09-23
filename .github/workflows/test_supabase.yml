@@ -1,15 +1,11 @@
-name: Test Supabase Connection
+name: Test Web Application
 
 on:
   workflow_dispatch:
 
 jobs:
-  test-supabase:
+  test-web:
     runs-on: ubuntu-latest
-
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      REPORT_USER_ID: ${{ secrets.REPORT_USER_ID }}
 
     steps:
       - name: Checkout repository
@@ -25,119 +21,74 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Test report user scope
+      - name: Test FastAPI application
         run: |
           python - <<'PY'
-          import os
           import sys
-          from uuid import UUID
-
-          from database.connection import init_db
-          from database.repository import Repository
 
           try:
-              print("1. Testing database connection...")
-              init_db()
-              print(
-                  "   SUCCESS: database connection works."
-              )
+              print("1. Importing FastAPI application...")
 
-              user_id_text = os.environ.get(
-                  "REPORT_USER_ID",
-                  "",
-              ).strip()
+              from web.app import app
 
-              if not user_id_text:
+              print("   SUCCESS: web.app imported.")
+
+              print("2. Checking application metadata...")
+
+              if app.title != "RetirementPortfolio":
                   raise RuntimeError(
-                      "REPORT_USER_ID secret is missing."
+                      "Unexpected FastAPI application title."
                   )
-
-              user_id = UUID(user_id_text)
-
-              print("2. Creating report Repository...")
-
-              repo = Repository(
-                  user_id=str(user_id)
-              )
 
               print(
-                  "   SUCCESS: user-scoped Repository created."
+                  "   SUCCESS: FastAPI application created."
               )
 
-              print("3. Reading report user's accounts...")
+              print("3. Checking registered routes...")
 
-              accounts = repo.get_accounts()
+              routes = {
+                  route.path
+                  for route in app.routes
+              }
+
+              if "/" not in routes:
+                  raise RuntimeError(
+                      "Home route '/' is missing."
+                  )
+
+              if "/health" not in routes:
+                  raise RuntimeError(
+                      "Health route '/health' is missing."
+                  )
+
+              print("   SUCCESS: required routes exist.")
+
+              print("4. Testing /health response...")
+
+              from web.app import health_check
+
+              result = health_check()
+
+              if result.get("status") != "ok":
+                  raise RuntimeError(
+                      "Health check did not return status=ok."
+                  )
 
               print(
-                  f"   Accounts found: {len(accounts)}"
+                  "   SUCCESS: /health response is valid."
               )
-
-              for account in accounts:
-                  print(
-                      "   - "
-                      f"id={account.id}, "
-                      f"name={account.account_name}"
-                  )
-
-              print("4. Reading investment profile...")
-
-              profile = repo.get_investment_profile()
-
-              if profile is None:
-                  print(
-                      "   Investment profile: not configured"
-                  )
-              else:
-                  print(
-                      "   Investment profile: configured"
-                  )
-
-              print("5. Reading watchlist...")
-
-              watchlist = repo.get_watchlist()
-
-              print(
-                  f"   Watchlist items: {len(watchlist)}"
-              )
-
-              for item in watchlist:
-                  print(
-                      "   - "
-                      f"{item['ticker']} "
-                      f"{item['name']}"
-                  )
-
-              print("6. Reading user settings...")
-
-              settings = repo.get_user_settings()
-
-              if settings is None:
-                  print(
-                      "   User settings: not configured"
-                  )
-              else:
-                  print(
-                      "   User settings: configured"
-                  )
-                  print(
-                      "   Morning report enabled: "
-                      f"{settings.morning_report_enabled}"
-                  )
-                  print(
-                      "   Morning report time: "
-                      f"{settings.morning_report_time}"
-                  )
 
               print("")
               print(
-                  "SUCCESS: REPORT_USER_ID can read "
-                  "user-scoped Supabase data."
+                  "SUCCESS: FastAPI web application "
+                  "is ready."
               )
 
           except Exception as exc:
               print("")
               print(
-                  "ERROR: Report user scope test failed."
+                  "ERROR: FastAPI web application "
+                  "test failed."
               )
               print(
                   f"{type(exc).__name__}: {exc}"
