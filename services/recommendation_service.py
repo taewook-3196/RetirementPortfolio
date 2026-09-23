@@ -1,23 +1,28 @@
 """
 services/recommendation_service.py
-매수 추천 비즈니스 로직 서비스.
-- 최신 시장가, 3개월 최고가, 보유 자산 데이터를 집계
-- strategy.recommendation 엔진을 호출하여 이번 달 매수 추천 결과 생성
-- 추천 결과를 DB(RecommendationLog)에 저장 및 이전 기록 조회 지원
+
+매수 추천 및 리밸런싱 비즈니스 로직 서비스.
+
+- 사용자 포트폴리오와 최신 시장 가격 집계
+- 최근 3개월 고점 계산
+- 계좌별 투자 주기 및 예산 반영
+- 매수 추천 결과 생성 및 RecommendationLog 저장
+- 리밸런싱 추천 결과 생성
 """
 
 from __future__ import annotations
-from typing import Dict, Any, List, Optional
+
+from typing import Any, Dict, List, Optional
+
 from core.config import AppConfig, ETFConfig, load_config
 from database.repository import Repository
 from services.market_data_service import MarketDataService
 from services.portfolio_service import PortfolioService
+from strategy.cycle_helper import check_cycle_investment_history
 from strategy.recommendation import (
     ETFRecommendationInput,
-    ETFRecommendationResult,
     generate_recommendations,
 )
-from strategy.cycle_helper import check_cycle_investment_history
 
 
 class RecommendationService:
@@ -30,170 +35,467 @@ class RecommendationService:
     ):
         self.repo = repo
         self.config = config or load_config()
-        self.market_service = market_service or MarketDataService(repo, self.config)
-        self.portfolio_service = portfolio_service or PortfolioService(repo, self.config)
+
+        self.market_service = (
+            market_service
+            or MarketDataService(repo, self.config)
+        )
+
+        self.portfolio_service = (
+            portfolio_service
+            or PortfolioService(repo, self.config)
+        )
 
     def calculate_recommendations(
-        self, account_id: Optional[int] = None, auto_save: bool = True
+        self,
+        account_id: Optional[int] = None,
+        auto_save: bool = True,
     ) -> Dict[str, Any]:
         """
-        포트폴리오 현황과 시장 가격을 통합하여 최종 매수 추천을 산출합니다.
-        account_id 지정 시 해당 계좌의 자산 및 설정 예산을 적용합니다.
+        포트폴리오 현황과 시장 가격을 이용하여
+        매수 추천 결과를 계산합니다.
+
+        account_id가 지정되면 해당 계좌의 자산과 예산만 사용합니다.
         """
         cfg = self.config
-        positions = self.portfolio_service.get_positions(account_id=account_id)
-        summary = self.portfolio_service.get_summary(positions, account_id=account_id)
 
-        # 계좌별 자본금 한도 및 예산 적용
+        positions = self.portfolio_service.get_positions(
+            account_id=account_id
+        )
+
+        summary = self.portfolio_service.get_summary(
+            positions,
+            account_id=account_id,
+        )
+
         already_invested = False
         cycle_desc = ""
-        last_buy_dt = None
 
+        # ---------------------------------------------------------
+        # 계좌별 또는 전체 투자 예산 계산
+        # ---------------------------------------------------------
         if account_id is not None:
-            acc = self.repo.get_account(account_id)
-            init_cap = int(acc.initial_capital) if acc else cfg.initial_capital
-            base_m = int(acc.base_monthly) if acc else cfg.base_monthly
-            max_add = int(acc.max_additional_monthly) if acc else cfg.max_additional_monthly
+            account = self.repo.get_account(account_id)
 
-            if acc:
-                ctype = getattr(acc, "buy_cycle_type", "monthly")
-                cdetail = getattr(acc, "buy_cycle_detail", "25")
-                txs = self.repo.get_transactions(account_id=account_id)
-                already_invested, last_buy_dt, cycle_desc = check_cycle_investment_history(
-                    txs, ctype, cdetail
+            if account:
+                initial_capital = float(
+                    account.initial_capital or 0
                 )
-        else:
-            accs = self.repo.get_accounts()
-            if accs:
-                init_cap = int(sum(a.initial_capital for a in accs))
-                base_m = int(sum(a.base_monthly for a in accs))
-                max_add = int(sum(a.max_additional_monthly for a in accs))
-            else:
-                init_cap = cfg.initial_capital
-                base_m = cfg.base_monthly
-                max_add = cfg.max_additional_monthly
+                base_monthly = float(
+                    account.base_monthly or 0
+                )
+                max_additional_monthly = float(
+                    account.max_additional_monthly or 0
+                )
 
-            def_acc = self.repo.get_default_account()
-            ctype = getattr(def_acc, "buy_cycle_type", "monthly") if def_acc else "monthly"
-            cdetail = getattr(def_acc, "buy_cycle_detail", "25") if def_acc else "25"
-            txs = self.repo.get_transactions()
-            already_invested, last_buy_dt, cycle_desc = check_cycle_investment_history(
-                txs, ctype, cdetail
+                cycle_type = (
+                    account.buy_cycle_type
+                    or "monthly"
+                )
+                cycle_detail = (
+                    account.buy_cycle_detail
+                    or "25"
+                )
+
+                transactions = self.repo.get_transactions(
+                    account_id=account_id
+                )
+
+                (
+                    already_invested,
+                    _last_buy_dt,
+                    cycle_desc,
+                ) = check_cycle_investment_history(
+                    transactions,
+                    cycle_type,
+                    cycle_detail,
+                )
+
+            else:
+                initial_capital = float(
+                    cfg.initial_capital
+                )
+                base_monthly = float(
+                    cfg.base_monthly
+                )
+                max_additional_monthly = float(
+                    cfg.max_additional_monthly
+                )
+
+        else:
+            accounts = self.repo.get_accounts()
+
+            if accounts:
+                initial_capital = sum(
+                    float(account.initial_capital or 0)
+                    for account in accounts
+                )
+
+                base_monthly = sum(
+                    float(account.base_monthly or 0)
+                    for account in accounts
+                )
+
+                max_additional_monthly = sum(
+                    float(
+                        account.max_additional_monthly
+                        or 0
+                    )
+                    for account in accounts
+                )
+
+            else:
+                initial_capital = float(
+                    cfg.initial_capital
+                )
+                base_monthly = float(
+                    cfg.base_monthly
+                )
+                max_additional_monthly = float(
+                    cfg.max_additional_monthly
+                )
+
+            default_account = (
+                self.repo.get_default_account()
             )
 
-        target_etfs = self.portfolio_service.get_target_etfs(account_id)
-        target_tickers = {e.ticker for e in target_etfs}
+            cycle_type = (
+                default_account.buy_cycle_type
+                if default_account
+                and default_account.buy_cycle_type
+                else "monthly"
+            )
+
+            cycle_detail = (
+                default_account.buy_cycle_detail
+                if default_account
+                and default_account.buy_cycle_detail
+                else "25"
+            )
+
+            transactions = (
+                self.repo.get_transactions()
+            )
+
+            (
+                already_invested,
+                _last_buy_dt,
+                cycle_desc,
+            ) = check_cycle_investment_history(
+                transactions,
+                cycle_type,
+                cycle_detail,
+            )
+
+        # ---------------------------------------------------------
+        # 목표 종목 + 실제 보유 중인 비목표 종목
+        # ---------------------------------------------------------
+        target_etfs = (
+            self.portfolio_service.get_target_etfs(
+                account_id
+            )
+        )
+
+        target_tickers = {
+            etf.ticker
+            for etf in target_etfs
+        }
+
         extra_items: List[ETFConfig] = []
-        for ticker, pos in positions.items():
-            if ticker not in target_tickers and (pos.quantity > 0 or pos.total_buy_cost > 0):
-                extra_items.append(ETFConfig(ticker=ticker, name=pos.name or ticker, target_weight=0.0))
+
+        for ticker, position in positions.items():
+            quantity = float(
+                position.quantity or 0
+            )
+
+            total_buy_cost = float(
+                position.total_buy_cost or 0
+            )
+
+            if (
+                ticker not in target_tickers
+                and (
+                    quantity > 0
+                    or total_buy_cost > 0
+                )
+            ):
+                extra_items.append(
+                    ETFConfig(
+                        ticker=ticker,
+                        name=position.name or ticker,
+                        target_weight=0.0,
+                    )
+                )
+
         all_etfs = target_etfs + extra_items
 
+        # ---------------------------------------------------------
+        # 추천 엔진 입력 생성
+        # ---------------------------------------------------------
         inputs: List[ETFRecommendationInput] = []
-        for etf in all_etfs:
-            pos = positions.get(etf.ticker)
-            cur_price = pos.current_price if pos and pos.current_price > 0 else 0.0
-            cur_qty = pos.quantity if pos else 0
-            cur_val = pos.current_value if pos else 0.0
 
-            high_price, _ = self.market_service.get_recent_3m_high(etf.ticker)
-            if high_price <= 0:
-                high_price = cur_price
+        for etf in all_etfs:
+            position = positions.get(etf.ticker)
+
+            current_price = (
+                float(position.current_price or 0)
+                if position
+                else 0.0
+            )
+
+            holding_quantity = (
+                float(position.quantity or 0)
+                if position
+                else 0.0
+            )
+
+            current_asset_value = (
+                float(position.current_value or 0)
+                if position
+                else 0.0
+            )
+
+            recent_high, _ = (
+                self.market_service.get_recent_3m_high(
+                    etf.ticker
+                )
+            )
+
+            recent_high = float(
+                recent_high or 0
+            )
+
+            if recent_high <= 0:
+                recent_high = current_price
 
             inputs.append(
                 ETFRecommendationInput(
                     ticker=etf.ticker,
                     name=etf.name,
-                    target_weight=etf.target_weight,
-                    current_price=cur_price,
-                    recent_3m_high=high_price,
-                    holding_quantity=cur_qty,
-                    current_asset_value=cur_val,
+                    target_weight=float(
+                        etf.target_weight or 0
+                    ),
+                    current_price=current_price,
+                    recent_3m_high=recent_high,
+                    holding_quantity=holding_quantity,
+                    current_asset_value=current_asset_value,
                 )
             )
 
-        res = generate_recommendations(
+        # ---------------------------------------------------------
+        # 추천 계산
+        # ---------------------------------------------------------
+        result = generate_recommendations(
             inputs=inputs,
-            initial_capital=init_cap,
-            base_monthly=base_m,
-            max_additional_monthly=max_add,
-            total_invested_so_far=int(summary.total_invested),
+            initial_capital=initial_capital,
+            base_monthly=base_monthly,
+            max_additional_monthly=max_additional_monthly,
+            total_invested_so_far=float(
+                summary.total_invested or 0
+            ),
             already_invested_in_cycle=already_invested,
             cycle_desc=cycle_desc,
         )
 
-        if auto_save and res.get("recommendations"):
-            recs_to_save = [
+        # ---------------------------------------------------------
+        # 추천 결과 저장
+        # ---------------------------------------------------------
+        if (
+            auto_save
+            and result.get("recommendations")
+        ):
+            recommendations_to_save = [
                 {
-                    "ticker": r.ticker,
-                    "name": r.name,
-                    "target_weight": r.target_weight,
-                    "current_weight": r.current_weight,
-                    "weight_gap": r.weight_gap,
-                    "recent_high": r.recent_high,
-                    "current_price": r.current_price,
-                    "drawdown": r.drawdown,
-                    "drawdown_score": r.drawdown_score,
-                    "priority_score": r.priority_score,
-                    "recommended_buy": r.recommended_buy,
-                    "expected_weight_after": r.expected_weight_after,
-                    "reason": r.reason,
+                    "ticker": recommendation.ticker,
+                    "name": recommendation.name,
+                    "target_weight": float(
+                        recommendation.target_weight
+                        or 0
+                    ),
+                    "current_weight": float(
+                        recommendation.current_weight
+                        or 0
+                    ),
+                    "weight_gap": float(
+                        recommendation.weight_gap
+                        or 0
+                    ),
+                    "recent_high": float(
+                        recommendation.recent_high
+                        or 0
+                    ),
+                    "current_price": float(
+                        recommendation.current_price
+                        or 0
+                    ),
+                    "drawdown": float(
+                        recommendation.drawdown
+                        or 0
+                    ),
+                    "drawdown_score": int(
+                        recommendation.drawdown_score
+                        or 0
+                    ),
+                    "priority_score": float(
+                        recommendation.priority_score
+                        or 0
+                    ),
+                    "recommended_buy": float(
+                        recommendation.recommended_buy
+                        or 0
+                    ),
+                    "expected_weight_after": float(
+                        recommendation.expected_weight_after
+                        or 0
+                    ),
+                    "reason": (
+                        recommendation.reason
+                        or ""
+                    ),
                 }
-                for r in res["recommendations"]
+                for recommendation
+                in result["recommendations"]
             ]
-            self.repo.save_recommendations(recs_to_save)
 
-        return res
+            self.repo.save_recommendations(
+                recommendations_to_save
+            )
 
-    def calculate_rebalancing(self, account_id: Optional[int] = None) -> Dict[str, Any]:
+        return result
+
+    def calculate_rebalancing(
+        self,
+        account_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """
-        추가 자금 투입 없이 현재 보유 자산을 기준으로 리밸런싱 권장 결과를 산출합니다.
-        (고점 대비 5% 이내 유지, 5~20% 낙폭별 추가 매수, 5% 이상 상승 시 절반 익절)
+        추가 자금 투입 없이 현재 보유 자산을 기준으로
+        리밸런싱 추천 결과를 계산합니다.
         """
         from strategy.rebalancing import (
             ETFRebalanceInput,
             generate_rebalancing_recommendations,
         )
 
-        cfg = self.config
-        positions = self.portfolio_service.get_positions(account_id=account_id)
-        summary = self.portfolio_service.get_summary(positions, account_id=account_id)
+        positions = (
+            self.portfolio_service.get_positions(
+                account_id=account_id
+            )
+        )
 
-        target_etfs = self.portfolio_service.get_target_etfs(account_id)
-        target_tickers = {e.ticker for e in target_etfs}
+        summary = (
+            self.portfolio_service.get_summary(
+                positions,
+                account_id=account_id,
+            )
+        )
+
+        target_etfs = (
+            self.portfolio_service.get_target_etfs(
+                account_id
+            )
+        )
+
+        target_tickers = {
+            etf.ticker
+            for etf in target_etfs
+        }
+
         extra_items: List[ETFConfig] = []
-        for ticker, pos in positions.items():
-            if ticker not in target_tickers and (pos.quantity > 0 or pos.total_buy_cost > 0):
-                extra_items.append(ETFConfig(ticker=ticker, name=pos.name or ticker, target_weight=0.0))
+
+        for ticker, position in positions.items():
+            quantity = float(
+                position.quantity or 0
+            )
+
+            total_buy_cost = float(
+                position.total_buy_cost or 0
+            )
+
+            if (
+                ticker not in target_tickers
+                and (
+                    quantity > 0
+                    or total_buy_cost > 0
+                )
+            ):
+                extra_items.append(
+                    ETFConfig(
+                        ticker=ticker,
+                        name=position.name or ticker,
+                        target_weight=0.0,
+                    )
+                )
+
         all_etfs = target_etfs + extra_items
 
         inputs: List[ETFRebalanceInput] = []
-        for etf in all_etfs:
-            pos = positions.get(etf.ticker)
-            cur_price = pos.current_price if pos and pos.current_price > 0 else 0.0
-            cur_qty = pos.quantity if pos else 0
-            cur_val = pos.current_value if pos else 0.0
 
-            # 직전 3개월 고점 (당일 가격 제외 고점, 미보유 시 일반 고점)
-            high_price, _ = self.market_service.get_recent_3m_high(etf.ticker, exclude_today=True)
-            if high_price <= 0:
-                high_price, _ = self.market_service.get_recent_3m_high(etf.ticker, exclude_today=False)
-            if high_price <= 0:
-                high_price = cur_price
+        for etf in all_etfs:
+            position = positions.get(etf.ticker)
+
+            current_price = (
+                float(position.current_price or 0)
+                if position
+                else 0.0
+            )
+
+            holding_quantity = (
+                float(position.quantity or 0)
+                if position
+                else 0.0
+            )
+
+            current_asset_value = (
+                float(position.current_value or 0)
+                if position
+                else 0.0
+            )
+
+            # 당일 가격을 제외한 직전 3개월 고점
+            recent_high, _ = (
+                self.market_service.get_recent_3m_high(
+                    etf.ticker,
+                    exclude_today=True,
+                )
+            )
+
+            recent_high = float(
+                recent_high or 0
+            )
+
+            # 과거 가격이 부족하면 당일 포함 고점 사용
+            if recent_high <= 0:
+                recent_high, _ = (
+                    self.market_service.get_recent_3m_high(
+                        etf.ticker,
+                        exclude_today=False,
+                    )
+                )
+
+                recent_high = float(
+                    recent_high or 0
+                )
+
+            if recent_high <= 0:
+                recent_high = current_price
 
             inputs.append(
                 ETFRebalanceInput(
                     ticker=etf.ticker,
                     name=etf.name,
-                    target_weight=etf.target_weight,
-                    current_price=cur_price,
-                    recent_3m_high=high_price,
-                    holding_quantity=cur_qty,
-                    current_asset_value=cur_val,
+                    target_weight=float(
+                        etf.target_weight or 0
+                    ),
+                    current_price=current_price,
+                    recent_3m_high=recent_high,
+                    holding_quantity=holding_quantity,
+                    current_asset_value=current_asset_value,
                 )
             )
 
         return generate_rebalancing_recommendations(
             inputs=inputs,
-            total_portfolio_value=summary.total_current_value,
+            total_portfolio_value=float(
+                summary.total_current_value or 0
+            ),
         )
