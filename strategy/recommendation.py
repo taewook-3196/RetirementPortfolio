@@ -71,7 +71,20 @@ def generate_recommendations(
     - already_invested_in_cycle=True인 경우 해당 주기에 이미 납입(매수)한 이력이 있으므로 추가 매수 추천을 0원으로 제한합니다.
     """
     if not inputs:
-        return {"summary": {}, "recommendations": []}
+        remaining_cash = max(0, initial_capital - total_invested_so_far)
+        summary = {
+            "initial_capital": initial_capital,
+            "total_invested_so_far": total_invested_so_far,
+            "remaining_cash": remaining_cash,
+            "base_monthly_budget": base_monthly,
+            "total_additional_buy": 0,
+            "total_recommended_buy": 0,
+            "total_portfolio_value_now": 0.0,
+            "total_portfolio_value_expected": 0.0,
+            "already_invested_in_cycle": already_invested_in_cycle,
+            "cycle_desc": cycle_desc,
+        }
+        return {"summary": summary, "recommendations": []}
 
     # 1. 포트폴리오 총 평가액 및 현재 비중 계산
     total_portfolio_value = sum(item.current_asset_value for item in inputs)
@@ -169,7 +182,9 @@ def generate_recommendations(
         wg_pct = round(p["weight_gap"] * 100, 1)
         dd_pct = round(p["drawdown"] * 100, 1)
 
-        if p["weight_gap"] <= 0:
+        if item.target_weight <= 0:
+            reasons.append("목표 비중이 미설정(0.0%)된 종목으로, 정량 매수 추천에서 제외됩니다.")
+        elif p["weight_gap"] <= 0:
             reasons.append(
                 f"현재 비중({round(p['cur_weight']*100, 1)}%)이 목표비중({round(item.target_weight*100, 1)}%)을 초과하여 추가매수를 제한합니다."
             )
