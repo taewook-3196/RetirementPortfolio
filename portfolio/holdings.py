@@ -53,7 +53,7 @@ def calculate_etf_positions(
     for div in dividends:
         div_by_ticker.setdefault(div.ticker, []).append(div)
 
-    all_tickers = set(list(tx_by_ticker.keys()) + list(names_map.keys()) + list(latest_prices.keys()))
+    all_tickers = set(tx_by_ticker.keys()).union(names_map.keys())
 
     for ticker in all_tickers:
         pos = ETFPosition(
