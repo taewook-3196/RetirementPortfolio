@@ -1155,6 +1155,115 @@ def home():
                 return data.transactions || [];
             }
 
+            async function loadPositions(
+                accessToken,
+                accountId
+            ) {
+                const data =
+                    await apiRequest(
+                        "/api/accounts/"
+                        + accountId
+                        + "/positions",
+                        accessToken
+                    );
+            
+                return data.positions || [];
+            }
+            
+            
+            function renderPositions(
+                container,
+                positions
+            ) {
+                container.innerHTML = "";
+            
+                if (positions.length === 0) {
+                    const empty =
+                        document.createElement(
+                            "div"
+                        );
+            
+                    empty.className = "empty";
+                    empty.textContent =
+                        "보유현황이 없습니다.";
+            
+                    container.appendChild(empty);
+                    return;
+                }
+            
+                for (const position of positions) {
+                    const row =
+                        document.createElement(
+                            "div"
+                        );
+            
+                    row.className = "target-row";
+            
+                    const info =
+                        document.createElement(
+                            "div"
+                        );
+            
+                    info.className = "target-info";
+            
+                    const name =
+                        document.createElement(
+                            "div"
+                        );
+            
+                    name.className = "target-name";
+                    name.textContent =
+                        position.name || position.ticker;
+            
+                    const ticker =
+                        document.createElement(
+                            "div"
+                        );
+            
+                    ticker.className = "target-ticker";
+                    ticker.textContent =
+                        position.ticker;
+            
+                    const detail =
+                        document.createElement(
+                            "div"
+                        );
+            
+                    detail.className =
+                        "account-detail";
+            
+                    detail.textContent =
+                        "보유 "
+                        + formatNumber(
+                            position.quantity
+                        )
+                        + "주 · 평단 "
+                        + formatWon(
+                            position.average_buy_price
+                        );
+            
+                    info.appendChild(name);
+                    info.appendChild(ticker);
+                    info.appendChild(detail);
+            
+                    const cost =
+                        document.createElement(
+                            "div"
+                        );
+            
+                    cost.className = "target-weight";
+                    cost.textContent =
+                        formatWon(
+                            position.total_buy_cost
+                        );
+            
+                    row.appendChild(info);
+                    row.appendChild(cost);
+            
+                    container.appendChild(row);
+                }
+            }
+
 
             function createDetail(text) {
                 const element =
@@ -1989,6 +2098,60 @@ def home():
                             targetsList,
                             targets
                         );
+
+                        const positionsTitle =
+                            document.createElement(
+                                "div"
+                            );
+                        
+                        positionsTitle.className =
+                            "section-title";
+                        
+                        positionsTitle.textContent =
+                            "현재 보유현황";
+                        
+                        card.appendChild(
+                            positionsTitle
+                        );
+                        
+                        const positionsList =
+                            document.createElement(
+                                "div"
+                            );
+                        
+                        positionsList.className =
+                            "targets-list loading";
+                        
+                        positionsList.textContent =
+                            "보유현황을 계산하는 중...";
+                        
+                        card.appendChild(
+                            positionsList
+                        );
+                        
+                        try {
+                            const positions =
+                                await loadPositions(
+                                    accessToken,
+                                    account.id
+                                );
+                        
+                            positionsList.className =
+                                "targets-list";
+                        
+                            renderPositions(
+                                positionsList,
+                                positions
+                            );
+                        
+                        } catch (error) {
+                            positionsList.className =
+                                "error";
+                        
+                            positionsList.textContent =
+                                error.message
+                                || "보유현황을 불러오지 못했습니다.";
+                        }
 
                         const formTitle =
                             document.createElement(
