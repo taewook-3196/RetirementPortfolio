@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TZ: 'Asia/Seoul'
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
@@ -35,50 +36,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: 최신 포트폴리오 데이터베이스(SQLite) 동기화
-        run: |
-          python -c "
-          import json, os, sqlite3
-          if os.path.exists('portfolio_data.json'):
-              with open('portfolio_data.json', encoding='utf-8') as f:
-                  data = json.load(f)
-              conn = sqlite3.connect('portfolio.db')
-              cur = conn.cursor()
-              cur.execute('DELETE FROM dividends')
-              cur.execute('DELETE FROM transactions')
-              cur.execute('DELETE FROM account_targets')
-              cur.execute('DELETE FROM accounts')
-              for a in data.get('accounts', []):
-                  cur.execute('''INSERT INTO accounts (id, account_name, account_number, broker, initial_capital, base_monthly, max_additional_monthly, buy_cycle_type, buy_cycle_detail, is_default, memo)
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                              (a.get('id'), a.get('account_name'), a.get('account_number', ''), a.get('broker', ''),
-                               float(a.get('initial_capital', 0)), float(a.get('base_monthly', 0)), float(a.get('max_additional_monthly', 0)),
-                               a.get('buy_cycle_type', 'monthly'), a.get('buy_cycle_detail', '25'), int(a.get('is_default', 0)), a.get('memo', '')))
-              for t in data.get('account_targets', []):
-                  cur.execute('''INSERT INTO account_targets (account_id, ticker, name, target_weight, dividend_yield)
-                                 VALUES (?, ?, ?, ?, ?)''',
-                              (t.get('account_id'), t.get('ticker'), t.get('name', ''), float(t.get('target_weight', 0)), float(t.get('dividend_yield', 0))))
-              for tx in data.get('transactions', []):
-                  cur.execute('''INSERT INTO transactions (id, account_id, transaction_date, ticker, transaction_type, quantity, price, fee, tax, memo)
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                              (tx.get('id'), tx.get('account_id'), tx.get('transaction_date'), tx.get('ticker'),
-                               tx.get('transaction_type', 'BUY'), int(tx.get('quantity', 0)), float(tx.get('price', 0)),
-                               float(tx.get('fee', 0)), float(tx.get('tax', 0)), tx.get('memo', '')))
-              for d in data.get('dividends', []):
-                  cur.execute('''INSERT INTO dividends (id, account_id, dividend_date, ticker, gross_amount, tax, net_amount)
-                                 VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                              (d.get('id'), d.get('account_id'), d.get('dividend_date'), d.get('ticker'),
-                               float(d.get('gross_amount', 0)), float(d.get('tax', 0)), float(d.get('net_amount', 0))))
-              for m in data.get('etf_master', []):
-                  ticker, name = m.get('ticker', '').strip(), m.get('name', '').strip()
-                  if ticker and name:
-                      cur.execute('INSERT OR REPLACE INTO etf_master (ticker, name) VALUES (?, ?)', (ticker, name))
-              conn.commit()
-              conn.close()
-              print(f'Successfully synchronized {len(data.get(\"accounts\", []))} accounts, {len(data.get(\"transactions\", []))} transactions into portfolio.db!')
-          "
-
+     
       - name: 모닝 리포트 HTML 생성 및 데이터 분석
         env:
           KRX_API_KEY: ${{ secrets.KRX_API_KEY }}
