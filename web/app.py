@@ -6,70 +6,19 @@ RetirementPortfolio 모바일 웹 애플리케이션.
 
 from __future__ import annotations
 
+import json
 import os
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
 from supabase import create_client
 
 from database.repository import Repository
 
 
-class AccountCreateRequest(BaseModel):
-    """신규 계좌 생성 요청."""
-
-    account_name: str = Field(
-        min_length=1,
-        max_length=100,
-    )
-
-    account_number: str = Field(
-        default="",
-        max_length=100,
-    )
-
-    broker: str = Field(
-        default="",
-        max_length=100,
-    )
-
-    initial_capital: float = Field(
-        default=0,
-        ge=0,
-    )
-
-    base_monthly: float = Field(
-        default=0,
-        ge=0,
-    )
-
-    max_additional_monthly: float = Field(
-        default=0,
-        ge=0,
-    )
-
-    buy_cycle_type: str = Field(
-        default="monthly",
-        max_length=50,
-    )
-
-    buy_cycle_detail: str = Field(
-        default="25",
-        max_length=50,
-    )
-
-    is_default: bool = False
-
-    memo: str = Field(
-        default="",
-        max_length=1000,
-    )
-
-
 app = FastAPI(
     title="RetirementPortfolio",
-    version="0.4.0",
+    version="0.5.0",
 )
 
 
@@ -85,9 +34,7 @@ def health_check():
 
 @app.get("/api/me")
 def get_current_user(
-    authorization: str | None = Header(
-        default=None
-    ),
+    authorization: str | None = Header(default=None),
 ):
     """
     Supabase access token을 검증하고
@@ -100,9 +47,7 @@ def get_current_user(
             detail="로그인이 필요합니다.",
         )
 
-    scheme, separator, token = (
-        authorization.partition(" ")
-    )
+    scheme, separator, token = authorization.partition(" ")
 
     if (
         not separator
@@ -181,9 +126,7 @@ def get_verified_user_id(
 
 @app.get("/api/accounts")
 def get_accounts_api(
-    authorization: str | None = Header(
-        default=None
-    ),
+    authorization: str | None = Header(default=None),
 ):
     """로그인한 사용자의 계좌만 조회합니다."""
 
@@ -248,9 +191,7 @@ def get_accounts_api(
 )
 def get_account_targets_api(
     account_id: int,
-    authorization: str | None = Header(
-        default=None
-    ),
+    authorization: str | None = Header(default=None),
 ):
     """
     로그인한 사용자의 특정 계좌
@@ -284,21 +225,17 @@ def get_account_targets_api(
             "account_id": account.id,
             "account_name":
                 account.account_name,
-
             "targets": [
                 {
                     "ticker":
                         target.ticker,
-
                     "name":
                         target.name,
-
                     "target_weight":
                         float(
                             target.target_weight
                             or 0
                         ),
-
                     "dividend_yield":
                         float(
                             target.dividend_yield
@@ -319,93 +256,6 @@ def get_account_targets_api(
                 "목표 투자 비중을 "
                 "불러오지 못했습니다."
             ),
-        )
-        
-
-@app.post(
-    "/api/accounts",
-    status_code=201,
-)
-def create_account_api(
-    request: AccountCreateRequest,
-    authorization: str | None = Header(
-        default=None
-    ),
-):
-    """로그인한 사용자의 신규 계좌를 생성합니다."""
-
-    user_id = get_verified_user_id(
-        authorization
-    )
-
-    try:
-        repo = Repository(
-            user_id=user_id
-        )
-
-        account = repo.create_account(
-            account_name=request.account_name,
-            account_number=request.account_number,
-            broker=request.broker,
-            initial_capital=request.initial_capital,
-            base_monthly=request.base_monthly,
-            max_additional_monthly=(
-                request.max_additional_monthly
-            ),
-            buy_cycle_type=request.buy_cycle_type,
-            buy_cycle_detail=request.buy_cycle_detail,
-            is_default=int(
-                request.is_default
-            ),
-            memo=request.memo,
-        )
-
-        return {
-            "created": True,
-            "account": {
-                "id": account.id,
-                "account_name":
-                    account.account_name,
-                "account_number":
-                    account.account_number,
-                "broker":
-                    account.broker,
-                "initial_capital":
-                    float(
-                        account.initial_capital
-                        or 0
-                    ),
-                "base_monthly":
-                    float(
-                        account.base_monthly
-                        or 0
-                    ),
-                "max_additional_monthly":
-                    float(
-                        account.max_additional_monthly
-                        or 0
-                    ),
-                "buy_cycle_type":
-                    account.buy_cycle_type,
-                "buy_cycle_detail":
-                    account.buy_cycle_detail,
-                "is_default":
-                    bool(account.is_default),
-                "memo":
-                    account.memo,
-            },
-        }
-
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        )
-
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="계좌를 생성하지 못했습니다.",
         )
 
 
@@ -500,9 +350,7 @@ def home():
                 font-weight: 600;
             }
 
-            input,
-            select,
-            textarea {
+            input {
                 width: 100%;
                 min-height: 48px;
                 padding: 12px;
@@ -510,11 +358,6 @@ def home():
                 border-radius: 10px;
                 background: white;
                 font-size: 16px;
-            }
-
-            textarea {
-                min-height: 80px;
-                resize: vertical;
             }
 
             button {
@@ -534,20 +377,11 @@ def home():
                 opacity: 0.55;
             }
 
-            .secondary-button {
-                background: #5f6368;
-            }
-
-            #message,
-            #account-message {
+            #message {
                 min-height: 24px;
                 margin-top: 16px;
                 line-height: 1.5;
                 font-size: 14px;
-            }
-
-            .success {
-                color: #137333;
             }
 
             .error {
@@ -575,7 +409,7 @@ def home():
             }
 
             .account-name {
-                font-size: 17px;
+                font-size: 18px;
                 font-weight: 700;
             }
 
@@ -583,6 +417,63 @@ def home():
                 margin-top: 5px;
                 color: #555;
                 font-size: 14px;
+            }
+
+            .targets-title {
+                margin-top: 18px;
+                padding-top: 15px;
+                border-top: 1px solid #eee;
+                font-size: 15px;
+                font-weight: 700;
+            }
+
+            .targets-list {
+                margin-top: 8px;
+            }
+
+            .target-row {
+                display: flex;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 10px 0;
+                border-bottom: 1px solid #f0f0f0;
+            }
+
+            .target-row:last-child {
+                border-bottom: 0;
+            }
+
+            .target-info {
+                min-width: 0;
+            }
+
+            .target-name {
+                font-size: 14px;
+                font-weight: 600;
+                line-height: 1.4;
+            }
+
+            .target-ticker {
+                margin-top: 3px;
+                color: #777;
+                font-size: 13px;
+            }
+
+            .target-weight {
+                flex-shrink: 0;
+                font-size: 16px;
+                font-weight: 700;
+            }
+
+            .target-loading,
+            .target-error {
+                padding: 10px 0 2px;
+                color: #777;
+                font-size: 13px;
+            }
+
+            .target-error {
+                color: #b3261e;
             }
 
             .empty {
@@ -678,135 +569,17 @@ def home():
                     <div id="accounts-list"></div>
                 </section>
 
-
-                <section class="card">
-                    <h2>새 계좌 등록</h2>
-
-                    <form id="account-form">
-
-                        <label for="account-name">
-                            계좌명
-                        </label>
-
-                        <input
-                            id="account-name"
-                            type="text"
-                            value="퇴직연금(DC)"
-                            required
-                        >
-
-                        <label for="broker">
-                            증권사
-                        </label>
-
-                        <input
-                            id="broker"
-                            type="text"
-                            value="한국투자증권"
-                        >
-
-                        <label for="account-number">
-                            계좌번호
-                        </label>
-
-                        <input
-                            id="account-number"
-                            type="text"
-                            placeholder="선택사항"
-                        >
-
-                        <label for="initial-capital">
-                            초기자금
-                        </label>
-
-                        <input
-                            id="initial-capital"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value="116000000"
-                            required
-                        >
-
-                        <label for="base-monthly">
-                            월 기본 투자금
-                        </label>
-
-                        <input
-                            id="base-monthly"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value="10000000"
-                            required
-                        >
-
-                        <label for="max-additional-monthly">
-                            월 최대 추가 투자금
-                        </label>
-
-                        <input
-                            id="max-additional-monthly"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value="2000000"
-                            required
-                        >
-
-                        <label for="buy-cycle-type">
-                            매수주기
-                        </label>
-
-                        <select id="buy-cycle-type">
-                            <option value="monthly">
-                                매월
-                            </option>
-                        </select>
-
-                        <label for="buy-cycle-detail">
-                            매수일
-                        </label>
-
-                        <input
-                            id="buy-cycle-detail"
-                            type="number"
-                            min="1"
-                            max="31"
-                            step="1"
-                            value="17"
-                            required
-                        >
-
-                        <label for="memo">
-                            메모
-                        </label>
-
-                        <textarea
-                            id="memo"
-                            placeholder="선택사항"
-                        ></textarea>
-
-                        <button
-                            id="save-account-button"
-                            type="submit"
-                        >
-                            계좌 저장
-                        </button>
-
-                    </form>
-
-                    <div id="account-message"></div>
-                </section>
-
             </div>
 
         </main>
 
 
         <script>
-            const SUPABASE_URL = "__SUPABASE_URL__";
-            const SUPABASE_KEY = "__SUPABASE_KEY__";
+            const SUPABASE_URL =
+                __SUPABASE_URL_JSON__;
+
+            const SUPABASE_KEY =
+                __SUPABASE_KEY_JSON__;
 
             const loginCard =
                 document.getElementById(
@@ -843,21 +616,6 @@ def home():
                     "accounts-list"
                 );
 
-            const accountForm =
-                document.getElementById(
-                    "account-form"
-                );
-
-            const accountMessage =
-                document.getElementById(
-                    "account-message"
-                );
-
-            const saveAccountButton =
-                document.getElementById(
-                    "save-account-button"
-                );
-
 
             function formatWon(value) {
                 return new Intl.NumberFormat(
@@ -865,6 +623,24 @@ def home():
                 ).format(
                     Number(value || 0)
                 ) + "원";
+            }
+
+
+            function formatPercent(value) {
+                const number =
+                    Number(value || 0);
+
+                const percent =
+                    Math.abs(number) <= 1
+                    ? number * 100
+                    : number;
+
+                return new Intl.NumberFormat(
+                    "ko-KR",
+                    {
+                        maximumFractionDigits: 2,
+                    }
+                ).format(percent) + "%";
             }
 
 
@@ -931,8 +707,150 @@ def home():
             }
 
 
-            function renderAccounts(
-                accounts
+            async function loadAccountTargets(
+                accessToken,
+                accountId
+            ) {
+                const response = await fetch(
+                    "/api/accounts/"
+                    + accountId
+                    + "/targets",
+                    {
+                        method: "GET",
+
+                        headers: {
+                            "Authorization":
+                                "Bearer "
+                                + accessToken,
+                        },
+                    }
+                );
+
+                const data =
+                    await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.detail
+                        || "목표 비중을 불러오지 못했습니다."
+                    );
+                }
+
+                return data.targets || [];
+            }
+
+
+            function createDetail(
+                text
+            ) {
+                const element =
+                    document.createElement(
+                        "div"
+                    );
+
+                element.className =
+                    "account-detail";
+
+                element.textContent =
+                    text;
+
+                return element;
+            }
+
+
+            function renderTargets(
+                container,
+                targets
+            ) {
+                container.innerHTML = "";
+
+                if (targets.length === 0) {
+                    const empty =
+                        document.createElement(
+                            "div"
+                        );
+
+                    empty.className =
+                        "target-loading";
+
+                    empty.textContent =
+                        "등록된 목표 ETF가 없습니다.";
+
+                    container.appendChild(
+                        empty
+                    );
+
+                    return;
+                }
+
+                for (const target of targets) {
+                    const row =
+                        document.createElement(
+                            "div"
+                        );
+
+                    row.className =
+                        "target-row";
+
+                    const info =
+                        document.createElement(
+                            "div"
+                        );
+
+                    info.className =
+                        "target-info";
+
+                    const name =
+                        document.createElement(
+                            "div"
+                        );
+
+                    name.className =
+                        "target-name";
+
+                    name.textContent =
+                        target.name || "-";
+
+                    const ticker =
+                        document.createElement(
+                            "div"
+                        );
+
+                    ticker.className =
+                        "target-ticker";
+
+                    ticker.textContent =
+                        target.ticker || "-";
+
+                    const weight =
+                        document.createElement(
+                            "div"
+                        );
+
+                    weight.className =
+                        "target-weight";
+
+                    weight.textContent =
+                        formatPercent(
+                            target.target_weight
+                        );
+
+                    info.appendChild(name);
+                    info.appendChild(ticker);
+
+                    row.appendChild(info);
+                    row.appendChild(weight);
+
+                    container.appendChild(
+                        row
+                    );
+                }
+            }
+
+
+            async function renderAccounts(
+                accounts,
+                accessToken
             ) {
                 accountsList.innerHTML = "";
 
@@ -942,7 +860,8 @@ def home():
                             "div"
                         );
 
-                    empty.className = "empty";
+                    empty.className =
+                        "empty";
 
                     empty.textContent =
                         "아직 등록된 계좌가 없습니다.";
@@ -979,104 +898,149 @@ def home():
                             : ""
                         );
 
-                    const broker =
-                        document.createElement(
-                            "div"
-                        );
-
-                    broker.className =
-                        "account-detail";
-
-                    broker.textContent =
-                        "증권사: "
-                        + (
-                            account.broker
-                            || "-"
-                        );
-
-                    const capital =
-                        document.createElement(
-                            "div"
-                        );
-
-                    capital.className =
-                        "account-detail";
-
-                    capital.textContent =
-                        "초기자금: "
-                        + formatWon(
-                            account.initial_capital
-                        );
-
-                    const monthly =
-                        document.createElement(
-                            "div"
-                        );
-
-                    monthly.className =
-                        "account-detail";
-
-                    monthly.textContent =
-                        "월 기본 투자금: "
-                        + formatWon(
-                            account.base_monthly
-                        );
-
-                    const additional =
-                        document.createElement(
-                            "div"
-                        );
-
-                    additional.className =
-                        "account-detail";
-
-                    additional.textContent =
-                        "월 최대 추가 투자금: "
-                        + formatWon(
-                            account
-                                .max_additional_monthly
-                        );
-
-                    const cycle =
-                        document.createElement(
-                            "div"
-                        );
-
-                    cycle.className =
-                        "account-detail";
-
-                    cycle.textContent =
-                        "매수주기: 매월 "
-                        + account.buy_cycle_detail
-                        + "일";
-
                     card.appendChild(name);
-                    card.appendChild(broker);
-                    card.appendChild(capital);
-                    card.appendChild(monthly);
-                    card.appendChild(additional);
-                    card.appendChild(cycle);
+
+                    card.appendChild(
+                        createDetail(
+                            "증권사: "
+                            + (
+                                account.broker
+                                || "-"
+                            )
+                        )
+                    );
+
+                    card.appendChild(
+                        createDetail(
+                            "초기자금: "
+                            + formatWon(
+                                account.initial_capital
+                            )
+                        )
+                    );
+
+                    card.appendChild(
+                        createDetail(
+                            "월 기본 투자금: "
+                            + formatWon(
+                                account.base_monthly
+                            )
+                        )
+                    );
+
+                    card.appendChild(
+                        createDetail(
+                            "월 최대 추가 투자금: "
+                            + formatWon(
+                                account
+                                    .max_additional_monthly
+                            )
+                        )
+                    );
+
+                    const cycleText =
+                        account.buy_cycle_type
+                        === "monthly"
+                        ? (
+                            "매수주기: 매월 "
+                            + account.buy_cycle_detail
+                            + "일"
+                        )
+                        : (
+                            "매수주기: "
+                            + account.buy_cycle_type
+                            + " / "
+                            + account.buy_cycle_detail
+                        );
+
+                    card.appendChild(
+                        createDetail(
+                            cycleText
+                        )
+                    );
+
+                    const targetsTitle =
+                        document.createElement(
+                            "div"
+                        );
+
+                    targetsTitle.className =
+                        "targets-title";
+
+                    targetsTitle.textContent =
+                        "목표 포트폴리오";
+
+                    card.appendChild(
+                        targetsTitle
+                    );
+
+                    const targetsList =
+                        document.createElement(
+                            "div"
+                        );
+
+                    targetsList.className =
+                        "targets-list";
+
+                    const loading =
+                        document.createElement(
+                            "div"
+                        );
+
+                    loading.className =
+                        "target-loading";
+
+                    loading.textContent =
+                        "목표 비중을 불러오는 중...";
+
+                    targetsList.appendChild(
+                        loading
+                    );
+
+                    card.appendChild(
+                        targetsList
+                    );
 
                     accountsList.appendChild(
                         card
                     );
+
+                    try {
+                        const targets =
+                            await loadAccountTargets(
+                                accessToken,
+                                account.id
+                            );
+
+                        renderTargets(
+                            targetsList,
+                            targets
+                        );
+
+                    } catch (error) {
+                        targetsList.innerHTML =
+                            "";
+
+                        const errorElement =
+                            document.createElement(
+                                "div"
+                            );
+
+                        errorElement.className =
+                            "target-error";
+
+                        errorElement.textContent =
+                            error.message
+                            || (
+                                "목표 비중을 "
+                                + "불러오지 못했습니다."
+                            );
+
+                        targetsList.appendChild(
+                            errorElement
+                        );
+                    }
                 }
-            }
-
-
-            async function refreshAccounts(
-                accessToken
-            ) {
-                const accounts =
-                    await loadAccounts(
-                        accessToken
-                    );
-
-                renderAccounts(
-                    accounts
-                );
-
-                return accounts;
             }
 
 
@@ -1167,9 +1131,14 @@ def home():
                             "계좌 확인 중...";
 
                         const accounts =
-                            await refreshAccounts(
+                            await loadAccounts(
                                 data.access_token
                             );
+
+                        await renderAccounts(
+                            accounts,
+                            data.access_token
+                        );
 
                         loginStatus.textContent =
                             "로그인 완료 · "
@@ -1212,175 +1181,6 @@ def home():
                     }
                 }
             );
-
-
-            accountForm.addEventListener(
-                "submit",
-                async (event) => {
-                    event.preventDefault();
-
-                    accountMessage.textContent =
-                        "";
-
-                    accountMessage.className =
-                        "";
-
-                    saveAccountButton.disabled =
-                        true;
-
-                    saveAccountButton.textContent =
-                        "저장 중...";
-
-                    const accessToken =
-                        sessionStorage.getItem(
-                            "access_token"
-                        );
-
-                    if (!accessToken) {
-                        accountMessage.textContent =
-                            "로그인이 만료되었습니다. "
-                            + "다시 로그인해 주세요.";
-
-                        accountMessage.className =
-                            "error";
-
-                        saveAccountButton.disabled =
-                            false;
-
-                        saveAccountButton.textContent =
-                            "계좌 저장";
-
-                        return;
-                    }
-
-                    const payload = {
-                        account_name:
-                            document.getElementById(
-                                "account-name"
-                            ).value.trim(),
-
-                        account_number:
-                            document.getElementById(
-                                "account-number"
-                            ).value.trim(),
-
-                        broker:
-                            document.getElementById(
-                                "broker"
-                            ).value.trim(),
-
-                        initial_capital:
-                            Number(
-                                document.getElementById(
-                                    "initial-capital"
-                                ).value
-                            ),
-
-                        base_monthly:
-                            Number(
-                                document.getElementById(
-                                    "base-monthly"
-                                ).value
-                            ),
-
-                        max_additional_monthly:
-                            Number(
-                                document.getElementById(
-                                    "max-additional-monthly"
-                                ).value
-                            ),
-
-                        buy_cycle_type:
-                            document.getElementById(
-                                "buy-cycle-type"
-                            ).value,
-
-                        buy_cycle_detail:
-                            document.getElementById(
-                                "buy-cycle-detail"
-                            ).value,
-
-                        is_default:
-                            true,
-
-                        memo:
-                            document.getElementById(
-                                "memo"
-                            ).value.trim(),
-                    };
-
-                    try {
-                        const response =
-                            await fetch(
-                                "/api/accounts",
-                                {
-                                    method: "POST",
-
-                                    headers: {
-                                        "Content-Type":
-                                            "application/json",
-
-                                        "Authorization":
-                                            "Bearer "
-                                            + accessToken,
-                                    },
-
-                                    body:
-                                        JSON.stringify(
-                                            payload
-                                        ),
-                                }
-                            );
-
-                        const data =
-                            await response.json();
-
-                        if (
-                            !response.ok
-                            || !data.created
-                        ) {
-                            throw new Error(
-                                data.detail
-                                || "계좌 저장에 실패했습니다."
-                            );
-                        }
-
-                        const accounts =
-                            await refreshAccounts(
-                                accessToken
-                            );
-
-                        accountMessage.textContent =
-                            "계좌가 저장되었습니다.";
-
-                        accountMessage.className =
-                            "success";
-
-                        loginStatus.textContent =
-                            "로그인 완료 · 등록된 계좌 "
-                            + accounts.length
-                            + "개";
-
-                        accountForm.style.display =
-                            "none";
-
-                    } catch (error) {
-                        accountMessage.textContent =
-                            error.message
-                            || "계좌 저장에 실패했습니다.";
-
-                        accountMessage.className =
-                            "error";
-
-                    } finally {
-                        saveAccountButton.disabled =
-                            false;
-
-                        saveAccountButton.textContent =
-                            "계좌 저장";
-                    }
-                }
-            );
         </script>
 
     </body>
@@ -1388,13 +1188,13 @@ def home():
     """
 
     html = html.replace(
-        "__SUPABASE_URL__",
-        supabase_url,
+        "__SUPABASE_URL_JSON__",
+        json.dumps(supabase_url),
     )
 
     html = html.replace(
-        "__SUPABASE_KEY__",
-        supabase_key,
+        "__SUPABASE_KEY_JSON__",
+        json.dumps(supabase_key),
     )
 
     return HTMLResponse(
