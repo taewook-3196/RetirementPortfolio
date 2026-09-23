@@ -679,6 +679,13 @@ def get_account_positions_api(
             for target in targets
         }
 
+        target_weights = {
+            target.ticker: float(
+                target.target_weight or 0
+            )
+            for target in targets
+        }
+
         latest_prices = {}
         
         for ticker in ticker_names:
@@ -752,6 +759,11 @@ def get_account_positions_api(
                         current_value,
                     "current_weight":
                         current_weight,
+                    "target_weight":
+                        target_weights.get(
+                            position.ticker,
+                            0.0,
+                        ),
                     "unrealized_pnl":
                         float(
                             position.unrealized_pnl
