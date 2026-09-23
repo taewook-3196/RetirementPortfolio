@@ -15,7 +15,6 @@ from core.logging_config import setup_logging
 from database.connection import init_db
 from database.repository import Repository
 from data.krx_client import KRXClient
-from data.mock_provider import MockDataProvider
 
 logger = logging.getLogger("RetirementPortfolio.PriceUpdater")
 
@@ -25,11 +24,13 @@ def update_market_prices(
     repo: Optional[Repository] = None,
     days: int = 90,
     scenario: str = "normal",
+    **kwargs,
 ) -> Dict[str, Any]:
     """
     설정에 지정된 ETF들의 최신 가격 데이터를 수집하여 DB에 저장합니다.
     - config.data_source가 'krx'이면 KRX Open API 호출
-    - 'mock'이거나 KRX 호출 실패 시 MockDataProvider 활용
+    - 'naver'이면 네이버 금융 실시간 시세 호출
+    - 'mock'이면 단위 테스트용 모의 데이터 생성 (일반 사용자 환경에서는 미사용)
     """
     ensure_directories()
     cfg = config or load_config()
@@ -80,8 +81,15 @@ def update_market_prices(
     data_source_used = cfg.data_source.lower()
     records: List[Dict[str, Any]] = []
 
+    # 0. Mock 시뮬레이션 데이터 (단위 테스트 등에서 명시적으로 지정한 경우에만 동작)
+    if data_source_used == "mock":
+        from data.mock_provider import MockDataProvider
+        mock_provider = MockDataProvider(scenario=scenario)
+        records = mock_provider.get_historical_prices(etf_info_list, days=days)
+        logger.info("MockDataProvider를 통해 데이터 생성 (시나리오: %s, 종목: %s)", scenario, target_tickers)
+
     # 1. KRX API 시도
-    if data_source_used == "krx":
+    elif data_source_used == "krx":
         try:
             client = KRXClient()
             if client.is_configured():
@@ -118,16 +126,17 @@ def update_market_prices(
             data_source_used = "naver"
             logger.info("네이버 금융으로부터 %d개 레코드 수신 완료", len(records))
         except Exception as e:
-            logger.error("네이버 금융 시세 수집 실패: %s -> Mock 데이터로 대체합니다.", e)
-            data_source_used = "mock (fallback)"
+            logger.error("네이버 금융 시세 수집 실패: %s", e)
 
-    # 3. Mock 시뮬레이션 (설정이 mock이거나 외부 네트워크 모두 실패 시)
-    if not records or data_source_used.startswith("mock"):
-        logger.info("MockDataProvider를 통해 데이터 생성 (시나리오: %s)", scenario)
-        mock = MockDataProvider(scenario=scenario)
-        records = mock.get_historical_prices(etf_info_list, days=days)
-        if not data_source_used.startswith("mock"):
-            data_source_used = "mock (fallback)"
+    if not records:
+        logger.warning("시장 가격 데이터 수집 실패 (%s). 기존 DB 캐시 데이터를 안전하게 유지합니다.", data_source_used)
+        return {
+            "status": "warning",
+            "data_source": data_source_used,
+            "records_count": 0,
+            "saved_count": 0,
+            "message": "실제 시세 수집에 실패하여 기존 DB 데이터를 유지합니다.",
+        }
 
     saved_count = repository.upsert_prices(records)
     logger.info("DB 가격 저장 완료: %d건 반영됨", saved_count)
