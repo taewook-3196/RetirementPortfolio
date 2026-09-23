@@ -19,62 +19,38 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install database dependencies
+      - name: Install project dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install SQLAlchemy psycopg2-binary
+          pip install -r requirements.txt
 
-      - name: Test Supabase PostgreSQL connection
+      - name: Test project database layer
         run: |
           python - <<'PY'
-          import os
           import sys
 
-          from sqlalchemy import create_engine, text
-
-          database_url = os.getenv("DATABASE_URL")
-
-          if not database_url:
-              print("ERROR: DATABASE_URL secret is not available.")
-              sys.exit(1)
-
-          print("DATABASE_URL secret: found")
-          print("Connecting to Supabase PostgreSQL...")
+          from database.connection import init_db
+          from database.repository import Repository
 
           try:
-              engine = create_engine(
-                  database_url,
-                  pool_pre_ping=True,
-              )
+              print("1. Testing database.connection...")
+              init_db()
+              print("   SUCCESS: database.connection works.")
 
-              with engine.connect() as connection:
-                  result = connection.execute(
-                      text(
-                          """
-                          SELECT
-                              current_database() AS database_name,
-                              COUNT(*) AS account_count
-                          FROM public.accounts
-                          """
-                      )
-                  ).mappings().one()
+              print("2. Testing Repository...")
+              repo = Repository()
 
-                  print("SUCCESS: Supabase connection established.")
-                  print(
-                      "Database:",
-                      result["database_name"],
-                  )
-                  print(
-                      "Accounts:",
-                      result["account_count"],
-                  )
+              assets = repo.get_asset_master()
 
-              engine.dispose()
+              print("   SUCCESS: Repository works.")
+              print(f"   Shared assets found: {len(assets)}")
+
+              print("")
+              print("SUCCESS: Project database layer is connected to Supabase.")
 
           except Exception as exc:
-              print("ERROR: Supabase connection failed.")
-              print(
-                  f"{type(exc).__name__}: {exc}"
-              )
+              print("")
+              print("ERROR: Project database layer test failed.")
+              print(f"{type(exc).__name__}: {exc}")
               sys.exit(1)
           PY
