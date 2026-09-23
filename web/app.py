@@ -11,6 +11,7 @@ import os
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
 from supabase import create_client
 
 from database.repository import Repository
@@ -256,6 +257,241 @@ def get_account_targets_api(
                 "목표 투자 비중을 "
                 "불러오지 못했습니다."
             ),
+        )
+
+class TransactionCreateRequest(BaseModel):
+    """매수/매도 거래 등록 요청."""
+
+    transaction_date: str = Field(
+        min_length=8,
+        max_length=10,
+    )
+
+    ticker: str = Field(
+        min_length=1,
+        max_length=30,
+    )
+
+    transaction_type: str = Field(
+        min_length=3,
+        max_length=4,
+    )
+
+    quantity: float = Field(
+        gt=0,
+    )
+
+    price: float = Field(
+        ge=0,
+    )
+
+    fee: float = Field(
+        default=0,
+        ge=0,
+    )
+
+    tax: float = Field(
+        default=0,
+        ge=0,
+    )
+
+    memo: str = Field(
+        default="",
+        max_length=1000,
+    )
+
+
+@app.get(
+    "/api/accounts/{account_id}/transactions"
+)
+def get_transactions_api(
+    account_id: int,
+    authorization: str | None = Header(
+        default=None
+    ),
+):
+    """로그인 사용자의 특정 계좌 거래를 조회합니다."""
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        transactions = repo.get_transactions(
+            account_id=account_id
+        )
+
+        return {
+            "account_id": account.id,
+            "account_name":
+                account.account_name,
+            "transactions": [
+                {
+                    "id":
+                        transaction.id,
+                    "transaction_date":
+                        transaction
+                        .transaction_date
+                        .isoformat(),
+                    "ticker":
+                        transaction.ticker,
+                    "transaction_type":
+                        transaction.transaction_type,
+                    "quantity":
+                        float(
+                            transaction.quantity
+                            or 0
+                        ),
+                    "price":
+                        float(
+                            transaction.price
+                            or 0
+                        ),
+                    "fee":
+                        float(
+                            transaction.fee
+                            or 0
+                        ),
+                    "tax":
+                        float(
+                            transaction.tax
+                            or 0
+                        ),
+                    "memo":
+                        transaction.memo
+                        or "",
+                }
+                for transaction
+                in transactions
+            ],
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="거래 내역을 불러오지 못했습니다.",
+        )
+
+
+@app.post(
+    "/api/accounts/{account_id}/transactions",
+    status_code=201,
+)
+def create_transaction_api(
+    account_id: int,
+    request: TransactionCreateRequest,
+    authorization: str | None = Header(
+        default=None
+    ),
+):
+    """로그인 사용자의 특정 계좌에 거래를 등록합니다."""
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        transaction = repo.add_transaction(
+            transaction_date=(
+                request.transaction_date
+            ),
+            ticker=request.ticker,
+            transaction_type=(
+                request.transaction_type
+            ),
+            quantity=request.quantity,
+            price=request.price,
+            fee=request.fee,
+            tax=request.tax,
+            memo=request.memo,
+            account_id=account_id,
+        )
+
+        return {
+            "created": True,
+            "transaction": {
+                "id":
+                    transaction.id,
+                "account_id":
+                    transaction.account_id,
+                "transaction_date":
+                    transaction
+                    .transaction_date
+                    .isoformat(),
+                "ticker":
+                    transaction.ticker,
+                "transaction_type":
+                    transaction.transaction_type,
+                "quantity":
+                    float(
+                        transaction.quantity
+                        or 0
+                    ),
+                "price":
+                    float(
+                        transaction.price
+                        or 0
+                    ),
+                "fee":
+                    float(
+                        transaction.fee
+                        or 0
+                    ),
+                "tax":
+                    float(
+                        transaction.tax
+                        or 0
+                    ),
+                "memo":
+                    transaction.memo
+                    or "",
+            },
+        }
+
+    except HTTPException:
+        raise
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="거래를 저장하지 못했습니다.",
         )
 
 
