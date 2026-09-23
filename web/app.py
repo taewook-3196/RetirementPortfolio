@@ -4,16 +4,17 @@ web/app.py
 RetirementPortfolio 모바일 웹 애플리케이션.
 """
 
-
 from __future__ import annotations
 
 import os
 
 from fastapi import FastAPI, Header, HTTPException
-from pydantic import BaseModel, Field
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
 from supabase import create_client
+
 from database.repository import Repository
+
 
 class AccountCreateRequest(BaseModel):
     """신규 계좌 생성 요청."""
@@ -65,15 +66,17 @@ class AccountCreateRequest(BaseModel):
         max_length=1000,
     )
 
+
 app = FastAPI(
     title="RetirementPortfolio",
-    version="0.3.0",
+    version="0.4.0",
 )
 
 
 @app.get("/health")
 def health_check():
     """웹 서버 상태 확인용 API."""
+
     return {
         "status": "ok",
         "service": "RetirementPortfolio",
@@ -163,13 +166,11 @@ def get_current_user(
             ),
         )
 
+
 def get_verified_user_id(
     authorization: str | None,
 ) -> str:
-    """
-    검증된 Supabase 로그인 사용자의
-    user_id를 반환합니다.
-    """
+    """검증된 로그인 사용자의 user_id를 반환합니다."""
 
     user = get_current_user(
         authorization=authorization
@@ -184,9 +185,7 @@ def get_accounts_api(
         default=None
     ),
 ):
-    """
-    로그인한 사용자의 계좌만 조회합니다.
-    """
+    """로그인한 사용자의 계좌만 조회합니다."""
 
     user_id = get_verified_user_id(
         authorization
@@ -205,42 +204,31 @@ def get_accounts_api(
                     "id": account.id,
                     "account_name":
                         account.account_name,
-
                     "account_number":
                         account.account_number,
-
                     "broker":
                         account.broker,
-
                     "initial_capital":
                         float(
                             account.initial_capital
                             or 0
                         ),
-
                     "base_monthly":
                         float(
                             account.base_monthly
                             or 0
                         ),
-
                     "max_additional_monthly":
                         float(
                             account.max_additional_monthly
                             or 0
                         ),
-
                     "buy_cycle_type":
                         account.buy_cycle_type,
-
                     "buy_cycle_detail":
                         account.buy_cycle_detail,
-
                     "is_default":
-                        bool(
-                            account.is_default
-                        ),
-
+                        bool(account.is_default),
                     "memo":
                         account.memo,
                 }
@@ -252,7 +240,8 @@ def get_accounts_api(
         raise HTTPException(
             status_code=500,
             detail="계좌 정보를 불러오지 못했습니다.",
-        )        
+        )
+
 
 @app.post(
     "/api/accounts",
@@ -264,9 +253,7 @@ def create_account_api(
         default=None
     ),
 ):
-    """
-    로그인한 사용자의 신규 계좌를 생성합니다.
-    """
+    """로그인한 사용자의 신규 계좌를 생성합니다."""
 
     user_id = get_verified_user_id(
         authorization
@@ -300,42 +287,31 @@ def create_account_api(
                 "id": account.id,
                 "account_name":
                     account.account_name,
-
                 "account_number":
                     account.account_number,
-
                 "broker":
                     account.broker,
-
                 "initial_capital":
                     float(
                         account.initial_capital
                         or 0
                     ),
-
                 "base_monthly":
                     float(
                         account.base_monthly
                         or 0
                     ),
-
                 "max_additional_monthly":
                     float(
                         account.max_additional_monthly
                         or 0
                     ),
-
                 "buy_cycle_type":
                     account.buy_cycle_type,
-
                 "buy_cycle_detail":
                     account.buy_cycle_detail,
-
                 "is_default":
-                    bool(
-                        account.is_default
-                    ),
-
+                    bool(account.is_default),
                 "memo":
                     account.memo,
             },
@@ -356,7 +332,7 @@ def create_account_api(
 
 @app.get("/", response_class=HTMLResponse)
 def home():
-    """모바일 로그인 화면."""
+    """모바일 포트폴리오 웹 화면."""
 
     supabase_url = os.getenv(
         "SUPABASE_URL",
@@ -372,9 +348,7 @@ def home():
         return HTMLResponse(
             content="""
             <h1>웹 설정 오류</h1>
-            <p>
-                Supabase 웹 인증 설정이 없습니다.
-            </p>
+            <p>Supabase 웹 인증 설정이 없습니다.</p>
             """,
             status_code=500,
         )
@@ -391,7 +365,7 @@ def home():
             content="width=device-width, initial-scale=1.0"
         >
 
-        <title>RetirementPortfolio 로그인</title>
+        <title>RetirementPortfolio</title>
 
         <style>
             * {
@@ -400,7 +374,7 @@ def home():
 
             body {
                 margin: 0;
-                padding: 24px 16px;
+                padding: 20px 14px 50px;
                 background: #f5f7fa;
                 font-family:
                     -apple-system,
@@ -412,14 +386,15 @@ def home():
 
             .container {
                 width: 100%;
-                max-width: 480px;
-                margin: 40px auto;
+                max-width: 520px;
+                margin: 20px auto;
             }
 
             .card {
                 background: white;
                 border-radius: 18px;
-                padding: 26px 22px;
+                padding: 24px 20px;
+                margin-bottom: 16px;
                 box-shadow:
                     0 2px 14px rgba(0, 0, 0, 0.08);
             }
@@ -429,31 +404,44 @@ def home():
                 font-size: 25px;
             }
 
+            h2 {
+                margin: 0 0 16px;
+                font-size: 20px;
+            }
+
             .subtitle {
-                margin: 0 0 26px;
+                margin: 0 0 24px;
                 color: #666;
                 line-height: 1.5;
             }
 
             label {
                 display: block;
-                margin: 18px 0 7px;
+                margin: 16px 0 7px;
                 font-weight: 600;
             }
 
-            input {
+            input,
+            select,
+            textarea {
                 width: 100%;
                 min-height: 48px;
                 padding: 12px;
                 border: 1px solid #d5d9df;
                 border-radius: 10px;
+                background: white;
                 font-size: 16px;
+            }
+
+            textarea {
+                min-height: 80px;
+                resize: vertical;
             }
 
             button {
                 width: 100%;
                 min-height: 50px;
-                margin-top: 24px;
+                margin-top: 22px;
                 border: 0;
                 border-radius: 10px;
                 background: #202124;
@@ -467,9 +455,14 @@ def home():
                 opacity: 0.55;
             }
 
-            #message {
+            .secondary-button {
+                background: #5f6368;
+            }
+
+            #message,
+            #account-message {
                 min-height: 24px;
-                margin-top: 18px;
+                margin-top: 16px;
                 line-height: 1.5;
                 font-size: 14px;
             }
@@ -482,29 +475,46 @@ def home():
                 color: #b3261e;
             }
 
-            .user-box {
+            #app-area {
                 display: none;
-                margin-top: 20px;
-                padding: 16px;
+            }
+
+            .status-box {
+                padding: 14px;
                 background: #f1f8f4;
                 border-radius: 10px;
-                line-height: 1.7;
+                line-height: 1.6;
                 font-size: 14px;
             }
 
-            .user-box strong {
-                display: block;
-                margin-bottom: 4px;
+            .account-card {
+                margin-top: 12px;
+                padding: 16px;
+                border: 1px solid #e1e4e8;
+                border-radius: 12px;
+                line-height: 1.6;
             }
 
-            .user-id {
-                overflow-wrap: anywhere;
+            .account-name {
+                font-size: 17px;
+                font-weight: 700;
+            }
+
+            .account-detail {
+                margin-top: 5px;
                 color: #555;
+                font-size: 14px;
+            }
+
+            .empty {
+                padding: 16px 0 4px;
+                color: #777;
+                line-height: 1.6;
             }
 
             .security {
-                margin-top: 24px;
-                padding-top: 18px;
+                margin-top: 22px;
+                padding-top: 16px;
                 border-top: 1px solid #eee;
                 color: #777;
                 font-size: 13px;
@@ -515,8 +525,11 @@ def home():
 
     <body>
         <main class="container">
-            <section class="card">
 
+            <section
+                id="login-card"
+                class="card"
+            >
                 <h1>RetirementPortfolio</h1>
 
                 <p class="subtitle">
@@ -558,41 +571,175 @@ def home():
 
                 <div id="message"></div>
 
-                <div
-                    id="user-box"
-                    class="user-box"
-                >
-                    <strong>
-                        사용자 인증 완료
-                    </strong>
-
-                    <div id="user-email"></div>
-
-                    <div
-                        id="user-id"
-                        class="user-id"
-                    ></div>
-                </div>
-
                 <div class="security">
                     비밀번호 인증은 Supabase Auth가
                     처리하며 포트폴리오 데이터베이스에
                     비밀번호를 저장하지 않습니다.
                 </div>
-
             </section>
+
+
+            <div id="app-area">
+
+                <section class="card">
+                    <h1>RetirementPortfolio</h1>
+
+                    <div
+                        id="login-status"
+                        class="status-box"
+                    >
+                        로그인 완료
+                    </div>
+                </section>
+
+
+                <section class="card">
+                    <h2>내 계좌</h2>
+
+                    <div id="accounts-list"></div>
+                </section>
+
+
+                <section class="card">
+                    <h2>새 계좌 등록</h2>
+
+                    <form id="account-form">
+
+                        <label for="account-name">
+                            계좌명
+                        </label>
+
+                        <input
+                            id="account-name"
+                            type="text"
+                            value="퇴직연금(DC)"
+                            required
+                        >
+
+                        <label for="broker">
+                            증권사
+                        </label>
+
+                        <input
+                            id="broker"
+                            type="text"
+                            value="한국투자증권"
+                        >
+
+                        <label for="account-number">
+                            계좌번호
+                        </label>
+
+                        <input
+                            id="account-number"
+                            type="text"
+                            placeholder="선택사항"
+                        >
+
+                        <label for="initial-capital">
+                            초기자금
+                        </label>
+
+                        <input
+                            id="initial-capital"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value="116000000"
+                            required
+                        >
+
+                        <label for="base-monthly">
+                            월 기본 투자금
+                        </label>
+
+                        <input
+                            id="base-monthly"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value="10000000"
+                            required
+                        >
+
+                        <label for="max-additional-monthly">
+                            월 최대 추가 투자금
+                        </label>
+
+                        <input
+                            id="max-additional-monthly"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value="2000000"
+                            required
+                        >
+
+                        <label for="buy-cycle-type">
+                            매수주기
+                        </label>
+
+                        <select id="buy-cycle-type">
+                            <option value="monthly">
+                                매월
+                            </option>
+                        </select>
+
+                        <label for="buy-cycle-detail">
+                            매수일
+                        </label>
+
+                        <input
+                            id="buy-cycle-detail"
+                            type="number"
+                            min="1"
+                            max="31"
+                            step="1"
+                            value="17"
+                            required
+                        >
+
+                        <label for="memo">
+                            메모
+                        </label>
+
+                        <textarea
+                            id="memo"
+                            placeholder="선택사항"
+                        ></textarea>
+
+                        <button
+                            id="save-account-button"
+                            type="submit"
+                        >
+                            계좌 저장
+                        </button>
+
+                    </form>
+
+                    <div id="account-message"></div>
+                </section>
+
+            </div>
+
         </main>
+
 
         <script>
             const SUPABASE_URL = "__SUPABASE_URL__";
             const SUPABASE_KEY = "__SUPABASE_KEY__";
 
-            const form =
+            const loginCard =
+                document.getElementById(
+                    "login-card"
+                );
+
+            const loginForm =
                 document.getElementById(
                     "login-form"
                 );
 
-            const button =
+            const loginButton =
                 document.getElementById(
                     "login-button"
                 );
@@ -602,20 +749,44 @@ def home():
                     "message"
                 );
 
-            const userBox =
+            const appArea =
                 document.getElementById(
-                    "user-box"
+                    "app-area"
                 );
 
-            const userEmail =
+            const loginStatus =
                 document.getElementById(
-                    "user-email"
+                    "login-status"
                 );
 
-            const userId =
+            const accountsList =
                 document.getElementById(
-                    "user-id"
+                    "accounts-list"
                 );
+
+            const accountForm =
+                document.getElementById(
+                    "account-form"
+                );
+
+            const accountMessage =
+                document.getElementById(
+                    "account-message"
+                );
+
+            const saveAccountButton =
+                document.getElementById(
+                    "save-account-button"
+                );
+
+
+            function formatWon(value) {
+                return new Intl.NumberFormat(
+                    "ko-KR"
+                ).format(
+                    Number(value || 0)
+                ) + "원";
+            }
 
 
             async function verifyUser(
@@ -650,6 +821,7 @@ def home():
                 return data;
             }
 
+
             async function loadAccounts(
                 accessToken
             ) {
@@ -657,7 +829,7 @@ def home():
                     "/api/accounts",
                     {
                         method: "GET",
-            
+
                         headers: {
                             "Authorization":
                                 "Bearer "
@@ -665,21 +837,171 @@ def home():
                         },
                     }
                 );
-            
+
                 const data =
                     await response.json();
-            
+
                 if (!response.ok) {
                     throw new Error(
                         data.detail
                         || "계좌 정보를 불러오지 못했습니다."
                     );
                 }
-            
+
                 return data.accounts || [];
             }
 
-            form.addEventListener(
+
+            function renderAccounts(
+                accounts
+            ) {
+                accountsList.innerHTML = "";
+
+                if (accounts.length === 0) {
+                    const empty =
+                        document.createElement(
+                            "div"
+                        );
+
+                    empty.className = "empty";
+
+                    empty.textContent =
+                        "아직 등록된 계좌가 없습니다.";
+
+                    accountsList.appendChild(
+                        empty
+                    );
+
+                    return;
+                }
+
+                for (const account of accounts) {
+                    const card =
+                        document.createElement(
+                            "div"
+                        );
+
+                    card.className =
+                        "account-card";
+
+                    const name =
+                        document.createElement(
+                            "div"
+                        );
+
+                    name.className =
+                        "account-name";
+
+                    name.textContent =
+                        account.account_name
+                        + (
+                            account.is_default
+                            ? " · 기본 계좌"
+                            : ""
+                        );
+
+                    const broker =
+                        document.createElement(
+                            "div"
+                        );
+
+                    broker.className =
+                        "account-detail";
+
+                    broker.textContent =
+                        "증권사: "
+                        + (
+                            account.broker
+                            || "-"
+                        );
+
+                    const capital =
+                        document.createElement(
+                            "div"
+                        );
+
+                    capital.className =
+                        "account-detail";
+
+                    capital.textContent =
+                        "초기자금: "
+                        + formatWon(
+                            account.initial_capital
+                        );
+
+                    const monthly =
+                        document.createElement(
+                            "div"
+                        );
+
+                    monthly.className =
+                        "account-detail";
+
+                    monthly.textContent =
+                        "월 기본 투자금: "
+                        + formatWon(
+                            account.base_monthly
+                        );
+
+                    const additional =
+                        document.createElement(
+                            "div"
+                        );
+
+                    additional.className =
+                        "account-detail";
+
+                    additional.textContent =
+                        "월 최대 추가 투자금: "
+                        + formatWon(
+                            account
+                                .max_additional_monthly
+                        );
+
+                    const cycle =
+                        document.createElement(
+                            "div"
+                        );
+
+                    cycle.className =
+                        "account-detail";
+
+                    cycle.textContent =
+                        "매수주기: 매월 "
+                        + account.buy_cycle_detail
+                        + "일";
+
+                    card.appendChild(name);
+                    card.appendChild(broker);
+                    card.appendChild(capital);
+                    card.appendChild(monthly);
+                    card.appendChild(additional);
+                    card.appendChild(cycle);
+
+                    accountsList.appendChild(
+                        card
+                    );
+                }
+            }
+
+
+            async function refreshAccounts(
+                accessToken
+            ) {
+                const accounts =
+                    await loadAccounts(
+                        accessToken
+                    );
+
+                renderAccounts(
+                    accounts
+                );
+
+                return accounts;
+            }
+
+
+            loginForm.addEventListener(
                 "submit",
                 async (event) => {
                     event.preventDefault();
@@ -687,12 +1009,9 @@ def home():
                     message.textContent = "";
                     message.className = "";
 
-                    userBox.style.display =
-                        "none";
+                    loginButton.disabled = true;
 
-                    button.disabled = true;
-
-                    button.textContent =
+                    loginButton.textContent =
                         "로그인 중...";
 
                     const email =
@@ -757,7 +1076,7 @@ def home():
                             data.refresh_token || ""
                         );
 
-                        button.textContent =
+                        loginButton.textContent =
                             "사용자 확인 중...";
 
                         const user =
@@ -765,37 +1084,29 @@ def home():
                                 data.access_token
                             );
 
-                        button.textContent =
+                        loginButton.textContent =
                             "계좌 확인 중...";
 
                         const accounts =
-                            await loadAccounts(
+                            await refreshAccounts(
                                 data.access_token
                             );
-                        
-                        message.textContent =
-                            "로그인 및 사용자 인증에 "
-                            + "성공했습니다. "
-                            + "등록된 계좌: "
+
+                        loginStatus.textContent =
+                            "로그인 완료 · "
+                            + (
+                                user.email
+                                || "사용자"
+                            )
+                            + " · 등록된 계좌 "
                             + accounts.length
                             + "개";
 
-                        message.className =
-                            "success";
-
-                        userEmail.textContent =
-                            "이메일: "
-                            + (user.email || "");
-
-                        userId.textContent =
-                            "사용자 ID: "
-                            + user.user_id;
-
-                        userBox.style.display =
-                            "block";
-
-                        form.style.display =
+                        loginCard.style.display =
                             "none";
+
+                        appArea.style.display =
+                            "block";
 
                     } catch (error) {
                         sessionStorage.removeItem(
@@ -814,16 +1125,186 @@ def home():
                             "error";
 
                     } finally {
-                        button.disabled = false;
+                        loginButton.disabled =
+                            false;
 
-                        button.textContent =
+                        loginButton.textContent =
                             "로그인";
                     }
                 }
             );
-        </script>
-    </body>
 
+
+            accountForm.addEventListener(
+                "submit",
+                async (event) => {
+                    event.preventDefault();
+
+                    accountMessage.textContent =
+                        "";
+
+                    accountMessage.className =
+                        "";
+
+                    saveAccountButton.disabled =
+                        true;
+
+                    saveAccountButton.textContent =
+                        "저장 중...";
+
+                    const accessToken =
+                        sessionStorage.getItem(
+                            "access_token"
+                        );
+
+                    if (!accessToken) {
+                        accountMessage.textContent =
+                            "로그인이 만료되었습니다. "
+                            + "다시 로그인해 주세요.";
+
+                        accountMessage.className =
+                            "error";
+
+                        saveAccountButton.disabled =
+                            false;
+
+                        saveAccountButton.textContent =
+                            "계좌 저장";
+
+                        return;
+                    }
+
+                    const payload = {
+                        account_name:
+                            document.getElementById(
+                                "account-name"
+                            ).value.trim(),
+
+                        account_number:
+                            document.getElementById(
+                                "account-number"
+                            ).value.trim(),
+
+                        broker:
+                            document.getElementById(
+                                "broker"
+                            ).value.trim(),
+
+                        initial_capital:
+                            Number(
+                                document.getElementById(
+                                    "initial-capital"
+                                ).value
+                            ),
+
+                        base_monthly:
+                            Number(
+                                document.getElementById(
+                                    "base-monthly"
+                                ).value
+                            ),
+
+                        max_additional_monthly:
+                            Number(
+                                document.getElementById(
+                                    "max-additional-monthly"
+                                ).value
+                            ),
+
+                        buy_cycle_type:
+                            document.getElementById(
+                                "buy-cycle-type"
+                            ).value,
+
+                        buy_cycle_detail:
+                            document.getElementById(
+                                "buy-cycle-detail"
+                            ).value,
+
+                        is_default:
+                            true,
+
+                        memo:
+                            document.getElementById(
+                                "memo"
+                            ).value.trim(),
+                    };
+
+                    try {
+                        const response =
+                            await fetch(
+                                "/api/accounts",
+                                {
+                                    method: "POST",
+
+                                    headers: {
+                                        "Content-Type":
+                                            "application/json",
+
+                                        "Authorization":
+                                            "Bearer "
+                                            + accessToken,
+                                    },
+
+                                    body:
+                                        JSON.stringify(
+                                            payload
+                                        ),
+                                }
+                            );
+
+                        const data =
+                            await response.json();
+
+                        if (
+                            !response.ok
+                            || !data.created
+                        ) {
+                            throw new Error(
+                                data.detail
+                                || "계좌 저장에 실패했습니다."
+                            );
+                        }
+
+                        const accounts =
+                            await refreshAccounts(
+                                accessToken
+                            );
+
+                        accountMessage.textContent =
+                            "계좌가 저장되었습니다.";
+
+                        accountMessage.className =
+                            "success";
+
+                        loginStatus.textContent =
+                            "로그인 완료 · 등록된 계좌 "
+                            + accounts.length
+                            + "개";
+
+                        accountForm.style.display =
+                            "none";
+
+                    } catch (error) {
+                        accountMessage.textContent =
+                            error.message
+                            || "계좌 저장에 실패했습니다.";
+
+                        accountMessage.className =
+                            "error";
+
+                    } finally {
+                        saveAccountButton.disabled =
+                            false;
+
+                        saveAccountButton.textContent =
+                            "계좌 저장";
+                    }
+                }
+            );
+        </script>
+
+    </body>
     </html>
     """
 
