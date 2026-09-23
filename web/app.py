@@ -679,16 +679,49 @@ def get_account_positions_api(
             for target in targets
         }
 
+        latest_prices = {}
+        
+        for ticker in ticker_names:
+            latest_price = repo.get_latest_price(
+                ticker
+            )
+        
+            if latest_price is not None:
+                latest_prices[ticker] = (
+                    latest_price
+                )
+        
         positions = calculate_etf_positions(
             transactions=transactions,
             dividends=dividends,
-            latest_prices={},
+            latest_prices=latest_prices,
             ticker_names=ticker_names,
+        )
+
+        total_current_value = sum(
+            float(
+                position.current_value
+                or 0
+            )
+            for position in positions.values()
         )
 
         position_list = []
 
         for position in positions.values():
+            current_value = float(
+                position.current_value
+                or 0
+            )
+            
+            if total_current_value > 0:
+                current_weight = (
+                    current_value
+                    / total_current_value
+                )
+            else:
+                current_weight = 0.0
+            
             position_list.append(
                 {
                     "ticker":
@@ -708,6 +741,25 @@ def get_account_positions_api(
                     "total_buy_cost":
                         float(
                             position.total_buy_cost
+                            or 0
+                        ),
+                    "current_price":
+                        float(
+                            position.current_price
+                            or 0
+                        ),
+                    "current_value":
+                        current_value,
+                    "current_weight":
+                        current_weight,
+                    "unrealized_pnl":
+                        float(
+                            position.unrealized_pnl
+                            or 0
+                        ),
+                    "unrealized_roi":
+                        float(
+                            position.unrealized_roi
                             or 0
                         ),
                 }
