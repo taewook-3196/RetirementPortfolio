@@ -500,6 +500,34 @@ def home():
                 return data;
             }
 
+            async function loadAccounts(
+                accessToken
+            ) {
+                const response = await fetch(
+                    "/api/accounts",
+                    {
+                        method: "GET",
+            
+                        headers: {
+                            "Authorization":
+                                "Bearer "
+                                + accessToken,
+                        },
+                    }
+                );
+            
+                const data =
+                    await response.json();
+            
+                if (!response.ok) {
+                    throw new Error(
+                        data.detail
+                        || "계좌 정보를 불러오지 못했습니다."
+                    );
+                }
+            
+                return data.accounts || [];
+            }
 
             form.addEventListener(
                 "submit",
@@ -587,9 +615,20 @@ def home():
                                 data.access_token
                             );
 
+                        button.textContent =
+                            "계좌 확인 중...";
+
+                        const accounts =
+                            await loadAccounts(
+                                data.access_token
+                            );
+                        
                         message.textContent =
                             "로그인 및 사용자 인증에 "
-                            + "성공했습니다.";
+                            + "성공했습니다. "
+                            + "등록된 계좌: "
+                            + accounts.length
+                            + "개";
 
                         message.className =
                             "success";
