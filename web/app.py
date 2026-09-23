@@ -1446,42 +1446,58 @@ def home():
                             "div"
                         );
             
-                    row.className = "target-row";
+                    row.className = "transaction-row";
             
-                    const info =
+                    const header =
                         document.createElement(
                             "div"
                         );
             
-                    info.className = "target-info";
+                    header.className =
+                        "transaction-main";
             
                     const name =
                         document.createElement(
                             "div"
                         );
             
-                    name.className = "target-name";
                     name.textContent =
-                        position.name || position.ticker;
+                        position.name
+                        || position.ticker;
+            
+                    const value =
+                        document.createElement(
+                            "div"
+                        );
+            
+                    value.textContent =
+                        formatWon(
+                            position.current_value
+                        );
+            
+                    header.appendChild(name);
+                    header.appendChild(value);
             
                     const ticker =
                         document.createElement(
                             "div"
                         );
             
-                    ticker.className = "target-ticker";
+                    ticker.className =
+                        "target-ticker";
+            
                     ticker.textContent =
                         position.ticker;
             
-                    const detail =
+                    const holding =
                         document.createElement(
                             "div"
                         );
             
-                    detail.className =
+                    holding.className =
                         "account-detail";
             
-                    detail.textContent =
+                    holding.textContent =
                         "보유 "
                         + formatNumber(
                             position.quantity
@@ -1491,28 +1507,99 @@ def home():
                             position.average_buy_price
                         );
             
-                    info.appendChild(name);
-                    info.appendChild(ticker);
-                    info.appendChild(detail);
-            
-                    const cost =
+                    const market =
                         document.createElement(
                             "div"
                         );
             
-                    cost.className = "target-weight";
-                    cost.textContent =
-                        formatWon(
-                            position.total_buy_cost
+                    market.className =
+                        "account-detail";
+            
+                    market.textContent =
+                        "현재가 "
+                        + formatWon(
+                            position.current_price
+                        )
+                        + " · 평가금액 "
+                        + formatWon(
+                            position.current_value
                         );
             
-                    row.appendChild(info);
-                    row.appendChild(cost);
+                    const weights =
+                        document.createElement(
+                            "div"
+                        );
+            
+                    weights.className =
+                        "account-detail";
+            
+                    weights.textContent =
+                        "현재비중 "
+                        + formatPercent(
+                            position.current_weight
+                        )
+                        + " · 목표비중 "
+                        + formatPercent(
+                            position.target_weight
+                        );
+            
+                    const pnl =
+                        document.createElement(
+                            "div"
+                        );
+            
+                    pnl.className =
+                        "account-detail";
+            
+                    const pnlValue =
+                        Number(
+                            position.unrealized_pnl
+                            || 0
+                        );
+            
+                    const roiValue =
+                        Number(
+                            position.unrealized_roi
+                            || 0
+                        );
+            
+                    pnl.textContent =
+                        "평가손익 "
+                        + (
+                            pnlValue > 0
+                            ? "+"
+                            : ""
+                        )
+                        + formatWon(pnlValue)
+                        + " ("
+                        + (
+                            roiValue > 0
+                            ? "+"
+                            : ""
+                        )
+                        + formatPercent(roiValue)
+                        + ")";
+            
+                    if (pnlValue > 0) {
+                        pnl.classList.add(
+                            "sell"
+                        );
+                    } else if (pnlValue < 0) {
+                        pnl.classList.add(
+                            "buy"
+                        );
+                    }
+            
+                    row.appendChild(header);
+                    row.appendChild(ticker);
+                    row.appendChild(holding);
+                    row.appendChild(market);
+                    row.appendChild(weights);
+                    row.appendChild(pnl);
             
                     container.appendChild(row);
                 }
             }
-
 
             function createDetail(text) {
                 const element =
