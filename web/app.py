@@ -1879,12 +1879,45 @@ def home():
                 );
 
 
-            function formatWon(value) {
+            function formatMoney(
+                value,
+                currency = "KRW"
+            ) {
+                const number =
+                    Number(value || 0);
+            
+                const cleanCurrency =
+                    String(
+                        currency || "KRW"
+                    ).toUpperCase();
+            
+                if (cleanCurrency === "USD") {
+                    return new Intl.NumberFormat(
+                        "en-US",
+                        {
+                            style: "currency",
+                            currency: "USD",
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                        }
+                    ).format(number);
+                }
+            
                 return new Intl.NumberFormat(
-                    "ko-KR"
-                ).format(
-                    Number(value || 0)
-                ) + "원";
+                    "ko-KR",
+                    {
+                        style: "currency",
+                        currency: "KRW",
+                        maximumFractionDigits: 0,
+                    }
+                ).format(number);
+            }
+            
+            
+            function getAccountCurrency(account) {
+                return String(
+                    account?.currency || "KRW"
+                ).toUpperCase();
             }
 
 
