@@ -1441,7 +1441,94 @@ def home():
                     </div>
                 </section>
 
-
+                <section class="card">
+                    <h2>투자성향 / 투자전략</h2>
+                
+                    <p class="subtitle">
+                        이 설정은 AI 투자분석과
+                        Morning Report에 사용됩니다.
+                    </p>
+                
+                    <form id="investment-profile-form">
+                
+                        <label for="risk-profile">
+                            투자 성향
+                        </label>
+                
+                        <select id="risk-profile">
+                            <option value="conservative">
+                                안정형
+                            </option>
+                            <option value="balanced">
+                                균형형
+                            </option>
+                            <option value="aggressive">
+                                공격형
+                            </option>
+                        </select>
+                
+                        <label for="investment-horizon">
+                            투자기간 (년)
+                        </label>
+                
+                        <input
+                            id="investment-horizon"
+                            type="number"
+                            min="0"
+                            max="100"
+                            placeholder="예: 12"
+                        >
+                
+                        <label for="monthly-investment">
+                            월 투자 가능금액
+                        </label>
+                
+                        <input
+                            id="monthly-investment"
+                            type="number"
+                            min="0"
+                            step="10000"
+                            placeholder="예: 400000"
+                        >
+                
+                        <label for="ai-advice-style">
+                            AI 조언 방식
+                        </label>
+                
+                        <select id="ai-advice-style">
+                            <option value="conservative">
+                                보수적
+                            </option>
+                            <option value="balanced">
+                                균형적
+                            </option>
+                            <option value="aggressive">
+                                적극적
+                            </option>
+                        </select>
+                
+                        <label for="investment-preference-text">
+                            나의 투자 원칙 / 전략
+                        </label>
+                
+                        <textarea
+                            id="investment-preference-text"
+                            style="min-height: 180px;"
+                            placeholder="예: 단기 등락에 따른 충동매매를 피하고 장기투자 중심으로 운용한다. 시장 급락 시 분할매수를 선호한다."
+                        ></textarea>
+                
+                        <button type="submit">
+                            투자전략 저장
+                        </button>
+                
+                        <div
+                            id="investment-profile-message"
+                            class="transaction-message"
+                        ></div>
+                
+                    </form>
+                </section>
+                
                 <section class="card">
                     <h2>내 계좌</h2>
 
@@ -1605,6 +1692,39 @@ def home():
                 );
             }
 
+            async function loadInvestmentProfile(
+                accessToken
+            ) {
+                const data =
+                    await apiRequest(
+                        "/api/investment-profile",
+                        accessToken
+                    );
+            
+                return data.profile;
+            }
+            
+            
+            async function saveInvestmentProfile(
+                accessToken,
+                payload
+            ) {
+                return await apiRequest(
+                    "/api/investment-profile",
+                    accessToken,
+                    {
+                        method: "PUT",
+            
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+                        },
+            
+                        body:
+                            JSON.stringify(payload),
+                    }
+                );
+            }
 
             async function loadAccounts(
                 accessToken
@@ -3401,6 +3521,109 @@ def home():
                 }
             }
 
+            const investmentProfileForm =
+                document.getElementById(
+                    "investment-profile-form"
+                );
+            
+            investmentProfileForm.addEventListener(
+                "submit",
+                async (event) => {
+                    event.preventDefault();
+            
+                    const profileMessage =
+                        document.getElementById(
+                            "investment-profile-message"
+                        );
+            
+                    const accessToken =
+                        sessionStorage.getItem(
+                            "access_token"
+                        );
+            
+                    if (!accessToken) {
+                        profileMessage.textContent =
+                            "다시 로그인해주세요.";
+            
+                        profileMessage.className =
+                            "transaction-message error";
+            
+                        return;
+                    }
+            
+                    const horizonValue =
+                        document.getElementById(
+                            "investment-horizon"
+                        ).value;
+            
+                    const payload = {
+                        risk_profile:
+                            document.getElementById(
+                                "risk-profile"
+                            ).value,
+            
+                        investment_horizon_years:
+                            horizonValue
+                            ? Number(horizonValue)
+                            : null,
+            
+                        monthly_investment:
+                            Number(
+                                document.getElementById(
+                                    "monthly-investment"
+                                ).value
+                                || 0
+                            ),
+            
+                        ai_advice_style:
+                            document.getElementById(
+                                "ai-advice-style"
+                            ).value,
+            
+                        ai_advice_enabled: true,
+            
+                        investment_preference_text:
+                            document.getElementById(
+                                "investment-preference-text"
+                            ).value.trim(),
+                    };
+            
+                    profileMessage.textContent =
+                        "저장 중...";
+            
+                    profileMessage.className =
+                        "transaction-message";
+            
+                    try {
+                        const result =
+                            await saveInvestmentProfile(
+                                accessToken,
+                                payload
+                            );
+            
+                        if (!result.saved) {
+                            throw new Error(
+                                "저장에 실패했습니다."
+                            );
+                        }
+            
+                        profileMessage.textContent =
+                            "투자전략이 저장되었습니다.";
+            
+                        profileMessage.className =
+                            "transaction-message success";
+            
+                    } catch (error) {
+                        profileMessage.textContent =
+                            error.message
+                            || "투자전략을 저장하지 못했습니다.";
+            
+                        profileMessage.className =
+                            "transaction-message error";
+                    }
+                }
+            );
+            
 
             loginForm.addEventListener(
                 "submit",
@@ -3492,6 +3715,47 @@ def home():
                             await loadAccounts(
                                 data.access_token
                             );
+
+                        const investmentProfile =
+                            await loadInvestmentProfile(
+                                data.access_token
+                            );
+                        
+                        if (investmentProfile) {
+                            document.getElementById(
+                                "risk-profile"
+                            ).value =
+                                investmentProfile.risk_profile
+                                || "balanced";
+                        
+                            document.getElementById(
+                                "investment-horizon"
+                            ).value =
+                                investmentProfile
+                                    .investment_horizon_years
+                                ?? "";
+                        
+                            document.getElementById(
+                                "monthly-investment"
+                            ).value =
+                                investmentProfile
+                                    .monthly_investment
+                                || 0;
+                        
+                            document.getElementById(
+                                "ai-advice-style"
+                            ).value =
+                                investmentProfile
+                                    .ai_advice_style
+                                || "balanced";
+                        
+                            document.getElementById(
+                                "investment-preference-text"
+                            ).value =
+                                investmentProfile
+                                    .investment_preference_text
+                                || "";
+                        }
 
                         await renderAccounts(
                             accounts,
