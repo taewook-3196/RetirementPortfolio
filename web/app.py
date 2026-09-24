@@ -122,6 +122,91 @@ def get_verified_user_id(
 
     return user["user_id"]
 
+class AccountUpdateRequest(BaseModel):
+    """계좌별 운용 및 자금 설정 수정 요청."""
+
+    account_name: str = Field(
+        min_length=1,
+        max_length=200,
+    )
+
+    account_number: str = Field(
+        default="",
+        max_length=200,
+    )
+
+    broker: str = Field(
+        default="",
+        max_length=200,
+    )
+
+    initial_capital: float = Field(
+        default=0,
+        ge=0,
+    )
+
+    base_monthly: float = Field(
+        default=0,
+        ge=0,
+    )
+
+    max_additional_monthly: float = Field(
+        default=0,
+        ge=0,
+    )
+
+    buy_cycle_type: str = Field(
+        default="monthly",
+        max_length=50,
+    )
+
+    buy_cycle_detail: str = Field(
+        default="25",
+        max_length=100,
+    )
+
+    currency: str = Field(
+        default="KRW",
+        max_length=10,
+    )
+
+    account_type: str = Field(
+        default="brokerage",
+        max_length=50,
+    )
+
+    market_scope: str = Field(
+        default="KR",
+        max_length=20,
+    )
+
+    contribution_type: str = Field(
+        default="none",
+        max_length=50,
+    )
+
+    contribution_amount: float = Field(
+        default=0,
+        ge=0,
+    )
+
+    contribution_month: int | None = Field(
+        default=None,
+        ge=1,
+        le=12,
+    )
+
+    strategy_type: str = Field(
+        default="allocation",
+        max_length=50,
+    )
+
+    is_default: bool = False
+
+    memo: str = Field(
+        default="",
+        max_length=2000,
+    )    
 
 @app.get("/api/accounts")
 def get_accounts_api(
@@ -169,6 +254,34 @@ def get_accounts_api(
                         account.buy_cycle_type,
                     "buy_cycle_detail":
                         account.buy_cycle_detail,
+                    
+                    "currency":
+                        account.currency or "KRW",
+                    
+                    "account_type":
+                        account.account_type
+                        or "brokerage",
+                    
+                    "market_scope":
+                        account.market_scope
+                        or "KR",
+                    
+                    "contribution_type":
+                        account.contribution_type
+                        or "none",
+                    
+                    "contribution_amount":
+                        float(
+                            account.contribution_amount
+                            or 0
+                        ),
+                    
+                    "contribution_month":
+                        account.contribution_month,
+                    
+                    "strategy_type":
+                        account.strategy_type
+                        or "allocation",
                     "is_default":
                         bool(account.is_default),
                     "memo":
@@ -184,6 +297,201 @@ def get_accounts_api(
             detail="계좌 정보를 불러오지 못했습니다.",
         )
 
+@app.put("/api/accounts/{account_id}")
+def update_account_api(
+    account_id: int,
+    request: AccountUpdateRequest,
+    authorization: str | None = Header(default=None),
+):
+    """로그인한 사용자의 계좌 설정을 수정합니다."""
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        updated = repo.update_account(
+            account_id=account_id,
+
+            account_name=
+                request.account_name,
+
+            account_number=
+                request.account_number,
+
+            broker=
+                request.broker,
+
+            initial_capital=
+                request.initial_capital,
+
+            base_monthly=
+                request.base_monthly,
+
+            max_additional_monthly=
+                request.max_additional_monthly,
+
+            buy_cycle_type=
+                request.buy_cycle_type,
+
+            buy_cycle_detail=
+                request.buy_cycle_detail,
+
+            currency=
+                request.currency,
+
+            account_type=
+                request.account_type,
+
+            market_scope=
+                request.market_scope,
+
+            contribution_type=
+                request.contribution_type,
+
+            contribution_amount=
+                request.contribution_amount,
+
+            contribution_month=
+                request.contribution_month,
+
+            strategy_type=
+                request.strategy_type,
+
+            is_default=
+                int(request.is_default),
+
+            memo=
+                request.memo,
+        )
+
+        if not updated:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        saved_account = repo.get_account(
+            account_id
+        )
+
+        if saved_account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        return {
+            "updated": True,
+
+            "account": {
+                "id":
+                    saved_account.id,
+
+                "account_name":
+                    saved_account.account_name,
+
+                "account_number":
+                    saved_account.account_number,
+
+                "broker":
+                    saved_account.broker,
+
+                "initial_capital":
+                    float(
+                        saved_account.initial_capital
+                        or 0
+                    ),
+
+                "base_monthly":
+                    float(
+                        saved_account.base_monthly
+                        or 0
+                    ),
+
+                "max_additional_monthly":
+                    float(
+                        saved_account
+                        .max_additional_monthly
+                        or 0
+                    ),
+
+                "buy_cycle_type":
+                    saved_account.buy_cycle_type,
+
+                "buy_cycle_detail":
+                    saved_account.buy_cycle_detail,
+
+                "currency":
+                    saved_account.currency
+                    or "KRW",
+
+                "account_type":
+                    saved_account.account_type
+                    or "brokerage",
+
+                "market_scope":
+                    saved_account.market_scope
+                    or "KR",
+
+                "contribution_type":
+                    saved_account
+                    .contribution_type
+                    or "none",
+
+                "contribution_amount":
+                    float(
+                        saved_account
+                        .contribution_amount
+                        or 0
+                    ),
+
+                "contribution_month":
+                    saved_account
+                    .contribution_month,
+
+                "strategy_type":
+                    saved_account.strategy_type
+                    or "allocation",
+
+                "is_default":
+                    bool(
+                        saved_account.is_default
+                    ),
+
+                "memo":
+                    saved_account.memo or "",
+            },
+        }
+
+    except HTTPException:
+        raise
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="계좌 설정을 저장하지 못했습니다.",
+        )
 
 @app.get(
     "/api/accounts/{account_id}/targets"
