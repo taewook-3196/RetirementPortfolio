@@ -251,6 +251,252 @@ def get_account_targets_api(
             detail="목표 투자 비중을 불러오지 못했습니다.",
         )
 
+class InvestmentProfileRequest(BaseModel):
+    """사용자 투자 성향 및 AI 투자전략 설정."""
+
+    risk_profile: str = Field(
+        default="balanced",
+        max_length=50,
+    )
+
+    investment_horizon_years: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+    )
+
+    target_return: float | None = None
+
+    max_drawdown: float | None = None
+
+    monthly_investment: float = Field(
+        default=0,
+        ge=0,
+    )
+
+    preferred_markets: list[str] = Field(
+        default_factory=list,
+    )
+
+    excluded_assets: list[str] = Field(
+        default_factory=list,
+    )
+
+    ai_advice_enabled: bool = True
+
+    ai_advice_style: str = Field(
+        default="balanced",
+        max_length=50,
+    )
+
+    memo: str = Field(
+        default="",
+        max_length=2000,
+    )
+
+    investment_preference_text: str = Field(
+        default="",
+        max_length=10000,
+    )
+
+@app.get("/api/investment-profile")
+def get_investment_profile_api(
+    authorization: str | None = Header(default=None),
+):
+    """로그인한 사용자의 투자 성향을 조회합니다."""
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        profile = (
+            repo.get_investment_profile()
+        )
+
+        if profile is None:
+            return {
+                "profile": None,
+            }
+
+        return {
+            "profile": {
+                "risk_profile":
+                    profile.risk_profile,
+                "investment_horizon_years":
+                    profile.investment_horizon_years,
+                "target_return":
+                    (
+                        float(
+                            profile.target_return
+                        )
+                        if profile.target_return
+                        is not None
+                        else None
+                    ),
+                "max_drawdown":
+                    (
+                        float(
+                            profile.max_drawdown
+                        )
+                        if profile.max_drawdown
+                        is not None
+                        else None
+                    ),
+                "monthly_investment":
+                    float(
+                        profile.monthly_investment
+                        or 0
+                    ),
+                "preferred_markets":
+                    profile.preferred_markets
+                    or [],
+                "excluded_assets":
+                    profile.excluded_assets
+                    or [],
+                "ai_advice_enabled":
+                    bool(
+                        profile.ai_advice_enabled
+                    ),
+                "ai_advice_style":
+                    profile.ai_advice_style,
+                "memo":
+                    profile.memo or "",
+                "investment_preference_text":
+                    (
+                        profile
+                        .investment_preference_text
+                        or ""
+                    ),
+            }
+        }
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "투자 성향을 "
+                "불러오지 못했습니다."
+            ),
+        )
+
+
+@app.put("/api/investment-profile")
+def update_investment_profile_api(
+    request: InvestmentProfileRequest,
+    authorization: str | None = Header(default=None),
+):
+    """로그인한 사용자의 투자 성향을 저장합니다."""
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        profile = (
+            repo.save_investment_profile(
+                risk_profile=
+                    request.risk_profile,
+                investment_horizon_years=
+                    request
+                    .investment_horizon_years,
+                target_return=
+                    request.target_return,
+                max_drawdown=
+                    request.max_drawdown,
+                monthly_investment=
+                    request.monthly_investment,
+                preferred_markets=
+                    request.preferred_markets,
+                excluded_assets=
+                    request.excluded_assets,
+                ai_advice_enabled=
+                    request.ai_advice_enabled,
+                ai_advice_style=
+                    request.ai_advice_style,
+                memo=
+                    request.memo,
+                investment_preference_text=
+                    request
+                    .investment_preference_text,
+            )
+        )
+
+        return {
+            "saved": True,
+            "profile": {
+                "risk_profile":
+                    profile.risk_profile,
+                "investment_horizon_years":
+                    profile.investment_horizon_years,
+                "target_return":
+                    (
+                        float(
+                            profile.target_return
+                        )
+                        if profile.target_return
+                        is not None
+                        else None
+                    ),
+                "max_drawdown":
+                    (
+                        float(
+                            profile.max_drawdown
+                        )
+                        if profile.max_drawdown
+                        is not None
+                        else None
+                    ),
+                "monthly_investment":
+                    float(
+                        profile.monthly_investment
+                        or 0
+                    ),
+                "preferred_markets":
+                    profile.preferred_markets
+                    or [],
+                "excluded_assets":
+                    profile.excluded_assets
+                    or [],
+                "ai_advice_enabled":
+                    bool(
+                        profile.ai_advice_enabled
+                    ),
+                "ai_advice_style":
+                    profile.ai_advice_style,
+                "memo":
+                    profile.memo or "",
+                "investment_preference_text":
+                    (
+                        profile
+                        .investment_preference_text
+                        or ""
+                    ),
+            },
+        }
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "투자 성향을 "
+                "저장하지 못했습니다."
+            ),
+        )
 
 class TransactionCreateRequest(BaseModel):
     """매수/매도 거래 등록 요청."""
