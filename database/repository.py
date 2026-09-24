@@ -418,22 +418,34 @@ class Repository:
         account_name: str,
         account_number: str = "",
         broker: str = "",
-        initial_capital: float = 100000000.0,
-        base_monthly: float = 10000000.0,
-        max_additional_monthly: float = 3000000.0,
+        initial_capital: float = 0.0,
+        base_monthly: float = 0.0,
+        max_additional_monthly: float = 0.0,
         buy_cycle_type: str = "monthly",
         buy_cycle_detail: str = "25",
+        currency: str = "KRW",
+        account_type: str = "brokerage",
+        market_scope: str = "KR",
+        contribution_type: str = "none",
+        contribution_amount: float = 0.0,
+        contribution_month: Optional[int] = None,
+        strategy_type: str = "allocation",
         is_default: int = 0,
         memo: str = "",
     ) -> Account:
         """
         현재 사용자의 신규 계좌를 생성합니다.
 
-        사용자의 첫 번째 계좌는 자동으로 기본 계좌가 됩니다.
+        사용자의 첫 번째 계좌는 자동으로
+        기본 계좌가 됩니다.
+
+        계좌 생성과 목표 종목 등록은 분리합니다.
         """
+
         if not self.user_id:
             raise ValueError(
-                "계좌를 생성하려면 user_id가 필요합니다."
+                "계좌를 생성하려면 "
+                "user_id가 필요합니다."
             )
 
         clean_account_name = str(
@@ -445,11 +457,76 @@ class Repository:
                 "계좌 이름을 입력해야 합니다."
             )
 
+        clean_currency = str(
+            currency or "KRW"
+        ).strip().upper()
+
+        if clean_currency not in (
+            "KRW",
+            "USD",
+        ):
+            raise ValueError(
+                "지원하지 않는 계좌 통화입니다."
+            )
+
+        clean_account_type = str(
+            account_type or "brokerage"
+        ).strip().lower()
+
+        clean_market_scope = str(
+            market_scope or "KR"
+        ).strip().upper()
+
+        clean_contribution_type = str(
+            contribution_type or "none"
+        ).strip().lower()
+
+        if clean_contribution_type not in (
+            "none",
+            "monthly",
+            "yearly",
+            "irregular",
+        ):
+            raise ValueError(
+                "지원하지 않는 자금 납입 방식입니다."
+            )
+
+        clean_strategy_type = str(
+            strategy_type or "allocation"
+        ).strip().lower()
+
+        if clean_strategy_type not in (
+            "allocation",
+            "trading",
+            "mixed",
+        ):
+            raise ValueError(
+                "지원하지 않는 계좌 운용 방식입니다."
+            )
+
+        clean_contribution_month = None
+
+        if contribution_month is not None:
+            clean_contribution_month = int(
+                contribution_month
+            )
+
+            if not 1 <= clean_contribution_month <= 12:
+                raise ValueError(
+                    "납입 월은 1~12 사이여야 합니다."
+                )
+
+        if (
+            clean_contribution_type != "yearly"
+        ):
+            clean_contribution_month = None
+
         with get_db_session() as session:
             existing_account_count = (
                 session.query(Account)
                 .filter(
-                    Account.user_id == self.user_id
+                    Account.user_id
+                    == self.user_id
                 )
                 .count()
             )
@@ -463,95 +540,85 @@ class Repository:
                 (
                     session.query(Account)
                     .filter(
-                        Account.user_id == self.user_id
+                        Account.user_id
+                        == self.user_id
                     )
                     .update(
                         {
-                            Account.is_default: False
+                            Account.is_default:
+                                False
                         }
                     )
                 )
 
             account = Account(
                 user_id=self.user_id,
-                account_name=clean_account_name,
+
+                account_name=
+                    clean_account_name,
+
                 account_number=str(
                     account_number or ""
                 ).strip(),
+
                 broker=str(
                     broker or ""
                 ).strip(),
+
                 initial_capital=float(
                     initial_capital or 0
                 ),
+
                 base_monthly=float(
                     base_monthly or 0
                 ),
+
                 max_additional_monthly=float(
                     max_additional_monthly or 0
                 ),
+
                 buy_cycle_type=(
-                    str(buy_cycle_type).strip()
-                    if buy_cycle_type
-                    else "monthly"
+                    str(
+                        buy_cycle_type
+                        or "monthly"
+                    )
+                    .strip()
+                    .lower()
                 ),
-                buy_cycle_detail=(
-                    str(buy_cycle_detail).strip()
-                    if buy_cycle_detail
-                    else "25"
+
+                buy_cycle_detail=str(
+                    buy_cycle_detail or "25"
+                ).strip(),
+
+                currency=clean_currency,
+
+                account_type=
+                    clean_account_type,
+
+                market_scope=
+                    clean_market_scope,
+
+                contribution_type=
+                    clean_contribution_type,
+
+                contribution_amount=float(
+                    contribution_amount or 0
                 ),
+
+                contribution_month=
+                    clean_contribution_month,
+
+                strategy_type=
+                    clean_strategy_type,
+
                 is_default=make_default,
+
                 memo=str(
                     memo or ""
                 ).strip(),
             )
 
             session.add(account)
-            session.flush()
-
-            # 신규 계좌의 초기 목표 비중 시딩
-            cfg = load_config()
-
-            for etf in cfg.etfs:
-                ticker = str(
-                    etf.ticker
-                ).strip()
-
-                asset = (
-                    session.query(AssetMaster)
-                    .filter(
-                        AssetMaster.ticker == ticker
-                    )
-                    .first()
-                )
-
-                if not asset:
-                    asset = AssetMaster(
-                        ticker=ticker,
-                        name=etf.name,
-                        market="KR",
-                        exchange="KRX",
-                        asset_type="ETF",
-                        currency="KRW",
-                        is_active=True,
-                    )
-
-                    session.add(asset)
-                    session.flush()
-
-                session.add(
-                    AccountTarget(
-                        account_id=account.id,
-                        ticker=ticker,
-                        target_weight=float(
-                            etf.target_weight or 0
-                        ),
-                        dividend_yield=float(
-                            etf.dividend_yield or 0
-                        ),
-                    )
-                )
-
             session.flush()
             session.refresh(account)
 
@@ -563,15 +630,23 @@ class Repository:
         account_name: str,
         account_number: str = "",
         broker: str = "",
-        initial_capital: float = 100000000.0,
-        base_monthly: float = 10000000.0,
-        max_additional_monthly: float = 3000000.0,
+        initial_capital: float = 0.0,
+        base_monthly: float = 0.0,
+        max_additional_monthly: float = 0.0,
         buy_cycle_type: str = "monthly",
         buy_cycle_detail: str = "25",
+        currency: str = "KRW",
+        account_type: str = "brokerage",
+        market_scope: str = "KR",
+        contribution_type: str = "none",
+        contribution_amount: float = 0.0,
+        contribution_month: Optional[int] = None,
+        strategy_type: str = "allocation",
         is_default: int = 0,
         memo: str = "",
     ) -> bool:
         """현재 사용자의 계좌 정보를 수정합니다."""
+
         if not self.user_id:
             return False
 
@@ -584,12 +659,77 @@ class Repository:
                 "계좌 이름을 입력해야 합니다."
             )
 
+        clean_currency = str(
+            currency or "KRW"
+        ).strip().upper()
+
+        if clean_currency not in (
+            "KRW",
+            "USD",
+        ):
+            raise ValueError(
+                "지원하지 않는 계좌 통화입니다."
+            )
+
+        clean_account_type = str(
+            account_type or "brokerage"
+        ).strip().lower()
+
+        clean_market_scope = str(
+            market_scope or "KR"
+        ).strip().upper()
+
+        clean_contribution_type = str(
+            contribution_type or "none"
+        ).strip().lower()
+
+        if clean_contribution_type not in (
+            "none",
+            "monthly",
+            "yearly",
+            "irregular",
+        ):
+            raise ValueError(
+                "지원하지 않는 자금 납입 방식입니다."
+            )
+
+        clean_strategy_type = str(
+            strategy_type or "allocation"
+        ).strip().lower()
+
+        if clean_strategy_type not in (
+            "allocation",
+            "trading",
+            "mixed",
+        ):
+            raise ValueError(
+                "지원하지 않는 계좌 운용 방식입니다."
+            )
+
+        clean_contribution_month = None
+
+        if contribution_month is not None:
+            clean_contribution_month = int(
+                contribution_month
+            )
+
+            if not 1 <= clean_contribution_month <= 12:
+                raise ValueError(
+                    "납입 월은 1~12 사이여야 합니다."
+                )
+
+        if (
+            clean_contribution_type != "yearly"
+        ):
+            clean_contribution_month = None
+
         with get_db_session() as session:
             account = (
                 session.query(Account)
                 .filter(
                     Account.id == account_id,
-                    Account.user_id == self.user_id,
+                    Account.user_id
+                    == self.user_id,
                 )
                 .first()
             )
@@ -601,12 +741,15 @@ class Repository:
                 (
                     session.query(Account)
                     .filter(
-                        Account.user_id == self.user_id,
-                        Account.id != account_id,
+                        Account.user_id
+                        == self.user_id,
+                        Account.id
+                        != account_id,
                     )
                     .update(
                         {
-                            Account.is_default: False
+                            Account.is_default:
+                                False
                         }
                     )
                 )
@@ -636,15 +779,44 @@ class Repository:
             )
 
             account.buy_cycle_type = (
-                str(buy_cycle_type).strip()
-                if buy_cycle_type
-                else "monthly"
+                str(
+                    buy_cycle_type
+                    or "monthly"
+                )
+                .strip()
+                .lower()
             )
 
-            account.buy_cycle_detail = (
-                str(buy_cycle_detail).strip()
-                if buy_cycle_detail
-                else "25"
+            account.buy_cycle_detail = str(
+                buy_cycle_detail or "25"
+            ).strip()
+
+            account.currency = (
+                clean_currency
+            )
+
+            account.account_type = (
+                clean_account_type
+            )
+
+            account.market_scope = (
+                clean_market_scope
+            )
+
+            account.contribution_type = (
+                clean_contribution_type
+            )
+
+            account.contribution_amount = float(
+                contribution_amount or 0
+            )
+
+            account.contribution_month = (
+                clean_contribution_month
+            )
+
+            account.strategy_type = (
+                clean_strategy_type
             )
 
             account.is_default = bool(
@@ -658,7 +830,6 @@ class Repository:
             account.updated_at = datetime.now()
 
             return True
-
     def set_default_account(
         self,
         account_id: int,
