@@ -79,86 +79,86 @@ class KRXClient:
                 logger.debug("시장 API (%s) 수신 예외: %s", url, e)
         return all_rows
 
-        def fetch_full_asset_master(
-            self,
-            date_str: str,
-        ) -> List[Dict[str, str]]:
-            """
-            특정 기준일의 KRX 전체 종목 마스터를 생성합니다.
-    
-            ETF, KOSPI, KOSDAQ을 구분하여
-            asset_master 저장 형식으로 반환합니다.
-            """
-            if not self.api_key:
-                raise ValueError(
-                    "KRX_API_KEY가 필요합니다."
-                )
-    
-            market_sources = [
-                (
-                    self.URL_ETF,
-                    "ETF",
-                    "KRX",
-                ),
-                (
-                    self.URL_KOSPI,
-                    "STOCK",
-                    "KOSPI",
-                ),
-                (
-                    self.URL_KOSDAQ,
-                    "STOCK",
-                    "KOSDAQ",
-                ),
-            ]
-    
-            master_dict: Dict[
-                str,
-                Dict[str, str],
-            ] = {}
-    
-            for (
-                url,
-                asset_type,
-                exchange,
-            ) in market_sources:
-                try:
-                    rows = self.fetch_market_endpoint(
-                        url,
-                        date_str,
-                    )
-    
-                    for row in rows:
-                        ticker = str(
-                            row.get("ISU_CD", "")
-                        ).strip()
-    
-                        name = str(
-                            row.get("ISU_NM", "")
-                        ).strip()
-    
-                        if not ticker or not name:
-                            continue
-    
-                        master_dict[ticker] = {
-                            "ticker": ticker,
-                            "name": name,
-                            "market": "KR",
-                            "exchange": exchange,
-                            "asset_type": asset_type,
-                            "currency": "KRW",
-                        }
-    
-                except Exception as exc:
-                    logger.warning(
-                        "%s 종목 마스터 수집 실패: %s",
-                        exchange,
-                        exc,
-                    )
-    
-            return list(
-                master_dict.values()
+    def fetch_full_asset_master(
+        self,
+        date_str: str,
+    ) -> List[Dict[str, str]]:
+        """
+        특정 기준일의 KRX 전체 종목 마스터를 생성합니다.
+
+        ETF, KOSPI, KOSDAQ을 구분하여
+        asset_master 저장 형식으로 반환합니다.
+        """
+        if not self.api_key:
+            raise ValueError(
+                "KRX_API_KEY가 필요합니다."
             )
+
+        market_sources = [
+            (
+                self.URL_ETF,
+                "ETF",
+                "KRX",
+            ),
+            (
+                self.URL_KOSPI,
+                "STOCK",
+                "KOSPI",
+            ),
+            (
+                self.URL_KOSDAQ,
+                "STOCK",
+                "KOSDAQ",
+            ),
+        ]
+
+        master_dict: Dict[
+            str,
+            Dict[str, str],
+        ] = {}
+
+        for (
+            url,
+            asset_type,
+            exchange,
+        ) in market_sources:
+            try:
+                rows = self.fetch_market_endpoint(
+                    url,
+                    date_str,
+                )
+
+                for row in rows:
+                    ticker = str(
+                        row.get("ISU_CD", "")
+                    ).strip()
+
+                    name = str(
+                        row.get("ISU_NM", "")
+                    ).strip()
+
+                    if not ticker or not name:
+                        continue
+
+                    master_dict[ticker] = {
+                        "ticker": ticker,
+                        "name": name,
+                        "market": "KR",
+                        "exchange": exchange,
+                        "asset_type": asset_type,
+                        "currency": "KRW",
+                    }
+
+            except Exception as exc:
+                logger.warning(
+                    "%s 종목 마스터 수집 실패: %s",
+                    exchange,
+                    exc,
+                )
+
+        return list(
+            master_dict.values()
+        )
 
     def fetch_historical_prices(
         self,
