@@ -171,6 +171,74 @@ class DailyReportService:
                         "account_id": acc.id,
                         "account_name": acc.account_name,
                         "broker": acc.broker,
+                        "currency": getattr(
+                            acc,
+                            "currency",
+                            "KRW",
+                        ) or "KRW",
+                        "account_type": getattr(
+                            acc,
+                            "account_type",
+                            "brokerage",
+                        ) or "brokerage",
+                        "market_scope": getattr(
+                            acc,
+                            "market_scope",
+                            "KR",
+                        ) or "KR",
+                        "strategy_type": getattr(
+                            acc,
+                            "strategy_type",
+                            "allocation",
+                        ) or "allocation",
+                        "initial_capital": float(
+                            getattr(
+                                acc,
+                                "initial_capital",
+                                0,
+                            ) or 0
+                        ),
+                        "base_monthly": float(
+                            getattr(
+                                acc,
+                                "base_monthly",
+                                0,
+                            ) or 0
+                        ),
+                        "max_additional_monthly": float(
+                            getattr(
+                                acc,
+                                "max_additional_monthly",
+                                0,
+                            ) or 0
+                        ),
+                        "contribution_type": getattr(
+                            acc,
+                            "contribution_type",
+                            "none",
+                        ) or "none",
+                        "contribution_amount": float(
+                            getattr(
+                                acc,
+                                "contribution_amount",
+                                0,
+                            ) or 0
+                        ),
+                        "contribution_month": getattr(
+                            acc,
+                            "contribution_month",
+                            None,
+                        ),
+                        "buy_cycle_type": getattr(
+                            acc,
+                            "buy_cycle_type",
+                            "monthly",
+                        ) or "monthly",
+                        "buy_cycle_detail": getattr(
+                            acc,
+                            "buy_cycle_detail",
+                            "25",
+                        ) or "25",
                         "total_eval": acc_eval,
                         "total_cost": acc_cost,
                         "total_pl": acc_pl,
@@ -430,13 +498,6 @@ class DailyReportService:
                                 else None
                             ),
 
-                        "monthly_investment":
-                            float(
-                                investment_profile
-                                .monthly_investment
-                                or 0
-                            ),
-
                         "preferred_markets":
                             investment_profile
                             .preferred_markets
@@ -510,8 +571,17 @@ class DailyReportService:
                                 "macro_summary":
                                     macro_summary,
 
+                                "macro_indicators":
+                                    macro_data,
+
                                 "investment_profile":
                                     investment_profile_data,
+
+                                "account_groups":
+                                    account_groups,
+
+                                "account_recommendations":
+                                    account_recommendations,
                             }
                         )
                     )
