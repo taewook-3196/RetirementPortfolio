@@ -388,20 +388,133 @@ class DailyReportService:
             except Exception as e:
                 logger.warning(f"매크로 10대 지표 수집 중 오류 (생략 진행): {e}")
 
+            # 3-2. 사용자 투자 성향 및 투자 원칙 조회
+            investment_profile_data = {}
+
+            try:
+                investment_profile = (
+                    self.repo.get_investment_profile()
+                )
+
+                if investment_profile is not None:
+                    investment_profile_data = {
+                        "risk_profile":
+                            investment_profile.risk_profile
+                            or "balanced",
+
+                        "investment_horizon_years":
+                            investment_profile
+                            .investment_horizon_years,
+
+                        "target_return":
+                            (
+                                float(
+                                    investment_profile
+                                    .target_return
+                                )
+                                if investment_profile
+                                .target_return
+                                is not None
+                                else None
+                            ),
+
+                        "max_drawdown":
+                            (
+                                float(
+                                    investment_profile
+                                    .max_drawdown
+                                )
+                                if investment_profile
+                                .max_drawdown
+                                is not None
+                                else None
+                            ),
+
+                        "monthly_investment":
+                            float(
+                                investment_profile
+                                .monthly_investment
+                                or 0
+                            ),
+
+                        "preferred_markets":
+                            investment_profile
+                            .preferred_markets
+                            or [],
+
+                        "excluded_assets":
+                            investment_profile
+                            .excluded_assets
+                            or [],
+
+                        "ai_advice_enabled":
+                            bool(
+                                investment_profile
+                                .ai_advice_enabled
+                            ),
+
+                        "ai_advice_style":
+                            investment_profile
+                            .ai_advice_style
+                            or "balanced",
+
+                        "memo":
+                            investment_profile.memo
+                            or "",
+
+                        "investment_preference_text":
+                            investment_profile
+                            .investment_preference_text
+                            or "",
+                    }
+
+                    logger.info(
+                        "사용자 투자 성향 및 투자 원칙을 "
+                        "모닝 리포트에 반영합니다."
+                    )
+
+            except Exception as e:
+                logger.warning(
+                    "사용자 투자 성향 조회 중 오류 "
+                    "(기본 설정으로 계속 진행): %s",
+                    e,
+                )
+
             # 4. Google Gemini AI 매크로 투자 가이드 생성 (활성화된 경우)
             gemini_analysis = {}
             if getattr(self.config.morning_report, "gemini_enabled", True) and self.gemini_service.is_configured():
                 try:
                     logger.info("Google Gemini AI 매크로 투자 가이드 생성 요청 중...")
-                    gemini_analysis = self.gemini_service.generate_macro_investment_guide({
-                        "account_name": account_name,
-                        "summary": summary,
-                        "recommendations": recommendations,
-                        "positions": positions,
-                        "news": news_items,
-                        "market_indices": market_indices,
-                        "macro_summary": macro_summary,
-                    })
+                    gemini_analysis = (
+                        self.gemini_service
+                        .generate_macro_investment_guide(
+                            {
+                                "account_name":
+                                    account_name,
+
+                                "summary":
+                                    summary,
+
+                                "recommendations":
+                                    recommendations,
+
+                                "positions":
+                                    positions,
+
+                                "news":
+                                    news_items,
+
+                                "market_indices":
+                                    market_indices,
+
+                                "macro_summary":
+                                    macro_summary,
+
+                                "investment_profile":
+                                    investment_profile_data,
+                            }
+                        )
+                    )
                 except Exception as e:
                     logger.warning(f"Gemini AI 가이드 생성 중 오류 (기본 룰로 대체): {e}")
 
@@ -416,6 +529,7 @@ class DailyReportService:
                 "news": news_items,
                 "market_indices": market_indices,
                 "macro_indicators": macro_data,
+                "investment_profile": investment_profile_data,
                 "gemini_analysis": gemini_analysis,
             }
 
