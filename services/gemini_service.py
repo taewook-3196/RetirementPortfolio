@@ -408,18 +408,54 @@ class GeminiService:
         usd_krw: str = "",
         **kwargs,
     ) -> str:
-        """프리미엄 투자 가이드 생성을 위한 정교한 프롬프트 구성"""
-        summary = ctx.get("summary", {})
-        recommendations = ctx.get("recommendations", {})
-        positions = ctx.get("positions", [])
-        news_items = ctx.get("news", [])
-        account_name = ctx.get("account_name", "퇴직연금 IRP/연금저축")
+        """
+        사용자 투자 원칙과 계좌별 실제 운용 규칙을 반영하여
+        Gemini 투자 가이드 프롬프트를 생성합니다.
+        """
 
-        # 사용자별 투자 성향 및 자유 입력 투자 원칙
+        summary = ctx.get(
+            "summary",
+            {},
+        )
+
+        recommendations = ctx.get(
+            "recommendations",
+            {},
+        )
+
+        positions = ctx.get(
+            "positions",
+            [],
+        )
+
+        news_items = ctx.get(
+            "news",
+            [],
+        )
+
+        account_name = ctx.get(
+            "account_name",
+            "포트폴리오",
+        )
+
+        account_groups = ctx.get(
+            "account_groups",
+            [],
+        ) or []
+
+        account_recommendations = ctx.get(
+            "account_recommendations",
+            [],
+        ) or []
+
         investment_profile = (
             ctx.get("investment_profile")
             or {}
         )
+
+        # -------------------------------------------------
+        # 사용자 전체 투자 성향
+        # -------------------------------------------------
 
         user_risk_profile = str(
             investment_profile.get(
@@ -443,14 +479,6 @@ class GeminiService:
             )
         )
 
-        monthly_investment = float(
-            investment_profile.get(
-                "monthly_investment",
-                0,
-            )
-            or 0
-        )
-
         ai_advice_style = str(
             investment_profile.get(
                 "ai_advice_style",
@@ -466,39 +494,6 @@ class GeminiService:
             )
             or ""
         ).strip()
-
-        total_eval = summary.get("total_eval", 0)
-        total_pl = summary.get("total_pl", 0)
-        total_pl_pct = summary.get("total_pl_pct", 0.0)
-        cash_balance = summary.get("cash_balance", 0)
-
-        d_day = recommendations.get("d_day", None)
-        next_buy_date = recommendations.get("next_buy_date", "")
-        rec_items = recommendations.get("items", [])
-        top_rec = rec_items[0] if rec_items else {}
-
-        # 보유 종목 요약
-        holdings_desc = []
-        for p in positions[:5]:
-            t_w = p.get("target_weight", 0) * 100
-            c_w = p.get("current_weight", 0) * 100
-            holdings_desc.append(f"- {p.get('name')}: 현재비중 {c_w:.1f}% (목표: {t_w:.1f}%), 수익률: {p.get('pl_pct', 0):+.1f}%")
-        holdings_str = "\n".join(holdings_desc) if holdings_desc else "보유 내역 없음"
-
-        # 뉴스 헤드라인 요약
-        news_lines = []
-        for n in news_items[:5]:
-            news_lines.append(f"- [{n.get('media', '언론')}] {n.get('title', '')}")
-        news_str = "\n".join(news_lines) if news_lines else "최신 특이 뉴스 없음"
-
-        if macro_summary:
-            macro_block = macro_summary
-            if usd_krw and usd_krw not in macro_summary:
-                macro_block += f"\n- 실시간 환율: {usd_krw}"
-        elif usd_krw:
-            macro_block = f"[실시간 거시경제 지표]\n- 원/달러 환율: {usd_krw}"
-        else:
-            macro_block = "매크로 지표 집계 중"
 
         effective_stance = (
             ai_advice_style
@@ -517,7 +512,9 @@ class GeminiService:
         )
 
         stance_instruction = (
-            stance_info["prompt_instruction"]
+            stance_info[
+                "prompt_instruction"
+            ]
         )
 
         horizon_text = (
@@ -533,62 +530,602 @@ class GeminiService:
             else "별도의 자유 입력 투자 원칙 없음"
         )
 
-        prompt = f"""
-당신은 최고 권위의 글로벌 거시경제(매크로) 분석가이자, 장기 은퇴/퇴직연금 분할매수 퀀트 포트폴리오 매니저입니다.
-투자자의 계좌 정보, 글로벌 지표, 환율, 수집된 뉴스를 종합하여 매일 아침 출근길에 읽기 좋은 명쾌하고 신뢰감 넘치는 모닝 브리핑을 작성하세요.
+        # -------------------------------------------------
+        # 전체 포트폴리오
+        # -------------------------------------------------
 
+        total_eval = float(
+            summary.get(
+                "total_eval",
+                0,
+            )
+            or 0
+        )
+
+        total_pl = float(
+            summary.get(
+                "total_pl",
+                0,
+            )
+            or 0
+        )
+
+        total_pl_pct = float(
+            summary.get(
+                "total_pl_pct",
+                0,
+            )
+            or 0
+        )
+
+        cash_balance = float(
+            summary.get(
+                "cash_balance",
+                0,
+            )
+            or 0
+        )
+
+        # -------------------------------------------------
+        # 계좌별 추천 정보를 빠르게 찾기 위한 맵
+        # -------------------------------------------------
+
+        recommendation_map = {}
+
+        for item in account_recommendations:
+
+            account_id = item.get(
+                "account_id"
+            )
+
+            if account_id is not None:
+                recommendation_map[
+                    account_id
+                ] = item
+
+        # -------------------------------------------------
+        # 계좌별 실제 운용 규칙
+        # -------------------------------------------------
+
+        account_rule_lines = []
+
+        for account in account_groups:
+
+            acc_id = account.get(
+                "account_id"
+            )
+
+            acc_name = account.get(
+                "account_name",
+                "계좌",
+            )
+
+            broker = account.get(
+                "broker",
+                "",
+            )
+
+            currency = str(
+                account.get(
+                    "currency",
+                    "KRW",
+                )
+                or "KRW"
+            ).upper()
+
+            account_type = str(
+                account.get(
+                    "account_type",
+                    "brokerage",
+                )
+                or "brokerage"
+            )
+
+            market_scope = str(
+                account.get(
+                    "market_scope",
+                    "KR",
+                )
+                or "KR"
+            ).upper()
+
+            strategy_type = str(
+                account.get(
+                    "strategy_type",
+                    "allocation",
+                )
+                or "allocation"
+            )
+
+            initial_capital = float(
+                account.get(
+                    "initial_capital",
+                    0,
+                )
+                or 0
+            )
+
+            base_monthly = float(
+                account.get(
+                    "base_monthly",
+                    0,
+                )
+                or 0
+            )
+
+            max_additional = float(
+                account.get(
+                    "max_additional_monthly",
+                    0,
+                )
+                or 0
+            )
+
+            contribution_type = str(
+                account.get(
+                    "contribution_type",
+                    "none",
+                )
+                or "none"
+            )
+
+            contribution_amount = float(
+                account.get(
+                    "contribution_amount",
+                    0,
+                )
+                or 0
+            )
+
+            contribution_month = (
+                account.get(
+                    "contribution_month"
+                )
+            )
+
+            buy_cycle_type = str(
+                account.get(
+                    "buy_cycle_type",
+                    "monthly",
+                )
+                or "monthly"
+            )
+
+            buy_cycle_detail = str(
+                account.get(
+                    "buy_cycle_detail",
+                    "",
+                )
+                or ""
+            )
+
+            acc_eval = float(
+                account.get(
+                    "total_eval",
+                    0,
+                )
+                or 0
+            )
+
+            acc_cash = float(
+                account.get(
+                    "cash_balance",
+                    0,
+                )
+                or 0
+            )
+
+            currency_symbol = (
+                "$"
+                if currency == "USD"
+                else "₩"
+            )
+
+            if contribution_type == "yearly":
+
+                if contribution_amount > 0:
+                    contribution_desc = (
+                        f"연 1회 "
+                        f"{currency_symbol}"
+                        f"{contribution_amount:,.0f}"
+                    )
+                else:
+                    contribution_desc = (
+                        "연 1회, 금액 미정"
+                    )
+
+                if contribution_month:
+                    contribution_desc += (
+                        f", {contribution_month}월"
+                    )
+
+            elif contribution_type == "monthly":
+
+                contribution_desc = (
+                    f"매월 "
+                    f"{currency_symbol}"
+                    f"{contribution_amount:,.0f}"
+                )
+
+            elif contribution_type == "irregular":
+
+                contribution_desc = (
+                    "비정기 외부자금 납입"
+                )
+
+            else:
+
+                contribution_desc = (
+                    "정기 외부자금 납입 없음"
+                )
+
+            if buy_cycle_type == "monthly":
+
+                buy_cycle_desc = (
+                    f"매월 {buy_cycle_detail}일"
+                )
+
+            else:
+
+                buy_cycle_desc = (
+                    f"{buy_cycle_type}"
+                )
+
+                if buy_cycle_detail:
+                    buy_cycle_desc += (
+                        f" ({buy_cycle_detail})"
+                    )
+
+            rec = recommendation_map.get(
+                acc_id,
+                {},
+            )
+
+            rec_items = rec.get(
+                "items",
+                [],
+            ) or []
+
+            rec_items = [
+                item
+                for item in rec_items
+                if float(
+                    item.get(
+                        "recommended_amount",
+                        0,
+                    )
+                    or 0
+                ) > 0
+                or int(
+                    item.get(
+                        "recommended_shares",
+                        0,
+                    )
+                    or 0
+                ) > 0
+            ]
+
+            if rec_items:
+
+                rec_desc_parts = []
+
+                for item in rec_items[:3]:
+
+                    rec_desc_parts.append(
+                        (
+                            f"{item.get('name', item.get('ticker', ''))} "
+                            f"{int(item.get('recommended_shares', 0) or 0)}주"
+                        )
+                    )
+
+                rec_desc = ", ".join(
+                    rec_desc_parts
+                )
+
+            elif rec.get(
+                "already_invested_this_month",
+                False,
+            ):
+
+                rec_desc = (
+                    "이번 매수 주기 투자 완료"
+                )
+
+            else:
+
+                rec_desc = (
+                    "현재 계산상 적극적인 추가 매수 추천 없음"
+                )
+
+            account_rule_lines.extend(
+                [
+                    f"[계좌: {acc_name}]",
+                    (
+                        f"- 증권사: "
+                        f"{broker or '미설정'}"
+                    ),
+                    (
+                        f"- 계좌 유형: "
+                        f"{account_type}"
+                    ),
+                    (
+                        f"- 기준 통화: "
+                        f"{currency}"
+                    ),
+                    (
+                        f"- 거래 시장: "
+                        f"{market_scope}"
+                    ),
+                    (
+                        f"- 운용 방식: "
+                        f"{strategy_type}"
+                    ),
+                    (
+                        f"- 초기 투자재원: "
+                        f"{currency_symbol}"
+                        f"{initial_capital:,.0f}"
+                    ),
+                    (
+                        f"- 현재 평가금액: "
+                        f"{currency_symbol}"
+                        f"{acc_eval:,.0f}"
+                    ),
+                    (
+                        f"- 계산된 현재 현금: "
+                        f"{currency_symbol}"
+                        f"{acc_cash:,.0f}"
+                    ),
+                    (
+                        f"- 월 기본 매수 한도: "
+                        f"{currency_symbol}"
+                        f"{base_monthly:,.0f}"
+                    ),
+                    (
+                        f"- 시장 상황에 따른 "
+                        f"월 추가 매수 한도: "
+                        f"{currency_symbol}"
+                        f"{max_additional:,.0f}"
+                    ),
+                    (
+                        f"- 외부자금 납입: "
+                        f"{contribution_desc}"
+                    ),
+                    (
+                        f"- 매수 기준: "
+                        f"{buy_cycle_desc}"
+                    ),
+                    (
+                        f"- 시스템 계산 매수안: "
+                        f"{rec_desc}"
+                    ),
+                    "",
+                ]
+            )
+
+        account_rules_str = (
+            "\n".join(
+                account_rule_lines
+            ).strip()
+            if account_rule_lines
+            else "등록된 계좌별 운용 규칙 없음"
+        )
+
+        # -------------------------------------------------
+        # 보유 종목
+        # -------------------------------------------------
+
+        holdings_desc = []
+
+        for position in positions[:10]:
+
+            target_weight = (
+                float(
+                    position.get(
+                        "target_weight",
+                        0,
+                    )
+                    or 0
+                )
+                * 100
+            )
+
+            current_weight = (
+                float(
+                    position.get(
+                        "current_weight",
+                        0,
+                    )
+                    or 0
+                )
+                * 100
+            )
+
+            pnl_pct = float(
+                position.get(
+                    "pl_pct",
+                    0,
+                )
+                or 0
+            )
+
+            holdings_desc.append(
+                (
+                    f"- "
+                    f"{position.get('name', position.get('ticker', ''))}: "
+                    f"현재비중 {current_weight:.1f}% "
+                    f"(목표 {target_weight:.1f}%), "
+                    f"수익률 {pnl_pct:+.1f}%"
+                )
+            )
+
+        holdings_str = (
+            "\n".join(
+                holdings_desc
+            )
+            if holdings_desc
+            else "보유 내역 없음"
+        )
+
+        # -------------------------------------------------
+        # 뉴스
+        # -------------------------------------------------
+
+        news_lines = []
+
+        for news in news_items[:5]:
+
+            news_lines.append(
+                (
+                    f"- "
+                    f"[{news.get('media', '언론')}] "
+                    f"{news.get('title', '')}"
+                )
+            )
+
+        news_str = (
+            "\n".join(
+                news_lines
+            )
+            if news_lines
+            else "최신 특이 뉴스 없음"
+        )
+
+        # -------------------------------------------------
+        # 매크로
+        # -------------------------------------------------
+
+        if macro_summary:
+
+            macro_block = (
+                macro_summary
+            )
+
+            if (
+                usd_krw
+                and usd_krw
+                not in macro_summary
+            ):
+
+                macro_block += (
+                    f"\n- 원/달러 환율: "
+                    f"{usd_krw}"
+                )
+
+        elif usd_krw:
+
+            macro_block = (
+                "[실시간 거시경제 지표]\n"
+                f"- 원/달러 환율: "
+                f"{usd_krw}"
+            )
+
+        else:
+
+            macro_block = (
+                "매크로 지표 집계 중"
+            )
+
+        # -------------------------------------------------
+        # 프롬프트
+        # -------------------------------------------------
+
+        prompt = f"""
+당신은 글로벌 거시경제 분석과 장기 자산배분을 지원하는 투자 분석 도우미입니다.
+
+오늘의 시장 데이터, 실제 포트폴리오 상태, 사용자가 직접 설정한 투자 원칙,
+그리고 각 계좌에 저장된 자금 운용 규칙을 구분하여 분석하세요.
+
+절대로 '월 기본 매수 한도'를 '매달 새로 입금되는 돈'으로 해석하지 마세요.
+
+월 기본 매수 한도는 이미 계좌 안에 존재하는 투자재원에서
+한 달 동안 기본적으로 사용할 수 있는 매수 한도입니다.
+
+월 추가 매수 한도 역시 새로운 외부 납입금이 아니라,
+시장 상황에 따라 기존 계좌 자금에서 추가로 사용할 수 있는 최대 매수 한도입니다.
+
+외부에서 새로 들어오는 자금은 반드시 각 계좌의
+'외부자금 납입' 설정만을 기준으로 판단하세요.
+
+'초기 투자재원'은 계좌 운용을 시작할 때의 투자재원이며,
+현재 사용 가능한 현금과 동일하다고 가정하지 마세요.
+
+[글로벌 매크로]
 {macro_block}
 
-[현재 계좌 및 포트폴리오 상황]
-- 계좌명: {account_name}
-- 총 평가자산: {total_eval:,.0f}원 (수익률: {total_pl_pct:+.2f}%, 평가손익: {total_pl:,.0f}원)
-- 예수금(현금): {cash_balance:,.0f}원
-- 매수 주기 현황: 매수 D-{d_day}일 남음 (정기 매수 예정일: {next_buy_date})
-- 1순위 추천 매수 종목: {top_rec.get('name', '비중 안정적 유지')} ({top_rec.get('recommended_shares', 0)}주 추천, 추천사유: {top_rec.get('reason', '')})
+[전체 포트폴리오]
+- 포트폴리오: {account_name}
+- 총 평가금액: {total_eval:,.0f}
+- 전체 평가손익: {total_pl:,.0f}
+- 전체 수익률: {total_pl_pct:+.2f}%
+- 시스템 계산 현금잔액: {cash_balance:,.0f}
 
-[보유 종목 비중 현황]
-{holdings_str}
-
-[사용자 개인 투자 설정]
+[사용자 전체 투자 설정]
 - 투자 성향: {stance_info['label']}
 - 투자 기간: {horizon_text}
-- 월 투자 가능금액: {monthly_investment:,.0f}원
 - AI 조언 방식: {stance_info['label']}
 
-[사용자가 직접 정한 투자 원칙 / 전략]
+[사용자가 직접 정한 투자 원칙]
 {preference_text}
 
-중요:
-- 위 사용자의 투자 원칙과 투자 기간을 개인화 조언에 적극 반영하세요.
-- 사용자의 자유 입력 원칙은 투자 선호사항이지 시장의 사실 데이터가 아닙니다.
-- 사용자 원칙이 실제 시장 데이터, 계좌 데이터 또는 계산된 포트폴리오 수치와 충돌하면 사실 데이터를 왜곡하지 마세요.
-- 사용자의 원칙과 시스템이 계산한 목표 비중 및 매수 가능금액을 함께 고려하세요.
+[계좌별 실제 자금 및 운용 규칙]
+{account_rules_str}
 
-[오늘의 주요 뉴스 헤드라인]
+[현재 보유 종목 및 목표비중]
+{holdings_str}
+
+[오늘의 주요 뉴스]
 {news_str}
 
 {stance_instruction}
 
+[판단 원칙]
+1. 시장 데이터와 계좌 데이터는 사용자의 자유 입력 투자 원칙보다 사실 판단에서 우선합니다.
+2. 사용자의 투자 원칙은 행동 방식과 위험 선호를 개인화하는 데 사용하세요.
+3. 계좌별 기준 통화, 투자 시장, 운용 방식, 매수 한도 및 외부자금 납입 방식을 서로 혼동하지 마세요.
+4. KRW 계좌와 USD 계좌가 동시에 존재하면 금액을 같은 통화처럼 단순 합산하지 마세요.
+5. 목표 비중과 현재 비중의 차이를 고려하되, 단순히 비중이 부족하다는 이유만으로 반드시 매수를 권하지 마세요.
+6. 월 기본 매수 한도는 목표액이 아니라 상한입니다. 반드시 전액을 사용할 필요는 없습니다.
+7. 월 추가 매수 한도 역시 시장 상황이 충분히 유리하다고 판단될 때 사용할 수 있는 최대 추가 한도입니다.
+8. 시장 상황상 매수할 근거가 부족하면 '대기' 또는 '기본 계획 유지'를 명확히 제시할 수 있습니다.
+9. 시장 급락이 발생했다고 해서 자동으로 추가매수를 권하지 말고, 밸류에이션·금리·경기·펀더멘털 변화를 함께 검토하세요.
+10. 시스템의 추천 매수 수량은 참고 데이터입니다. 시장 상황과 사용자 원칙을 함께 검토하여 설명하세요.
+11. 현재 현금잔액 계산의 정확성이 불확실하다면, 현금이 충분하다고 단정하지 마세요.
+12. 투자자의 장기 계획을 불필요한 단기 매매로 훼손하지 마세요.
+
 [작성 지침]
-1. 어투: 차분하고 신뢰감을 주는 금융 전문가의 어조 (~합니다, ~바람직합니다).
-2. 위 글로벌 10대 지표(미국 3대 증시, 국내 지수, 환율, WTI 유가, 10년물 국채금리, PCE 물가 및 고용지표)의 '상승/하락/보합 트렌드'를 유기적으로 연결하여 시장 분위기를 분석하세요.
-3. 세 가지 항목을 반드시 포함하여 유효한 JSON 형식으로만 응답해야 합니다:
-   - "one_line_summary": 스마트폰 카카오톡 알림용 핵심 한 줄 브리핑 (이모지 포함, 35~50자 내외로 지표 흐름과 추천을 찌르는 문장).
-   - "macro_analysis": 글로벌 매크로 및 시황 분석 (환율/유가/국채금리 추세와 미 증시 흐름이 국내 및 퇴직연금 ETF에 미치는 영향 2~3문장).
-   - "strategy_advice": 내 계좌 맞춤 분할 매수 조언 (투자자의 성향 '{stance_info['label']}'에 부합하는 행동 지침을 명확히 반영하며, 목표 비중 괴리도와 1순위 추천 종목을 검토하되, 시장 상황과 사용자의 투자 원칙을 함께 고려하여 매수·대기·분할매수 중 적절한 행동을 설명하는 코멘트 2~3문장).
-4. JSON 값 내부 텍스트에는 큰따옴표(") 대신 작은따옴표(')를 사용하거나 큰따옴표를 이스케이프(\")하여 유효한 JSON 구문을 유지하세요. 앞뒤 부가 설명 없이 순수 JSON만 출력하세요.
+차분하고 신뢰감 있는 금융 분석 문체를 사용하세요.
 
-[출력 JSON 스키마 예시]
-```json
+반드시 아래 세 필드를 포함하는 유효한 JSON 하나만 출력하세요.
+
+- "one_line_summary":
+  카카오톡용 핵심 한 줄 시황 및 행동 요약.
+  35~60자 정도로 작성하세요.
+
+- "macro_analysis":
+  미국 증시, 국내 증시, 환율, 유가, 국채금리, 물가 및 고용 흐름 중
+  실제 제공된 데이터에서 중요한 내용을 연결하여 2~4문장으로 설명하세요.
+
+- "strategy_advice":
+  계좌별 매수 한도, 목표비중, 현재 보유상태, 투자기간,
+  사용자 투자원칙과 시장 상황을 함께 고려하여
+  오늘 또는 이번 매수 주기에 무엇을 하는 것이 합리적인지 2~4문장으로 설명하세요.
+  매수, 분할매수, 추가매수, 대기, 기존 계획 유지 중 적절한 행동을 제시할 수 있습니다.
+
+제공되지 않은 시장 수치나 계좌 수치를 만들어내지 마세요.
+
+JSON 앞뒤에 설명이나 Markdown 코드블록을 붙이지 마세요.
+
+출력 형식:
+
 {{
-  "one_line_summary": "📈 나스닥 강세와 유가 하락 안정 속, D-4일 TDF 및 분할 매수 적기입니다.",
-  "macro_analysis": "미국 증시는 기술주 호조로 나스닥 중심의 상승세를 이어갔으며, 국제 유가(WTI) 하락으로 인플레이션 부담이 완화되고 있습니다. 근원 PCE와 금리 추세가 안정세를 유지하여 해외 지수 추종 및 자산배분 ETF에 우호적인 환경입니다.",
-  "strategy_advice": "현재 목표 비중 대비 저평가된 '{top_rec.get('name', '자산배분 ETF')}'을(를) 중심으로 계획된 분할 매수를 이어가는 것이 유리합니다. 거시경제 지표 안정세 속에서 원칙을 지키는 정석 투자를 권장합니다."
+  "one_line_summary": "...",
+  "macro_analysis": "...",
+  "strategy_advice": "..."
 }}
-```
 """
-        return prompt.strip()
 
+        return prompt.strip()
+        
     def _parse_json_response(self, raw_text: str) -> Dict[str, str]:
         """
         Gemini 응답 텍스트에서 JSON 객체(one_line_summary, macro_analysis, strategy_advice)를
