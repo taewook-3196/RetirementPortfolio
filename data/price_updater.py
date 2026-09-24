@@ -217,9 +217,31 @@ def update_market_prices(
                 # KRX가 제공한 실제 종목 마스터 정보가 있으면
                 # 기존 기본 정보를 더 정확한 정보로 갱신
                 if getattr(client, "last_etf_master", None):
-                    master_saved = repository.save_etf_master(
-                        client.last_etf_master
+                    target_ticker_set = set(
+                        target_tickers
                     )
+                
+                    selected_master = [
+                        item
+                        for item in client.last_etf_master
+                        if str(
+                            item.get("ticker", "")
+                        ).strip().zfill(6)
+                        in target_ticker_set
+                    ]
+                
+                    if selected_master:
+                        master_saved = (
+                            repository.save_etf_master(
+                                selected_master
+                            )
+                        )
+                
+                        logger.info(
+                            "가격 수집 대상 ETF 마스터 "
+                            "동기화 완료: %d건 반영",
+                            master_saved,
+                        )
 
                     logger.info(
                         "KRX ETF 마스터 동기화 완료: %d건 반영",
