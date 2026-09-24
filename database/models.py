@@ -41,25 +41,144 @@ class Profile(Base):
 class Account(Base):
     __tablename__ = "accounts"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+
     user_id = Column(
-        UUID(as_uuid=True),        
+        UUID(as_uuid=True),
         nullable=False,
         index=True,
     )
-    account_name = Column(Text, nullable=False)
-    account_number = Column(Text, nullable=True)
-    broker = Column(Text, nullable=True)
-    initial_capital = Column(Numeric, nullable=False, default=0)
-    base_monthly = Column(Numeric, nullable=False, default=0)
-    max_additional_monthly = Column(Numeric, nullable=False, default=0)
-    buy_cycle_type = Column(Text, nullable=False, default="monthly")
-    buy_cycle_detail = Column(Text, nullable=False, default="25")
-    is_default = Column(Boolean, nullable=False, default=False)
-    memo = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.now)
-    updated_at = Column(DateTime(timezone=True), default=datetime.now)
 
+    account_name = Column(
+        Text,
+        nullable=False,
+    )
+
+    account_number = Column(
+        Text,
+        nullable=True,
+    )
+
+    broker = Column(
+        Text,
+        nullable=True,
+    )
+
+    # 계좌 운용 시작 시 투자재원
+    initial_capital = Column(
+        Numeric,
+        nullable=False,
+        default=0,
+    )
+
+    # 기존 투자재원에서 사용하는 월 기본 매수 한도
+    base_monthly = Column(
+        Numeric,
+        nullable=False,
+        default=0,
+    )
+
+    # 시장 상황에 따른 월 추가 매수 한도
+    max_additional_monthly = Column(
+        Numeric,
+        nullable=False,
+        default=0,
+    )
+
+    # 매수 주기
+    # monthly / weekly / anytime 등
+    buy_cycle_type = Column(
+        Text,
+        nullable=False,
+        default="monthly",
+    )
+
+    # 매수일 등 주기 세부 설정
+    buy_cycle_detail = Column(
+        Text,
+        nullable=False,
+        default="25",
+    )
+
+    # 계좌 기준 통화
+    # KRW / USD
+    currency = Column(
+        Text,
+        nullable=False,
+        default="KRW",
+    )
+
+    # 계좌 종류
+    # retirement / isa / brokerage 등
+    account_type = Column(
+        Text,
+        nullable=False,
+        default="brokerage",
+    )
+
+    # 주 투자시장
+    # KR / US / GLOBAL
+    market_scope = Column(
+        Text,
+        nullable=False,
+        default="KR",
+    )
+
+    # 외부 신규자금 납입 방식
+    # none / monthly / yearly / irregular
+    contribution_type = Column(
+        Text,
+        nullable=False,
+        default="none",
+    )
+
+    # 정기 신규 납입액
+    # currency 기준 금액
+    contribution_amount = Column(
+        Numeric,
+        nullable=False,
+        default=0,
+    )
+
+    # yearly인 경우 납입 예정 월
+    # 1 ~ 12
+    contribution_month = Column(
+        Integer,
+        nullable=True,
+    )
+
+    # 계좌 운용 방식
+    # allocation / trading / mixed
+    strategy_type = Column(
+        Text,
+        nullable=False,
+        default="allocation",
+    )
+
+    is_default = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    memo = Column(
+        Text,
+        nullable=True,
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        default=datetime.now,
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=datetime.now,
+    )
 
 class AssetMaster(Base):
     __tablename__ = "asset_master"
