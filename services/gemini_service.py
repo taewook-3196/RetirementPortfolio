@@ -415,6 +415,58 @@ class GeminiService:
         news_items = ctx.get("news", [])
         account_name = ctx.get("account_name", "퇴직연금 IRP/연금저축")
 
+        # 사용자별 투자 성향 및 자유 입력 투자 원칙
+        investment_profile = (
+            ctx.get("investment_profile")
+            or {}
+        )
+
+        user_risk_profile = str(
+            investment_profile.get(
+                "risk_profile",
+                self.investment_stance,
+            )
+            or self.investment_stance
+        ).strip().lower()
+
+        if (
+            user_risk_profile
+            not in INVESTMENT_STANCE_PROFILES
+        ):
+            user_risk_profile = (
+                self.investment_stance
+            )
+
+        investment_horizon_years = (
+            investment_profile.get(
+                "investment_horizon_years"
+            )
+        )
+
+        monthly_investment = float(
+            investment_profile.get(
+                "monthly_investment",
+                0,
+            )
+            or 0
+        )
+
+        ai_advice_style = str(
+            investment_profile.get(
+                "ai_advice_style",
+                user_risk_profile,
+            )
+            or user_risk_profile
+        ).strip().lower()
+
+        investment_preference_text = str(
+            investment_profile.get(
+                "investment_preference_text",
+                "",
+            )
+            or ""
+        ).strip()
+
         total_eval = summary.get("total_eval", 0)
         total_pl = summary.get("total_pl", 0)
         total_pl_pct = summary.get("total_pl_pct", 0.0)
@@ -448,8 +500,38 @@ class GeminiService:
         else:
             macro_block = "매크로 지표 집계 중"
 
-        stance_info = INVESTMENT_STANCE_PROFILES.get(self.investment_stance, INVESTMENT_STANCE_PROFILES["balanced"])
-        stance_instruction = stance_info["prompt_instruction"]
+        effective_stance = (
+            ai_advice_style
+            if ai_advice_style
+            in INVESTMENT_STANCE_PROFILES
+            else user_risk_profile
+        )
+
+        stance_info = (
+            INVESTMENT_STANCE_PROFILES.get(
+                effective_stance,
+                INVESTMENT_STANCE_PROFILES[
+                    "balanced"
+                ],
+            )
+        )
+
+        stance_instruction = (
+            stance_info["prompt_instruction"]
+        )
+
+        horizon_text = (
+            f"{investment_horizon_years}년"
+            if investment_horizon_years
+            is not None
+            else "미설정"
+        )
+
+        preference_text = (
+            investment_preference_text
+            if investment_preference_text
+            else "별도의 자유 입력 투자 원칙 없음"
+        )
 
         prompt = f"""
 당신은 최고 권위의 글로벌 거시경제(매크로) 분석가이자, 장기 은퇴/퇴직연금 분할매수 퀀트 포트폴리오 매니저입니다.
@@ -467,6 +549,21 @@ class GeminiService:
 [보유 종목 비중 현황]
 {holdings_str}
 
+[사용자 개인 투자 설정]
+- 투자 성향: {stance_info['label']}
+- 투자 기간: {horizon_text}
+- 월 투자 가능금액: {monthly_investment:,.0f}원
+- AI 조언 방식: {stance_info['label']}
+
+[사용자가 직접 정한 투자 원칙 / 전략]
+{preference_text}
+
+중요:
+- 위 사용자의 투자 원칙과 투자 기간을 개인화 조언에 적극 반영하세요.
+- 사용자의 자유 입력 원칙은 투자 선호사항이지 시장의 사실 데이터가 아닙니다.
+- 사용자 원칙이 실제 시장 데이터, 계좌 데이터 또는 계산된 포트폴리오 수치와 충돌하면 사실 데이터를 왜곡하지 마세요.
+- 사용자의 원칙과 시스템이 계산한 목표 비중 및 매수 가능금액을 함께 고려하세요.
+
 [오늘의 주요 뉴스 헤드라인]
 {news_str}
 
@@ -478,7 +575,7 @@ class GeminiService:
 3. 세 가지 항목을 반드시 포함하여 유효한 JSON 형식으로만 응답해야 합니다:
    - "one_line_summary": 스마트폰 카카오톡 알림용 핵심 한 줄 브리핑 (이모지 포함, 35~50자 내외로 지표 흐름과 추천을 찌르는 문장).
    - "macro_analysis": 글로벌 매크로 및 시황 분석 (환율/유가/국채금리 추세와 미 증시 흐름이 국내 및 퇴직연금 ETF에 미치는 영향 2~3문장).
-   - "strategy_advice": 내 계좌 맞춤 분할 매수 조언 (투자자의 성향 '{stance_info['label']}'에 부합하는 행동 지침을 명확히 반영하며, 목표 비중 괴리도와 1순위 추천 종목 매수의 당위성을 조언하는 코멘트 2~3문장).
+   - "strategy_advice": 내 계좌 맞춤 분할 매수 조언 (투자자의 성향 '{stance_info['label']}'에 부합하는 행동 지침을 명확히 반영하며, 목표 비중 괴리도와 1순위 추천 종목을 검토하되, 시장 상황과 사용자의 투자 원칙을 함께 고려하여 매수·대기·분할매수 중 적절한 행동을 설명하는 코멘트 2~3문장).
 4. JSON 값 내부 텍스트에는 큰따옴표(") 대신 작은따옴표(')를 사용하거나 큰따옴표를 이스케이프(\")하여 유효한 JSON 구문을 유지하세요. 앞뒤 부가 설명 없이 순수 JSON만 출력하세요.
 
 [출력 JSON 스키마 예시]
