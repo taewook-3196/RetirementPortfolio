@@ -352,7 +352,25 @@ class DailyReportService:
                     chg_pct = 0.0
                     if len(p_hist) >= 2 and p_hist[-2].close_price > 0:
                         prev_close = p_hist[-2].close_price
-                        chg_pct = ((latest.close_price - prev_close) / prev_close) * 100.0
+                        latest_close = float(
+                            latest.close_price or 0
+                        )
+                        
+                        previous_close = float(
+                            prev_close or 0
+                        )
+                        
+                        if previous_close > 0:
+                            chg_pct = (
+                                (
+                                    latest_close
+                                    - previous_close
+                                )
+                                / previous_close
+                            ) * 100.0
+                        else:
+                            chg_pct = 0.0
+                        
                     elif latest.open_price and latest.open_price > 0:
                         chg_pct = ((latest.close_price - latest.open_price) / latest.open_price) * 100.0
                     market_indices["KODEX 200"] = {
