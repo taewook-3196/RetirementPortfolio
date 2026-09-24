@@ -3,6 +3,9 @@ name: Update Market Prices
 on:
   workflow_dispatch:
 
+  schedule:
+    - cron: "30 9 * * 1-5"
+
 jobs:
   update-prices:
     runs-on: ubuntu-latest
