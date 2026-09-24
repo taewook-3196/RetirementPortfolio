@@ -1786,19 +1786,7 @@ def home():
                             max="100"
                             placeholder="예: 12"
                         >
-                
-                        <label for="monthly-investment">
-                            월 투자 가능금액
-                        </label>
-                
-                        <input
-                            id="monthly-investment"
-                            type="number"
-                            min="0"
-                            step="10000"
-                            placeholder="예: 400000"
-                        >
-                
+                                
                         <label for="ai-advice-style">
                             AI 조언 방식
                         </label>
@@ -3874,15 +3862,7 @@ def home():
                             horizonValue
                             ? Number(horizonValue)
                             : null,
-            
-                        monthly_investment:
-                            Number(
-                                document.getElementById(
-                                    "monthly-investment"
-                                ).value
-                                || 0
-                            ),
-            
+                                                
                         ai_advice_style:
                             document.getElementById(
                                 "ai-advice-style"
@@ -4042,14 +4022,7 @@ def home():
                                 investmentProfile
                                     .investment_horizon_years
                                 ?? "";
-                        
-                            document.getElementById(
-                                "monthly-investment"
-                            ).value =
-                                investmentProfile
-                                    .monthly_investment
-                                || 0;
-                        
+                                                                            
                             document.getElementById(
                                 "ai-advice-style"
                             ).value =
