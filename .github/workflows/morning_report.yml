@@ -55,24 +55,20 @@ jobs:
           python -m services.daily_report_service --generate-only
 
       - name: GitHub Pages 디렉토리 점검
-        if: always()
         run: |
           mkdir -p exports/reports
           touch exports/reports/.nojekyll
 
       - name: GitHub Pages 아티팩트 업로드 (모바일 웹페이지 배포)
-        if: always()
         uses: actions/upload-pages-artifact@v3
         with:
           path: 'exports/reports'
 
       - name: GitHub Pages 웹 배포 실행
-        if: always()
         id: deployment
         uses: actions/deploy-pages@v4
 
       - name: 카카오톡 알림 발송 (웹 배포 완료 후)
-        if: always()
         env:
           KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
           KAKAO_ACCESS_TOKEN: ${{ secrets.KAKAO_ACCESS_TOKEN }}
