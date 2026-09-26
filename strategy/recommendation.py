@@ -955,29 +955,27 @@ def generate_recommendations(
 
         if result.base_buy > 0:
 
-            reasons.append(
-                "이번 주기 남은 기본 매수 한도에서 "
-                f"{result.base_buy:,.0f}원이 "
-                "배정되었습니다."
-            )
+          reasons.append(
+              "이번 주기 남은 기본 매수 가능 한도는 "
+              f"{result.base_buy:,.0f}원입니다."
+          )
 
         if result.additional_buy > 0:
 
-            ratio_pct = (
-                parsed[
-                    "additional_ratio"
-                ]
-                * 100
-            )
-
-            reasons.append(
-                f"현재 낙폭 단계에 따라 "
-                f"추가매수 한도의 "
-                f"{ratio_pct:.0f}% 단계가 "
-                "활성화되어 "
-                f"{result.additional_buy:,.0f}원이 "
-                "추가 반영되었습니다."
-            )
+          ratio_pct = (
+              parsed[
+                  "additional_ratio"
+              ]
+              * 100
+          )
+      
+          reasons.append(
+              f"현재 낙폭 단계에 따라 "
+              f"추가매수 한도의 "
+              f"{ratio_pct:.0f}% 단계가 활성화되어 있으며, "
+              f"현재 추가매수 가능 한도는 "
+              f"{result.additional_buy:,.0f}원입니다."
+          )
 
         elif (
             parsed[
