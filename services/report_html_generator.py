@@ -1170,7 +1170,7 @@ class ReportHtmlGenerator:
 
             if d_day is not None and d_day == 0:
                 return (
-                    "오늘은 <strong>정기 매수 기준일(D-Day)</strong>입니다. "
+                    "오늘은 <strong>정기 매수 검토 기준일(D-Day)</strong>입니다. "
                     f"현재 규칙상 최대 <strong>{total_budget:,.0f}원</strong>의 "
                     "매수 가능 범위가 계산되어 있습니다. "
                     "이는 자동 매수 명령이 아니며 실제 집행 여부와 규모는 "
@@ -1179,7 +1179,7 @@ class ReportHtmlGenerator:
 
             if d_day is not None and d_day > 0:
                 return (
-                    f"다음 정기 매수 기준일까지 <strong>{d_day}일</strong> "
+                    f"다음 정기 매수 검토 기준일까지 <strong>{d_day}일</strong> "
                     f"남았습니다. (예정일: {next_buy_date}) "
                     f"현재 규칙상 최대 <strong>{total_budget:,.0f}원</strong>의 "
                     "매수 가능 범위가 계산되어 있습니다. "
@@ -1300,7 +1300,7 @@ class ReportHtmlGenerator:
                         and d_day == 0
                     ):
                         dday_text = (
-                            "오늘 정기 매수 기준일"
+                            "오늘 정기 매수 검토 기준일"
                         )
                         dday_class = (
                             "badge-warning"
@@ -1568,7 +1568,7 @@ class ReportHtmlGenerator:
                 and d_day == 0
             ):
                 dday_text = (
-                    "오늘 정기 매수 기준일"
+                    "오늘 정기 매수 검토 기준일"
                 )
                 dday_class = (
                     "badge-warning"
@@ -1752,7 +1752,7 @@ class ReportHtmlGenerator:
             and d_day == 0
         ):
             dday_text = (
-                "오늘 정기 매수 기준일"
+                "오늘 정기 매수 검토 기준일"
             )
             dday_class = (
                 "badge-warning"
