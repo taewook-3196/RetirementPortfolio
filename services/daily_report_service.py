@@ -304,12 +304,12 @@ class DailyReportService:
                                 executable_amount,
 
                             # 기존 HTML/코드와의 호환성을 위해
-                            # 당분간 기존 필드도 유지합니다.
+                            # 필드명은 유지하되 실제 주문 가능한 값으로 전달합니다.
                             "recommended_shares":
                                 available_shares,
-
+                            
                             "recommended_amount":
-                                available_amount,
+                                executable_amount,
 
                             "reason": r.reason,
                             "target_weight":
@@ -419,12 +419,13 @@ class DailyReportService:
                     "executable_buy_amount":
                         executable_amount,
 
-                    # 기존 HTML 호환용
+                    # 기존 HTML/코드와의 호환성을 위해
+                    # 필드명은 유지하되 실제 주문 가능한 값으로 전달합니다.
                     "recommended_shares":
                         available_shares,
-
+                    
                     "recommended_amount":
-                        available_amount,
+                        executable_amount,
 
                     "reason": r.reason,
                     "target_weight":
