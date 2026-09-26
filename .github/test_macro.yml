@@ -1,0 +1,53 @@
+name: Test Macro Indicators
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Test macro indicators
+        run: |
+          python - <<'PY'
+          from services.macro_indicator_service import MacroIndicatorService
+
+          service = MacroIndicatorService()
+          data = service.fetch_all_macro_data()
+
+          print("\n=== OFFICIAL US ECONOMIC INDICATORS ===")
+
+          fundamentals = data.get("fundamentals", {})
+
+          for key in [
+              "core_pce",
+              "jobs_nfp",
+              "unemployment_rate",
+          ]:
+              item = fundamentals.get(key, {})
+
+              print(f"\n[{key}]")
+              print("success       :", item.get("success"))
+              print("latest_value  :", item.get("latest_value"))
+              print("previous_value:", item.get("previous_value"))
+              print("change_text   :", item.get("change_text"))
+              print("trend_badge   :", item.get("trend_badge"))
+              print("period        :", item.get("period"))
+              print("source        :", item.get("source"))
+
+          print("\n=== GEMINI INPUT ===")
+          print(service.build_summary_for_gemini(data))
+
+          print("\n=== KAKAO INPUT ===")
+          for line in service.build_kakao_macro_lines(data):
+              print(line)
+          PY
