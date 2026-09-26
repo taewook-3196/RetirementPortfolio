@@ -298,12 +298,33 @@ class GeminiService:
 
         # 4. JSON 파싱
         parsed = self._parse_json_response(raw_response)
+
+        action = str(
+            parsed.get(
+                "action",
+                "HOLD",
+            )
+            or "HOLD"
+        ).strip().upper()
+
+        action_labels = {
+            "BUY": "매수",
+            "PARTIAL": "일부 매수",
+            "WAIT": "대기",
+            "HOLD": "기존 계획 유지",
+        }
+
+        if action not in action_labels:
+            action = "HOLD"
+
         return {
             "success": True,
             "model_used": used_model,
             "investment_stance": self.investment_stance,
             "stance_badge": stance_info["badge"],
             "stance_label": stance_info["label"],
+            "action": action,
+            "action_label": action_labels[action],
             "one_line_summary": parsed.get("one_line_summary", "").strip(),
             "macro_analysis": parsed.get("macro_analysis", "").strip(),
             "strategy_advice": parsed.get("strategy_advice", "").strip(),
@@ -1156,7 +1177,23 @@ class GeminiService:
 [작성 지침]
 차분하고 신뢰감 있는 금융 분석 문체를 사용하세요.
 
-반드시 아래 세 필드를 포함하는 유효한 JSON 하나만 출력하세요.
+반드시 아래 네 필드를 포함하는 유효한 JSON 하나만 출력하세요.
+
+- "action":
+  오늘 또는 이번 매수 주기의 최종 행동 판단입니다.
+  반드시 "BUY", "PARTIAL", "WAIT", "HOLD" 중 하나만 출력하세요.
+
+  BUY:
+  현재 매수 가능 범위 내에서 의미 있는 수준의 매수를 실행하는 것이 합리적이라고 판단한 경우.
+
+  PARTIAL:
+  매수 가능 범위를 전부 사용하지 않고 일부만 분할매수하는 것이 합리적이라고 판단한 경우.
+
+  WAIT:
+  매수 가능 예산이 존재하더라도 현재 시장 상황이나 매수 시점 등을 고려하여 지금은 사용하지 않고 기다리는 것이 합리적이라고 판단한 경우.
+
+  HOLD:
+  별도의 신규 매수 행동보다 기존 자산배분 및 정기 투자 계획을 그대로 유지하는 것이 합리적이라고 판단한 경우.
 
 - "one_line_summary":
   카카오톡용 핵심 한 줄 시황 및 행동 요약.
@@ -1175,6 +1212,7 @@ class GeminiService:
   매수를 제시한다면 시스템의 사용 가능 예산을 초과하지 말고,
   가능한 경우 실제 매수할 금액 또는 수량을 명확히 제시하세요.
   대기를 제시한다면 사용 가능한 예산이 있더라도 왜 지금 사용하지 않는지가 드러나도록 설명하세요.
+  strategy_advice의 실제 행동 내용은 반드시 action 필드와 일치해야 합니다.
 
 제공되지 않은 시장 수치나 계좌 수치를 만들어내지 마세요.
 
@@ -1183,6 +1221,7 @@ JSON 앞뒤에 설명이나 Markdown 코드블록을 붙이지 마세요.
 출력 형식:
 
 {{
+  "action": "BUY | PARTIAL | WAIT | HOLD 중 하나",
   "one_line_summary": "...",
   "macro_analysis": "...",
   "strategy_advice": "..."
@@ -1233,9 +1272,31 @@ JSON 앞뒤에 설명이나 Markdown 코드블록을 붙이지 마세요.
             parsed = json.loads(clean_text)
             if isinstance(parsed, dict) and "macro_analysis" in parsed:
                 return {
-                    "one_line_summary": _sanitize_field(parsed.get("one_line_summary", "")),
-                    "macro_analysis": _sanitize_field(parsed.get("macro_analysis", "")),
-                    "strategy_advice": _sanitize_field(parsed.get("strategy_advice", "")),
+                    "action": str(
+                        parsed.get(
+                            "action",
+                            "HOLD",
+                        )
+                        or "HOLD"
+                    ).strip().upper(),
+                    "one_line_summary": _sanitize_field(
+                        parsed.get(
+                            "one_line_summary",
+                            "",
+                        )
+                    ),
+                    "macro_analysis": _sanitize_field(
+                        parsed.get(
+                            "macro_analysis",
+                            "",
+                        )
+                    ),
+                    "strategy_advice": _sanitize_field(
+                        parsed.get(
+                            "strategy_advice",
+                            "",
+                        )
+                    ),
                 }
         except Exception:
             pass
@@ -1249,20 +1310,82 @@ JSON 앞뒤에 설명이나 Markdown 코드블록을 붙이지 마세요.
                 parsed = json.loads(sub)
                 if isinstance(parsed, dict) and "macro_analysis" in parsed:
                     return {
-                        "one_line_summary": _sanitize_field(parsed.get("one_line_summary", "")),
-                        "macro_analysis": _sanitize_field(parsed.get("macro_analysis", "")),
-                        "strategy_advice": _sanitize_field(parsed.get("strategy_advice", "")),
+                        "action": str(
+                            parsed.get(
+                                "action",
+                                "HOLD",
+                            )
+                            or "HOLD"
+                        ).strip().upper(),
+                        "one_line_summary": _sanitize_field(
+                            parsed.get(
+                                "one_line_summary",
+                                "",
+                            )
+                        ),
+                        "macro_analysis": _sanitize_field(
+                            parsed.get(
+                                "macro_analysis",
+                                "",
+                            )
+                        ),
+                        "strategy_advice": _sanitize_field(
+                            parsed.get(
+                                "strategy_advice",
+                                "",
+                            )
+                        ),
                     }
             except Exception:
                 try:
-                    fixed_sub = re.sub(r",\s*([\]}])", r"\1", sub)
-                    parsed = json.loads(fixed_sub)
-                    if isinstance(parsed, dict) and "macro_analysis" in parsed:
+                    fixed_sub = re.sub(
+                        r",\s*([\]}])",
+                        r"\1",
+                        sub,
+                    )
+            
+                    parsed = json.loads(
+                        fixed_sub
+                    )
+            
+                    if (
+                        isinstance(parsed, dict)
+                        and "macro_analysis" in parsed
+                    ):
                         return {
-                            "one_line_summary": _sanitize_field(parsed.get("one_line_summary", "")),
-                            "macro_analysis": _sanitize_field(parsed.get("macro_analysis", "")),
-                            "strategy_advice": _sanitize_field(parsed.get("strategy_advice", "")),
+                            "action": str(
+                                parsed.get(
+                                    "action",
+                                    "HOLD",
+                                )
+                                or "HOLD"
+                            ).strip().upper(),
+            
+                            "one_line_summary":
+                                _sanitize_field(
+                                    parsed.get(
+                                        "one_line_summary",
+                                        "",
+                                    )
+                                ),
+            
+                            "macro_analysis":
+                                _sanitize_field(
+                                    parsed.get(
+                                        "macro_analysis",
+                                        "",
+                                    )
+                                ),
+            
+                            "strategy_advice":
+                                _sanitize_field(
+                                    parsed.get(
+                                        "strategy_advice",
+                                        "",
+                                    )
+                                ),
                         }
+            
                 except Exception:
                     pass
 
