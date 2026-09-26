@@ -1016,135 +1016,449 @@ class ReportHtmlGenerator:
         summary: Dict[str, Any],
         account_recommendations: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
-        """AI 투자 가이드 & 매수 추천 브리핑 렌더링 (계좌별 분리 렌더링 및 모바일 탭 인터랙션 지원)"""
-        # 1. 다중 계좌 AI 추천 데이터가 있는 경우
-        if account_recommendations and len(account_recommendations) > 0:
-            total_accounts = len(account_recommendations)
+        """
+        계좌별 정량 매수 가능 범위를 렌더링합니다.
 
-            # 1-1. 다중 계좌인 경우: 상단 탭 필터 바 + 계좌별 AI 가이드 카드들
-            if total_accounts > 1:
-                tab_buttons = [
-                    f'<button class="ai-tab-btn active" onclick="filterAccountAiGuide(\'all\', this)">🌐 전체 ({total_accounts}개 계좌)</button>'
-                ]
-                account_cards_html = []
-                grand_total_rec = 0
+        이 섹션의 금액/수량은 실제 매수 권고나 주문이 아니라,
+        계좌 규칙과 현재 포트폴리오 상태를 기준으로 계산된
+        '사용 가능한 최대 범위'입니다.
 
-                for idx, ar in enumerate(account_recommendations, 1):
-                    ar_id = ar.get("account_id", idx)
-                    ar_name = ar.get("account_name", f"계좌 {idx}")
-                    ar_broker = ar.get("broker", "")
-                    d_day = ar.get("d_day")
-                    next_buy_date = ar.get("next_buy_date", "")
-                    cycle_desc = ar.get("cycle_desc", "정기 투자 주기")
-                    already_invested = ar.get("already_invested_this_month", False)
-                    total_rec_amt = ar.get("total_recommended_amount", 0)
-                    grand_total_rec += total_rec_amt
-                    items = ar.get("items", [])
+        실제 매수/일부 매수/대기 판단은 Gemini 투자 가이드에서
+        별도로 수행합니다.
+        """
 
-                    custom_comment = ar.get("ai_guide_comment")
-                    if custom_comment:
-                        guide_comment = custom_comment
-                    elif already_invested:
-                        guide_comment = f"이번 주기(<strong>{cycle_desc}</strong>) 매수가 성공적으로 완료되었습니다! 포트폴리오 비중이 안정적으로 유지되고 있습니다."
-                    elif d_day is not None and d_day == 0:
-                        guide_comment = f"오늘은 <strong>정기 매수 실행일(D-Day)</strong>입니다! 오늘 추천된 총 <strong>{total_rec_amt:,.0f}원</strong> 규모의 매수를 진행해 보세요."
-                    elif d_day is not None and d_day > 0:
-                        guide_comment = f"다음 매수일까지 <strong>{d_day}일</strong> 남았습니다. (예정일: {next_buy_date}) 현재 시장 변동성을 모니터링하며 매수 예산을 준비해 두세요."
-                    else:
-                        guide_comment = f"설정된 투자 주기에 맞춰 낙폭 과대 종목 및 목표 비중 부족 종목을 우선하여 추천합니다."
+        def _render_budget_items(
+            items: List[Dict[str, Any]],
+        ) -> str:
+            items_html = ""
+            item_count = 0
 
-                    if already_invested:
-                        dday_text = "이번 주기 매수 완료"
-                        dday_class = "badge-success"
-                    elif d_day is not None and d_day == 0:
-                        dday_text = "오늘 매수 D-Day"
-                        dday_class = "badge-warning"
-                    elif d_day is not None and d_day > 0:
-                        dday_text = f"D-{d_day}"
-                        dday_class = "badge-info"
-                    else:
-                        dday_text = "수시 매수"
-                        dday_class = "badge-info"
+            for item in items:
+                available_budget = float(
+                    item.get(
+                        "available_buy_budget",
+                        item.get(
+                            "recommended_amount",
+                            0,
+                        ),
+                    )
+                    or 0
+                )
 
-                    tab_buttons.append(
-                        f'<button class="ai-tab-btn" onclick="filterAccountAiGuide(\'ai-group-{ar_id}\', this)">🏢 {ar_name}</button>'
+                available_shares = int(
+                    item.get(
+                        "available_buy_shares",
+                        item.get(
+                            "recommended_shares",
+                            0,
+                        ),
+                    )
+                    or 0
+                )
+
+                executable_amount = float(
+                    item.get(
+                        "executable_buy_amount",
+                        0,
+                    )
+                    or 0
+                )
+
+                if (
+                    available_budget <= 0
+                    and available_shares <= 0
+                ):
+                    continue
+
+                item_count += 1
+
+                name = item.get(
+                    "name",
+                    "",
+                )
+
+                ticker = item.get(
+                    "ticker",
+                    "",
+                )
+
+                reason = item.get(
+                    "reason",
+                    "",
+                )
+
+                reason_html = (
+                    f"{ticker} • {reason}"
+                    if reason
+                    else ticker
+                )
+
+                if available_shares > 0:
+                    share_text = (
+                        f"최대 {available_shares:,}주"
+                    )
+                else:
+                    share_text = (
+                        "정수 단위 매수 가능 수량 없음"
                     )
 
-                    # 계좌별 추천 종목 리스트 생성
-                    items_html = ""
-                    rec_count = 0
-                    for it in items:
-                        rec_shares = it.get("recommended_shares", 0)
-                        if rec_shares > 0:
-                            rec_count += 1
-                            name = it.get("name", "")
-                            ticker = it.get("ticker", "")
-                            rec_amount = it.get("recommended_amount", 0)
-                            reason = it.get("reason", "비중 확대 추천")
-                            items_html += f"""
-                            <div class="recom-item-card">
-                                <div>
-                                    <div class="recom-info-name">{name}</div>
-                                    <div class="recom-info-ticker">{ticker} • {reason}</div>
-                                </div>
-                                <div class="recom-val-box">
-                                    <div class="recom-shares">+{rec_shares:,}주</div>
-                                    <div class="recom-amt">{rec_amount:,.0f}원</div>
-                                </div>
-                            </div>
-                            """
+                if executable_amount > 0:
+                    execution_text = (
+                        f"실제 {available_shares:,}주 매수 시 "
+                        f"{executable_amount:,.0f}원"
+                    )
+                else:
+                    execution_text = (
+                        "실제 주문금액은 매수 시점 가격에 따라 결정"
+                    )
 
-                    if rec_count == 0:
-                        items_html = """
-                        <div style="text-align: center; padding: 14px; font-size: 13px; color: var(--text-dim);">
-                            현재 즉시 매수를 요하는 비중 불균형 종목이 없습니다. (포트폴리오 균형 양호)
+                items_html += f"""
+                <div class="recom-item-card">
+                    <div style="min-width: 0; padding-right: 10px;">
+                        <div class="recom-info-name">{name}</div>
+                        <div class="recom-info-ticker">
+                            {reason_html}
                         </div>
-                        """
+                        <div style="
+                            font-size: 11px;
+                            color: var(--text-dim);
+                            margin-top: 5px;
+                            line-height: 1.45;
+                        ">
+                            {execution_text}
+                        </div>
+                    </div>
 
-                    broker_badge = f'<span class="account-broker-label">• {ar_broker}</span>' if ar_broker else ""
+                    <div class="recom-val-box" style="flex-shrink: 0;">
+                        <div class="recom-shares">
+                            {share_text}
+                        </div>
+                        <div class="recom-amt">
+                            예산 {available_budget:,.0f}원
+                        </div>
+                    </div>
+                </div>
+                """
+
+            if item_count == 0:
+                return """
+                <div style="
+                    text-align: center;
+                    padding: 14px;
+                    font-size: 13px;
+                    color: var(--text-dim);
+                ">
+                    현재 계좌 규칙상 별도로 표시할 매수 가능 범위가 없습니다.
+                </div>
+                """
+
+            return items_html
+
+        def _build_guide_comment(
+            d_day: Any,
+            next_buy_date: str,
+            cycle_desc: str,
+            already_invested: bool,
+            total_budget: float,
+        ) -> str:
+            if already_invested:
+                return (
+                    f"이번 주기(<strong>{cycle_desc}</strong>)의 "
+                    "현재 계산상 추가 사용 가능한 매수 범위가 없습니다. "
+                    "실제 행동 판단은 위 Gemini 투자 가이드를 참고하세요."
+                )
+
+            if d_day is not None and d_day == 0:
+                return (
+                    "오늘은 <strong>정기 매수 기준일(D-Day)</strong>입니다. "
+                    f"현재 규칙상 최대 <strong>{total_budget:,.0f}원</strong>의 "
+                    "매수 가능 범위가 계산되어 있습니다. "
+                    "이는 자동 매수 명령이 아니며 실제 집행 여부와 규모는 "
+                    "위 Gemini 투자 판단 및 시장 상황을 함께 참고하세요."
+                )
+
+            if d_day is not None and d_day > 0:
+                return (
+                    f"다음 정기 매수 기준일까지 <strong>{d_day}일</strong> "
+                    f"남았습니다. (예정일: {next_buy_date}) "
+                    f"현재 규칙상 최대 <strong>{total_budget:,.0f}원</strong>의 "
+                    "매수 가능 범위가 계산되어 있습니다. "
+                    "이는 집행 명령이 아니라 현재 사용할 수 있는 한도입니다."
+                )
+
+            return (
+                f"현재 계좌 규칙상 최대 <strong>{total_budget:,.0f}원</strong>의 "
+                "매수 가능 범위가 계산되어 있습니다. "
+                "실제 매수 여부는 시장 상황과 위 Gemini 투자 판단을 "
+                "함께 참고하세요."
+            )
+
+        # -------------------------------------------------
+        # 1. 계좌별 데이터가 있는 경우
+        # -------------------------------------------------
+
+        if (
+            account_recommendations
+            and len(account_recommendations) > 0
+        ):
+            total_accounts = len(
+                account_recommendations
+            )
+
+            # ---------------------------------------------
+            # 1-1. 다중 계좌
+            # ---------------------------------------------
+
+            if total_accounts > 1:
+                tab_buttons = [
+                    (
+                        '<button class="ai-tab-btn active" '
+                        'onclick="filterAccountAiGuide(\'all\', this)">'
+                        f'🌐 전체 ({total_accounts}개 계좌)'
+                        '</button>'
+                    )
+                ]
+
+                account_cards_html = []
+
+                for idx, ar in enumerate(
+                    account_recommendations,
+                    1,
+                ):
+                    ar_id = ar.get(
+                        "account_id",
+                        idx,
+                    )
+
+                    ar_name = ar.get(
+                        "account_name",
+                        f"계좌 {idx}",
+                    )
+
+                    ar_broker = ar.get(
+                        "broker",
+                        "",
+                    )
+
+                    d_day = ar.get(
+                        "d_day"
+                    )
+
+                    next_buy_date = ar.get(
+                        "next_buy_date",
+                        "",
+                    )
+
+                    cycle_desc = ar.get(
+                        "cycle_desc",
+                        "정기 투자 주기",
+                    )
+
+                    already_invested = bool(
+                        ar.get(
+                            "already_invested_this_month",
+                            False,
+                        )
+                    )
+
+                    total_budget = float(
+                        ar.get(
+                            "total_available_buy_budget",
+                            ar.get(
+                                "total_recommended_amount",
+                                0,
+                            ),
+                        )
+                        or 0
+                    )
+
+                    items = ar.get(
+                        "items",
+                        [],
+                    ) or []
+
+                    guide_comment = (
+                        _build_guide_comment(
+                            d_day,
+                            next_buy_date,
+                            cycle_desc,
+                            already_invested,
+                            total_budget,
+                        )
+                    )
+
+                    if already_invested:
+                        dday_text = (
+                            "현재 추가 범위 없음"
+                        )
+                        dday_class = (
+                            "badge-success"
+                        )
+
+                    elif (
+                        d_day is not None
+                        and d_day == 0
+                    ):
+                        dday_text = (
+                            "오늘 정기 매수 기준일"
+                        )
+                        dday_class = (
+                            "badge-warning"
+                        )
+
+                    elif (
+                        d_day is not None
+                        and d_day > 0
+                    ):
+                        dday_text = (
+                            f"D-{d_day}"
+                        )
+                        dday_class = (
+                            "badge-info"
+                        )
+
+                    else:
+                        dday_text = (
+                            "수시 판단"
+                        )
+                        dday_class = (
+                            "badge-info"
+                        )
+
+                    tab_buttons.append(
+                        (
+                            '<button class="ai-tab-btn" '
+                            f'onclick="filterAccountAiGuide('
+                            f'\'ai-group-{ar_id}\', this)">'
+                            f'🏢 {ar_name}'
+                            '</button>'
+                        )
+                    )
+
+                    items_html = (
+                        _render_budget_items(
+                            items
+                        )
+                    )
+
+                    broker_badge = (
+                        (
+                            '<span class="account-broker-label">'
+                            f'• {ar_broker}'
+                            '</span>'
+                        )
+                        if ar_broker
+                        else ""
+                    )
+
                     card_html = f"""
-                    <div class="account-ai-group" id="ai-group-{ar_id}">
+                    <div
+                        class="account-ai-group"
+                        id="ai-group-{ar_id}"
+                    >
                         <div class="account-ai-header">
                             <div class="account-group-title">
-                                <span class="account-badge-pill">계좌 {idx}</span>
-                                <span class="account-name-label">{ar_name}</span>
+                                <span class="account-badge-pill">
+                                    계좌 {idx}
+                                </span>
+                                <span class="account-name-label">
+                                    {ar_name}
+                                </span>
                                 {broker_badge}
                             </div>
-                            <span class="badge {dday_class}" style="font-size: 11.5px; padding: 3px 8px;">{dday_text}</span>
+
+                            <span
+                                class="badge {dday_class}"
+                                style="
+                                    font-size: 11.5px;
+                                    padding: 3px 8px;
+                                "
+                            >
+                                {dday_text}
+                            </span>
                         </div>
 
-                        <div class="ai-guide-box" style="margin-bottom: 12px;">
+                        <div
+                            class="ai-guide-box"
+                            style="margin-bottom: 12px;"
+                        >
                             <div class="ai-comment">
                                 {guide_comment}
                             </div>
                         </div>
 
-                        <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 12.5px; font-weight: 700; color: #cbd5e1;">🎯 이번 주기 추천 매수 종목</span>
-                            <span style="font-size: 12.5px; font-weight: 700; color: #a5b4fc;">합계 {total_rec_amt:,.0f}원</span>
+                        <div style="
+                            margin-bottom: 8px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            gap: 8px;
+                        ">
+                            <span style="
+                                font-size: 12.5px;
+                                font-weight: 700;
+                                color: #cbd5e1;
+                            ">
+                                📐 이번 주기 매수 가능 범위
+                            </span>
+
+                            <span style="
+                                font-size: 12.5px;
+                                font-weight: 700;
+                                color: #a5b4fc;
+                                white-space: nowrap;
+                            ">
+                                최대 {total_budget:,.0f}원
+                            </span>
                         </div>
 
                         {items_html}
+
+                        <div style="
+                            margin-top: 9px;
+                            font-size: 10.5px;
+                            line-height: 1.5;
+                            color: var(--text-dim);
+                        ">
+                            ※ 위 금액과 수량은 시스템이 계산한
+                            매수 가능 상한이며 실제 매수 지시가 아닙니다.
+                        </div>
                     </div>
                     """
-                    account_cards_html.append(card_html)
 
-                tabs_html = f'<div class="ai-tabs">{"".join(tab_buttons)}</div>'
-                all_cards = "\n".join(account_cards_html)
+                    account_cards_html.append(
+                        card_html
+                    )
+
+                tabs_html = (
+                    '<div class="ai-tabs">'
+                    + "".join(tab_buttons)
+                    + "</div>"
+                )
+
+                all_cards = "\n".join(
+                    account_cards_html
+                )
 
                 tab_script = """
                 <script>
                 function filterAccountAiGuide(targetId, btnElement) {
                     var groups = document.querySelectorAll('.account-ai-group');
                     var btns = document.querySelectorAll('.ai-tab-btn');
+
                     for (var i = 0; i < btns.length; i++) {
                         btns[i].classList.remove('active');
                     }
+
                     if (btnElement) {
                         btnElement.classList.add('active');
                     }
+
                     for (var j = 0; j < groups.length; j++) {
-                        if (targetId === 'all' || groups[j].id === targetId) {
+                        if (
+                            targetId === 'all'
+                            || groups[j].id === targetId
+                        ) {
                             groups[j].style.display = 'block';
                         } else {
                             groups[j].style.display = 'none';
@@ -1158,184 +1472,330 @@ class ReportHtmlGenerator:
                 <section class="card">
                     <div class="card-header">
                         <div class="card-title-group">
-                            <span class="card-icon">🤖</span>
-                            <h2 class="card-title">AI 투자 가이드 & 매수 전략</h2>
+                            <span class="card-icon">📐</span>
+                            <h2 class="card-title">
+                                계좌별 매수 가능 범위
+                            </h2>
                         </div>
-                        <span style="font-size: 12px; color: var(--text-dim);">{total_accounts}개 계좌 맞춤 전략</span>
+
+                        <span style="
+                            font-size: 12px;
+                            color: var(--text-dim);
+                        ">
+                            {total_accounts}개 계좌
+                        </span>
                     </div>
+
                     {tabs_html}
                     {all_cards}
                     {tab_script}
                 </section>
                 """
 
-            # 1-2. 단일 계좌인 경우: 깔끔한 계좌 헤더와 단일 AI 가이드
+            # ---------------------------------------------
+            # 1-2. 단일 계좌
+            # ---------------------------------------------
+
+            ar = account_recommendations[0]
+
+            ar_name = ar.get(
+                "account_name",
+                "기본 계좌",
+            )
+
+            ar_broker = ar.get(
+                "broker",
+                "",
+            )
+
+            d_day = ar.get(
+                "d_day"
+            )
+
+            next_buy_date = ar.get(
+                "next_buy_date",
+                "",
+            )
+
+            cycle_desc = ar.get(
+                "cycle_desc",
+                "정기 투자 주기",
+            )
+
+            already_invested = bool(
+                ar.get(
+                    "already_invested_this_month",
+                    False,
+                )
+            )
+
+            total_budget = float(
+                ar.get(
+                    "total_available_buy_budget",
+                    ar.get(
+                        "total_recommended_amount",
+                        0,
+                    ),
+                )
+                or 0
+            )
+
+            items = ar.get(
+                "items",
+                [],
+            ) or []
+
+            guide_comment = (
+                _build_guide_comment(
+                    d_day,
+                    next_buy_date,
+                    cycle_desc,
+                    already_invested,
+                    total_budget,
+                )
+            )
+
+            if already_invested:
+                dday_text = (
+                    "현재 추가 범위 없음"
+                )
+                dday_class = (
+                    "badge-success"
+                )
+
+            elif (
+                d_day is not None
+                and d_day == 0
+            ):
+                dday_text = (
+                    "오늘 정기 매수 기준일"
+                )
+                dday_class = (
+                    "badge-warning"
+                )
+
+            elif (
+                d_day is not None
+                and d_day > 0
+            ):
+                dday_text = (
+                    f"D-{d_day}"
+                )
+                dday_class = (
+                    "badge-info"
+                )
+
             else:
-                ar = account_recommendations[0]
-                ar_name = ar.get("account_name", "기본 계좌")
-                ar_broker = ar.get("broker", "")
-                d_day = ar.get("d_day")
-                next_buy_date = ar.get("next_buy_date", "")
-                cycle_desc = ar.get("cycle_desc", "정기 투자 주기")
-                already_invested = ar.get("already_invested_this_month", False)
-                total_rec_amt = ar.get("total_recommended_amount", 0)
-                items = ar.get("items", [])
+                dday_text = (
+                    "수시 판단"
+                )
+                dday_class = (
+                    "badge-info"
+                )
 
-                custom_comment = ar.get("ai_guide_comment")
-                if custom_comment:
-                    guide_comment = custom_comment
-                elif already_invested:
-                    guide_comment = f"이번 주기(<strong>{cycle_desc}</strong>) 매수가 성공적으로 완료되었습니다! 포트폴리오 비중이 안정적으로 유지되고 있습니다."
-                elif d_day is not None and d_day == 0:
-                    guide_comment = f"오늘은 <strong>정기 매수 실행일(D-Day)</strong>입니다! 오늘 추천된 총 <strong>{total_rec_amt:,.0f}원</strong> 규모의 매수를 진행해 보세요."
-                elif d_day is not None and d_day > 0:
-                    guide_comment = f"다음 매수일까지 <strong>{d_day}일</strong> 남았습니다. (예정일: {next_buy_date}) 현재 시장 변동성을 모니터링하며 매수 예산을 준비해 두세요."
-                else:
-                    guide_comment = f"설정된 투자 주기에 맞춰 낙폭 과대 종목 및 목표 비중 부족 종목을 우선하여 추천합니다."
+            items_html = (
+                _render_budget_items(
+                    items
+                )
+            )
 
-                if already_invested:
-                    dday_text = "이번 주기 매수 완료"
-                    dday_class = "badge-success"
-                elif d_day is not None and d_day == 0:
-                    dday_text = "오늘 매수 D-Day"
-                    dday_class = "badge-warning"
-                elif d_day is not None and d_day > 0:
-                    dday_text = f"D-{d_day}"
-                    dday_class = "badge-info"
-                else:
-                    dday_text = "수시 매수"
-                    dday_class = "badge-info"
+            broker_badge = (
+                (
+                    '<span class="account-broker-label">'
+                    f'• {ar_broker}'
+                    '</span>'
+                )
+                if ar_broker
+                else ""
+            )
 
-                items_html = ""
-                rec_count = 0
-                for it in items:
-                    rec_shares = it.get("recommended_shares", 0)
-                    if rec_shares > 0:
-                        rec_count += 1
-                        name = it.get("name", "")
-                        ticker = it.get("ticker", "")
-                        rec_amount = it.get("recommended_amount", 0)
-                        reason = it.get("reason", "비중 확대 추천")
-                        items_html += f"""
-                        <div class="recom-item-card">
-                            <div>
-                                <div class="recom-info-name">{name}</div>
-                                <div class="recom-info-ticker">{ticker} • {reason}</div>
-                            </div>
-                            <div class="recom-val-box">
-                                <div class="recom-shares">+{rec_shares:,}주</div>
-                                <div class="recom-amt">{rec_amount:,.0f}원</div>
-                            </div>
-                        </div>
-                        """
-
-                if rec_count == 0:
-                    items_html = """
-                    <div style="text-align: center; padding: 14px; font-size: 13px; color: var(--text-dim);">
-                        현재 즉시 매수를 요하는 비중 불균형 종목이 없습니다. (포트폴리오 균형 양호)
-                    </div>
-                    """
-
-                broker_badge = f'<span class="account-broker-label">• {ar_broker}</span>' if ar_broker else ""
-                return f"""
-                <section class="card">
-                    <div class="card-header">
-                        <div class="card-title-group">
-                            <span class="card-icon">🤖</span>
-                            <h2 class="card-title">AI 투자 가이드 & 매수 전략</h2>
-                        </div>
-                        <span class="badge {dday_class}">{dday_text}</span>
+            return f"""
+            <section class="card">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <span class="card-icon">📐</span>
+                        <h2 class="card-title">
+                            매수 가능 범위
+                        </h2>
                     </div>
 
-                    <div class="account-ai-group" style="margin-bottom: 0;">
-                        <div class="account-ai-header">
-                            <div class="account-group-title">
-                                <span class="account-badge-pill">계좌</span>
-                                <span class="account-name-label">{ar_name}</span>
-                                {broker_badge}
-                            </div>
-                        </div>
+                    <span class="badge {dday_class}">
+                        {dday_text}
+                    </span>
+                </div>
 
-                        <div class="ai-guide-box">
-                            <div class="ai-comment">
-                                {guide_comment}
-                            </div>
+                <div
+                    class="account-ai-group"
+                    style="margin-bottom: 0;"
+                >
+                    <div class="account-ai-header">
+                        <div class="account-group-title">
+                            <span class="account-badge-pill">
+                                계좌
+                            </span>
+                            <span class="account-name-label">
+                                {ar_name}
+                            </span>
+                            {broker_badge}
                         </div>
-
-                        <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 13px; font-weight: 700; color: #cbd5e1;">🎯 이번 주기 추천 매수 종목</span>
-                            <span style="font-size: 13px; font-weight: 700; color: #a5b4fc;">합계 {total_rec_amt:,.0f}원</span>
-                        </div>
-
-                        {items_html}
                     </div>
-                </section>
-                """
 
-        # 2. 계좌별 추천 데이터가 없는 경우 (기존 호환 및 목 테스트)
-        d_day = recommendations.get("d_day", None)
-        next_buy_date = recommendations.get("next_buy_date", "")
-        cycle_desc = recommendations.get("cycle_desc", "정기 투자 주기")
-        already_invested = recommendations.get("already_invested_this_month", False)
-        total_rec_amt = recommendations.get("total_recommended_amount", 0)
-        items = recommendations.get("items", [])
-
-        if already_invested:
-            dday_text = "투자 완료"
-            dday_class = "badge-success"
-            guide_comment = f"이번 주기(<strong>{cycle_desc}</strong>) 매수가 성공적으로 완료되었습니다! 포트폴리오 비중이 안정적으로 유지되고 있습니다."
-        elif d_day is not None and d_day == 0:
-            dday_text = "오늘 매수 D-Day"
-            dday_class = "badge-warning"
-            guide_comment = f"오늘은 <strong>정기 매수 실행일(D-Day)</strong>입니다! 오늘 추천된 총 <strong>{total_rec_amt:,.0f}원</strong> 규모의 매수를 진행해 보세요."
-        elif d_day is not None and d_day > 0:
-            dday_text = f"D-{d_day}"
-            dday_class = "badge-info"
-            guide_comment = f"다음 매수일까지 <strong>{d_day}일</strong> 남았습니다. (예정일: {next_buy_date}) 현재 시장 변동성을 모니터링하며 매수 예산을 준비해 두세요."
-        else:
-            dday_text = "수시 매수"
-            dday_class = "badge-info"
-            guide_comment = f"설정된 투자 주기에 맞춰 낙폭 과대 종목 및 목표 비중 부족 종목을 우선하여 추천합니다."
-
-        # 추천 종목 리스트 생성
-        items_html = ""
-        rec_count = 0
-        for it in items:
-            rec_shares = it.get("recommended_shares", 0)
-            if rec_shares > 0:
-                rec_count += 1
-                name = it.get("name", "")
-                ticker = it.get("ticker", "")
-                rec_amount = it.get("recommended_amount", 0)
-                reason = it.get("reason", "비중 확대 추천")
-                items_html += f"""
-                <div class="recom-item-card">
-                    <div>
-                        <div class="recom-info-name">{name}</div>
-                        <div class="recom-info-ticker">{ticker} • {reason}</div>
+                    <div class="ai-guide-box">
+                        <div class="ai-comment">
+                            {guide_comment}
+                        </div>
                     </div>
-                    <div class="recom-val-box">
-                        <div class="recom-shares">+{rec_shares:,}주</div>
-                        <div class="recom-amt">{rec_amount:,.0f}원</div>
+
+                    <div style="
+                        margin-bottom: 10px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        gap: 8px;
+                    ">
+                        <span style="
+                            font-size: 13px;
+                            font-weight: 700;
+                            color: #cbd5e1;
+                        ">
+                            📐 이번 주기 매수 가능 범위
+                        </span>
+
+                        <span style="
+                            font-size: 13px;
+                            font-weight: 700;
+                            color: #a5b4fc;
+                            white-space: nowrap;
+                        ">
+                            최대 {total_budget:,.0f}원
+                        </span>
+                    </div>
+
+                    {items_html}
+
+                    <div style="
+                        margin-top: 9px;
+                        font-size: 10.5px;
+                        line-height: 1.5;
+                        color: var(--text-dim);
+                    ">
+                        ※ 위 금액과 수량은 시스템이 계산한
+                        매수 가능 상한입니다.
+                        실제 매수 여부는 위 Gemini 투자 가이드의
+                        시장 판단과 함께 검토합니다.
                     </div>
                 </div>
-                """
-
-        if rec_count == 0:
-            items_html = f"""
-            <div style="text-align: center; padding: 14px; font-size: 13px; color: var(--text-dim);">
-                현재 즉시 매수를 요하는 비중 불균형 종목이 없습니다. (포트폴리오 균형 양호)
-            </div>
+            </section>
             """
+
+        # -------------------------------------------------
+        # 2. 계좌별 데이터가 없는 경우
+        # -------------------------------------------------
+
+        d_day = recommendations.get(
+            "d_day"
+        )
+
+        next_buy_date = recommendations.get(
+            "next_buy_date",
+            "",
+        )
+
+        cycle_desc = recommendations.get(
+            "cycle_desc",
+            "정기 투자 주기",
+        )
+
+        already_invested = bool(
+            recommendations.get(
+                "already_invested_this_month",
+                False,
+            )
+        )
+
+        total_budget = float(
+            recommendations.get(
+                "total_available_buy_budget",
+                recommendations.get(
+                    "total_recommended_amount",
+                    0,
+                ),
+            )
+            or 0
+        )
+
+        items = recommendations.get(
+            "items",
+            [],
+        ) or []
+
+        guide_comment = (
+            _build_guide_comment(
+                d_day,
+                next_buy_date,
+                cycle_desc,
+                already_invested,
+                total_budget,
+            )
+        )
+
+        if already_invested:
+            dday_text = (
+                "현재 추가 범위 없음"
+            )
+            dday_class = (
+                "badge-success"
+            )
+
+        elif (
+            d_day is not None
+            and d_day == 0
+        ):
+            dday_text = (
+                "오늘 정기 매수 기준일"
+            )
+            dday_class = (
+                "badge-warning"
+            )
+
+        elif (
+            d_day is not None
+            and d_day > 0
+        ):
+            dday_text = (
+                f"D-{d_day}"
+            )
+            dday_class = (
+                "badge-info"
+            )
+
+        else:
+            dday_text = (
+                "수시 판단"
+            )
+            dday_class = (
+                "badge-info"
+            )
+
+        items_html = (
+            _render_budget_items(
+                items
+            )
+        )
 
         return f"""
         <section class="card">
             <div class="card-header">
                 <div class="card-title-group">
-                    <span class="card-icon">🤖</span>
-                    <h2 class="card-title">AI 투자 가이드 & 매수 전략</h2>
+                    <span class="card-icon">📐</span>
+                    <h2 class="card-title">
+                        매수 가능 범위
+                    </h2>
                 </div>
-                <span class="ai-dday-badge">{dday_text}</span>
+
+                <span class="badge {dday_class}">
+                    {dday_text}
+                </span>
             </div>
 
             <div class="ai-guide-box">
@@ -1344,15 +1804,45 @@ class ReportHtmlGenerator:
                 </div>
             </div>
 
-            <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 13px; font-weight: 700; color: #cbd5e1;">🎯 이번 주기 추천 매수 종목</span>
-                <span style="font-size: 13px; font-weight: 700; color: #a5b4fc;">합계 {total_rec_amt:,.0f}원</span>
+            <div style="
+                margin-bottom: 10px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 8px;
+            ">
+                <span style="
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #cbd5e1;
+                ">
+                    📐 이번 주기 매수 가능 범위
+                </span>
+
+                <span style="
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #a5b4fc;
+                    white-space: nowrap;
+                ">
+                    최대 {total_budget:,.0f}원
+                </span>
             </div>
 
             {items_html}
+
+            <div style="
+                margin-top: 9px;
+                font-size: 10.5px;
+                line-height: 1.5;
+                color: var(--text-dim);
+            ">
+                ※ 위 금액과 수량은 시스템이 계산한
+                매수 가능 상한이며 실제 매수 지시가 아닙니다.
+            </div>
         </section>
         """
-
+        
     def _render_positions_section(
         self,
         positions: List[Dict[str, Any]],
