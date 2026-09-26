@@ -262,17 +262,60 @@ class DailyReportService:
                     recs_raw = rec_res.get("recommendations", [])
 
                     acc_rec_items = []
+
                     for r in recs_raw:
-                        shares = int(r.recommended_buy // r.current_price) if (r.current_price > 0 and not already_inv) else 0
-                        amt = r.recommended_buy if not already_inv else 0
+                        available_amount = (
+                            float(r.recommended_buy or 0)
+                            if not already_inv
+                            else 0.0
+                        )
+
+                        available_shares = (
+                            int(
+                                available_amount
+                                // float(r.current_price)
+                            )
+                            if (
+                                float(r.current_price or 0) > 0
+                                and available_amount > 0
+                            )
+                            else 0
+                        )
+
+                        executable_amount = (
+                            available_shares
+                            * float(r.current_price or 0)
+                        )
+
                         acc_rec_items.append({
                             "ticker": r.ticker,
                             "name": r.name,
-                            "recommended_shares": shares,
-                            "recommended_amount": amt,
+
+                            # 정량 엔진이 계산한 값은
+                            # '매수 권고'가 아니라
+                            # 현재 규칙상 사용할 수 있는 예산입니다.
+                            "available_buy_budget":
+                                available_amount,
+
+                            "available_buy_shares":
+                                available_shares,
+
+                            "executable_buy_amount":
+                                executable_amount,
+
+                            # 기존 HTML/코드와의 호환성을 위해
+                            # 당분간 기존 필드도 유지합니다.
+                            "recommended_shares":
+                                available_shares,
+
+                            "recommended_amount":
+                                available_amount,
+
                             "reason": r.reason,
-                            "target_weight": r.target_weight,
-                            "current_weight": r.current_weight,
+                            "target_weight":
+                                r.target_weight,
+                            "current_weight":
+                                r.current_weight,
                         })
 
                     account_recommendations.append({
@@ -280,13 +323,41 @@ class DailyReportService:
                         "account_name": acc.account_name,
                         "broker": acc.broker,
                         "d_day": d_day,
-                        "next_buy_date": next_dt.strftime("%Y-%m-%d") if next_dt else "",
+                        "next_buy_date": (
+                            next_dt.strftime("%Y-%m-%d")
+                            if next_dt
+                            else ""
+                        ),
                         "cycle_desc": c_desc or desc,
-                        "already_invested_this_month": already_inv,
-                        "total_recommended_amount": tot_rec if not already_inv else 0,
+
+                        # 이 값은 이제 단순히
+                        # '현재 단계에서 추가 행동이 없는 상태'를
+                        # 나타내는 호환용 값입니다.
+                        "already_invested_this_month":
+                            already_inv,
+
+                        # 새 의미:
+                        # 시스템 규칙상 현재 사용할 수 있는
+                        # 최대 매수 예산.
+                        "total_available_buy_budget": (
+                            float(tot_rec or 0)
+                            if not already_inv
+                            else 0.0
+                        ),
+
+                        # 기존 HTML 호환용.
+                        "total_recommended_amount": (
+                            float(tot_rec or 0)
+                            if not already_inv
+                            else 0.0
+                        ),
+
+                        # Gemini가 이것을 자동 매수 명령으로
+                        # 해석하지 않도록 의미를 명시합니다.
+                        "budget_is_not_buy_order": True,
+
                         "items": acc_rec_items,
                     })
-
                 except Exception as e:
                     logger.debug(f"계좌 [{acc.account_name}] 개별 요약, 종목 및 추천 집계 생략: {e}")
 
@@ -310,28 +381,100 @@ class DailyReportService:
                 next_dt_u, d_day_u, desc_u = None, None, "수시 매수"
 
             unified_rec_items = []
+
             for r in recs_raw_u:
-                shares = int(r.recommended_buy // r.current_price) if (r.current_price > 0 and not already_inv_u) else 0
-                amt = r.recommended_buy if not already_inv_u else 0
+                available_amount = (
+                    float(r.recommended_buy or 0)
+                    if not already_inv_u
+                    else 0.0
+                )
+
+                available_shares = (
+                    int(
+                        available_amount
+                        // float(r.current_price)
+                    )
+                    if (
+                        float(r.current_price or 0) > 0
+                        and available_amount > 0
+                    )
+                    else 0
+                )
+
+                executable_amount = (
+                    available_shares
+                    * float(r.current_price or 0)
+                )
+
                 unified_rec_items.append({
                     "ticker": r.ticker,
                     "name": r.name,
-                    "recommended_shares": shares,
-                    "recommended_amount": amt,
+
+                    "available_buy_budget":
+                        available_amount,
+
+                    "available_buy_shares":
+                        available_shares,
+
+                    "executable_buy_amount":
+                        executable_amount,
+
+                    # 기존 HTML 호환용
+                    "recommended_shares":
+                        available_shares,
+
+                    "recommended_amount":
+                        available_amount,
+
                     "reason": r.reason,
-                    "target_weight": r.target_weight,
-                    "current_weight": r.current_weight,
+                    "target_weight":
+                        r.target_weight,
+                    "current_weight":
+                        r.current_weight,
                 })
+
+            total_available_buy_budget = (
+                float(
+                    rec_sum_u.get(
+                        "total_recommended_buy",
+                        0,
+                    )
+                    or 0
+                )
+                if not already_inv_u
+                else 0.0
+            )
 
             recommendations = {
                 "d_day": d_day_u,
-                "next_buy_date": next_dt_u.strftime("%Y-%m-%d") if next_dt_u else "",
-                "cycle_desc": rec_sum_u.get("cycle_desc", desc_u),
-                "already_invested_this_month": already_inv_u,
-                "total_recommended_amount": rec_sum_u.get("total_recommended_buy", 0) if not already_inv_u else 0,
+
+                "next_buy_date": (
+                    next_dt_u.strftime("%Y-%m-%d")
+                    if next_dt_u
+                    else ""
+                ),
+
+                "cycle_desc":
+                    rec_sum_u.get(
+                        "cycle_desc",
+                        desc_u,
+                    ),
+
+                "already_invested_this_month":
+                    already_inv_u,
+
+                # 새 의미
+                "total_available_buy_budget":
+                    total_available_buy_budget,
+
+                # 기존 HTML 호환용
+                "total_recommended_amount":
+                    total_available_buy_budget,
+
+                "budget_is_not_buy_order": True,
+
                 "items": unified_rec_items,
             }
-
             # 포트폴리오 요약 데이터 딕셔너리화
             summary = {
                 "total_eval": getattr(summary_raw, "total_current_value", 0),
