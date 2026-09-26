@@ -839,17 +839,34 @@ class DailyReportService:
         sign = "+" if total_pl > 0 else ""
 
         d_day = recommendations.get("d_day", None)
-        already_invested = recommendations.get("already_invested_this_month", False)
-        rec_amt = recommendations.get("total_recommended_amount", 0)
 
-        if already_invested:
-            guide_text = "이번 주기 투자 완료 (비중 안정적 유지 중)"
-        elif d_day == 0:
-            guide_text = f"🚨 오늘 매수 D-Day! (추천: {rec_amt:,.0f}원)"
+        available_budget = float(
+            recommendations.get(
+                "total_available_buy_budget",
+                0,
+            ) or 0
+        )
+        
+        if d_day == 0:
+            guide_text = (
+                f"오늘 정기 매수 기준일 "
+                f"(매수 가능 예산 최대 {available_budget:,.0f}원)"
+            )
         elif d_day is not None:
-            guide_text = f"매수 D-{d_day}일 남음 (예정: {recommendations.get('next_buy_date', '')})"
+            guide_text = (
+                f"정기 매수 기준일까지 D-{d_day} "
+                f"({recommendations.get('next_buy_date', '')})"
+            )
         else:
-            guide_text = f"추천 매수액 {rec_amt:,.0f}원"
+            guide_text = (
+                f"매수 가능 예산 최대 "
+                f"{available_budget:,.0f}원"
+            )
+
+        already_invested = recommendations.get(
+            "already_invested_this_month",
+            False,
+        )
 
         lines = [
             f"🌅 [포트폴리오 모닝 리포트] {date_str} ({weekday_kr})",
@@ -956,34 +973,137 @@ class DailyReportService:
                     break
                 lines.append(line)
 
-        # 추천 종목 (다중 계좌 시 계좌별 그룹화 표출)
+        # 매수 가능 범위
+        # 정량 엔진은 매수 여부를 결정하지 않고,
+        # 현재 계좌 규칙상 사용할 수 있는 최대 범위만 표시합니다.
         if account_recommendations and len(account_recommendations) > 1:
-            has_rec = False
-            rec_blocks = []
-            for ar in account_recommendations:
-                ar_name = ar.get("account_name", "")
-                ar_items = [it for it in ar.get("items", []) if it.get("recommended_shares", 0) > 0]
-                if ar_items:
-                    has_rec = True
-                    rec_blocks.append(f"[{ar_name}]")
-                    for it in ar_items:
-                        rec_blocks.append(f"• {it.get('name')} (+{it.get('recommended_shares'):,}주)")
-            if has_rec:
-                lines.append("\n🎯 계좌별 추천 매수:")
-                lines.extend(rec_blocks)
-            else:
-                lines.append("\n🎯 이번 주기 추천 매수: 전 계좌 비중 균형 유지 중")
-        else:
-            items = recommendations.get("items", [])
-            rec_items = [it for it in items if it.get("recommended_shares", 0) > 0]
-            if rec_items:
-                lines.append(f"\n🎯 이번 주기 추천 매수 ({len(rec_items)}종목):")
-                for it in rec_items:
-                    s = it.get("recommended_shares", 0)
-                    lines.append(f"• {it.get('name')} (+{s:,}주)")
-            elif not already_invested:
-                lines.append("\n🎯 이번 주기 추천 매수: 전 등록 종목 비중 균형 유지 중")
+            capacity_blocks = []
 
+            for ar in account_recommendations:
+                ar_name = ar.get(
+                    "account_name",
+                    "",
+                )
+
+                ar_budget = float(
+                    ar.get(
+                        "total_available_buy_budget",
+                        0,
+                    ) or 0
+                )
+
+                ar_items = [
+                    it
+                    for it in ar.get("items", [])
+                    if (
+                        float(
+                            it.get(
+                                "available_buy_budget",
+                                0,
+                            ) or 0
+                        ) > 0
+                    )
+                ]
+
+                if ar_budget <= 0 and not ar_items:
+                    continue
+
+                capacity_blocks.append(
+                    f"[{ar_name}] 최대 {ar_budget:,.0f}원"
+                )
+
+                for it in ar_items:
+                    shares = int(
+                        it.get(
+                            "available_buy_shares",
+                            0,
+                        ) or 0
+                    )
+
+                    executable_amount = float(
+                        it.get(
+                            "executable_buy_amount",
+                            0,
+                        ) or 0
+                    )
+
+                    if shares > 0:
+                        capacity_blocks.append(
+                            f"• {it.get('name')}: "
+                            f"최대 {shares:,}주 "
+                            f"({executable_amount:,.0f}원)"
+                        )
+
+            if capacity_blocks:
+                lines.append(
+                    "\n📐 계좌별 매수 가능 범위:"
+                )
+                lines.extend(
+                    capacity_blocks
+                )
+
+        else:
+            available_budget = float(
+                recommendations.get(
+                    "total_available_buy_budget",
+                    0,
+                ) or 0
+            )
+
+            items = recommendations.get(
+                "items",
+                [],
+            )
+
+            capacity_items = [
+                it
+                for it in items
+                if (
+                    float(
+                        it.get(
+                            "available_buy_budget",
+                            0,
+                        ) or 0
+                    ) > 0
+                )
+            ]
+
+            if (
+                available_budget > 0
+                or capacity_items
+            ):
+                lines.append(
+                    f"\n📐 매수 가능 범위: "
+                    f"최대 {available_budget:,.0f}원"
+                )
+
+                for it in capacity_items:
+                    shares = int(
+                        it.get(
+                            "available_buy_shares",
+                            0,
+                        ) or 0
+                    )
+
+                    executable_amount = float(
+                        it.get(
+                            "executable_buy_amount",
+                            0,
+                        ) or 0
+                    )
+
+                    if shares > 0:
+                        lines.append(
+                            f"• {it.get('name')}: "
+                            f"최대 {shares:,}주 "
+                            f"({executable_amount:,.0f}원)"
+                        )
+
+                lines.append(
+                    "• 위 금액은 자동 매수 지시가 아닌 "
+                    "현재 규칙상 사용 가능한 최대 범위"
+                )
+                
         # 뉴스 1건 (AI 시황이 없을 때 주요 시황으로 표출)
         if (not gemini_analysis or not gemini_analysis.get("success")) and news_items:
             first_news = news_items[0].get("title", "")
