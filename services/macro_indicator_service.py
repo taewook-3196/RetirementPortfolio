@@ -372,12 +372,37 @@ class MacroIndicatorService:
                 decimals,
             )
 
-            sign = (
-                "+"
-                if change_pct > 0
-                else ""
-            )
-
+            # 일반 시장지표는 등락률(%)로 표시하고,
+            # 미국 10년물 국채금리는 전일 대비 bp로 표시합니다.
+            if key == "us10y_yield":
+                previous_yield = prev_close
+            
+                yield_change_bp = (
+                    current_price - previous_yield
+                ) * 100.0
+            
+                if yield_change_bp > 0:
+                    change_str = (
+                        f"+{yield_change_bp:.1f}bp"
+                    )
+                elif yield_change_bp < 0:
+                    change_str = (
+                        f"{yield_change_bp:.1f}bp"
+                    )
+                else:
+                    change_str = "0.0bp"
+            
+            else:
+                sign = (
+                    "+"
+                    if change_pct > 0
+                    else ""
+                )
+            
+                change_str = (
+                    f"{sign}{change_pct:.2f}%"
+                )
+            
             return {
                 "key": key,
                 "name": name,
@@ -388,9 +413,7 @@ class MacroIndicatorService:
                     change_pct,
                     2,
                 ),
-                "change_str": (
-                    f"{sign}{change_pct:.2f}%"
-                ),
+                "change_str": change_str,
                 "trend": trend,
                 "trend_badge": trend_badge,
                 "5d_change_pct": round(
