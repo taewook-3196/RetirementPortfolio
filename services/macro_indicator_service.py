@@ -207,6 +207,7 @@ class MacroIndicatorService:
             "trend": "UNKNOWN",
             "trend_badge": "데이터 없음",
             "5d_change_pct": 0.0,
+            "5d_change_bp": None,
             "unit": unit,
             "success": False,
         }
@@ -356,6 +357,93 @@ class MacroIndicatorService:
                         * 100.0
                     )
 
+            price_str = self._format_price(
+                current_price,
+                unit,
+                decimals,
+            )
+
+            # ------------------------------------------------
+            # 미국 10년물 국채금리
+            # ------------------------------------------------
+            # 금리의 움직임은 상대 변화율(%)보다
+            # basis point(bp)로 표시하는 것이 명확합니다.
+            #
+            # 예:
+            # 5.16% -> 5.18%
+            # = +0.02%p
+            # = +2bp
+            # ------------------------------------------------
+
+            if key == "us10y_yield":
+
+                daily_change_bp = (
+                    current_price
+                    - prev_close
+                ) * 100.0
+
+                if daily_change_bp > 0:
+                    change_str = (
+                        f"+{daily_change_bp:.1f}bp"
+                    )
+                elif daily_change_bp < 0:
+                    change_str = (
+                        f"{daily_change_bp:.1f}bp"
+                    )
+                else:
+                    change_str = "0.0bp"
+
+                (
+                    trend,
+                    trend_badge,
+                    five_d_bp,
+                ) = self._calculate_yield_trend(
+                    current_price,
+                    closes,
+                    daily_change_bp,
+                )
+
+                return {
+                    "key": key,
+                    "name": name,
+                    "symbol": sym,
+                    "price": current_price,
+                    "price_str": price_str,
+
+                    # 호환성을 위해 기존 change_pct는
+                    # Yahoo의 상대 변화율 값을 유지합니다.
+                    # 실제 리포트 표시는 change_str의 bp를 사용합니다.
+                    "change_pct": round(
+                        change_pct,
+                        2,
+                    ),
+
+                    "change_str": change_str,
+                    "change_bp": round(
+                        daily_change_bp,
+                        1,
+                    ),
+
+                    "trend": trend,
+                    "trend_badge": trend_badge,
+
+                    # 기존 필드와의 호환성을 위해 유지.
+                    # 10년물의 실제 5일 변화는
+                    # 5d_change_bp를 사용합니다.
+                    "5d_change_pct": 0.0,
+                    "5d_change_bp": round(
+                        five_d_bp,
+                        1,
+                    ),
+
+                    "unit": unit,
+                    "success": True,
+                }
+
+            # ------------------------------------------------
+            # 일반 시장지표
+            # ------------------------------------------------
+
             (
                 trend,
                 trend_badge,
@@ -366,43 +454,16 @@ class MacroIndicatorService:
                 change_pct,
             )
 
-            price_str = self._format_price(
-                current_price,
-                unit,
-                decimals,
+            sign = (
+                "+"
+                if change_pct > 0
+                else ""
             )
 
-            # 일반 시장지표는 등락률(%)로 표시하고,
-            # 미국 10년물 국채금리는 전일 대비 bp로 표시합니다.
-            if key == "us10y_yield":
-                previous_yield = prev_close
-            
-                yield_change_bp = (
-                    current_price - previous_yield
-                ) * 100.0
-            
-                if yield_change_bp > 0:
-                    change_str = (
-                        f"+{yield_change_bp:.1f}bp"
-                    )
-                elif yield_change_bp < 0:
-                    change_str = (
-                        f"{yield_change_bp:.1f}bp"
-                    )
-                else:
-                    change_str = "0.0bp"
-            
-            else:
-                sign = (
-                    "+"
-                    if change_pct > 0
-                    else ""
-                )
-            
-                change_str = (
-                    f"{sign}{change_pct:.2f}%"
-                )
-            
+            change_str = (
+                f"{sign}{change_pct:.2f}%"
+            )
+
             return {
                 "key": key,
                 "name": name,
@@ -420,6 +481,7 @@ class MacroIndicatorService:
                     five_d_pct,
                     2,
                 ),
+                "5d_change_bp": None,
                 "unit": unit,
                 "success": True,
             }
@@ -1281,6 +1343,99 @@ class MacroIndicatorService:
             ),
             five_d_pct,
         )
+
+    def _calculate_yield_trend(
+        self,
+        current_yield: float,
+        closes: List[float],
+        daily_change_bp: float,
+    ) -> tuple[str, str, float]:
+        """
+        미국 국채금리 전용 추세 계산.
+
+        주가지수처럼 상대 변화율(%)을 사용하지 않고
+        금리 수준의 차이를 basis point(bp)로 계산합니다.
+        """
+
+        # 5일 데이터가 충분하지 않은 경우
+        # 당일 변화만으로 방향을 판단합니다.
+        if (
+            not closes
+            or len(closes) < 2
+        ):
+            if daily_change_bp >= 5.0:
+                return (
+                    "UP",
+                    (
+                        "▲ 금리 상승 "
+                        f"(당일 +{daily_change_bp:.1f}bp)"
+                    ),
+                    daily_change_bp,
+                )
+
+            if daily_change_bp <= -5.0:
+                return (
+                    "DOWN",
+                    (
+                        "▼ 금리 하락 "
+                        f"(당일 {daily_change_bp:.1f}bp)"
+                    ),
+                    daily_change_bp,
+                )
+
+            return (
+                "FLAT",
+                (
+                    "━ 금리 보합 "
+                    f"(당일 {daily_change_bp:+.1f}bp)"
+                ),
+                daily_change_bp,
+            )
+
+        first_yield = closes[0]
+
+        # Yahoo의 마지막 close가 현재가와 사실상 동일하면
+        # 그대로 사용합니다.
+        # 장중 데이터 등으로 차이가 있을 경우에는
+        # 현재 regularMarketPrice를 최신값으로 사용합니다.
+        last_yield = current_yield
+
+        five_d_bp = (
+            last_yield
+            - first_yield
+        ) * 100.0
+
+        # 5거래일 기준 ±10bp 이상이면
+        # 의미 있는 금리 방향성으로 판단합니다.
+        if five_d_bp >= 10.0:
+            return (
+                "UP",
+                (
+                    "▲ 금리 상승 "
+                    f"(5일 +{five_d_bp:.1f}bp)"
+                ),
+                five_d_bp,
+            )
+
+        if five_d_bp <= -10.0:
+            return (
+                "DOWN",
+                (
+                    "▼ 금리 하락 "
+                    f"(5일 {five_d_bp:.1f}bp)"
+                ),
+                five_d_bp,
+            )
+
+        return (
+            "FLAT",
+            (
+                "━ 금리 보합 "
+                f"(5일 {five_d_bp:+.1f}bp)"
+            ),
+            five_d_bp,
+        )
+      
 
     # ========================================================
     # 가격 포맷
