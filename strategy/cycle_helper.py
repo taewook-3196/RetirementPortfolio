@@ -1161,3 +1161,216 @@ def check_cycle_investment_history(
         ),
         period_name,
     )
+
+def get_cycle_buy_amount(
+    transactions: list,
+    cycle_type: str,
+    cycle_detail: str = "",
+    base_date: Optional[date] = None,
+) -> Tuple[
+    float,
+    Optional[str],
+    str,
+]:
+    """
+    현재 투자 주기 안에서 실제 BUY 거래금액 합계를 계산합니다.
+
+    거래금액 계산:
+        quantity * price + fee + tax
+
+    반환:
+        (
+            total_buy_amount,
+            latest_buy_date_str,
+            period_name,
+        )
+    """
+    (
+        start_date,
+        end_date,
+        period_name,
+    ) = get_current_cycle_period(
+        cycle_type,
+        cycle_detail,
+        base_date,
+    )
+
+    if (
+        start_date is None
+        or end_date is None
+    ):
+        return (
+            0.0,
+            None,
+            period_name,
+        )
+
+    total_buy_amount = 0.0
+    latest_buy_date: Optional[date] = None
+
+    for transaction in (
+        transactions or []
+    ):
+        if isinstance(
+            transaction,
+            dict,
+        ):
+            transaction_type = (
+                transaction.get(
+                    "transaction_type",
+                    transaction.get(
+                        "type",
+                        "",
+                    ),
+                )
+            )
+
+            transaction_date_value = (
+                transaction.get(
+                    "transaction_date",
+                    transaction.get(
+                        "date",
+                        None,
+                    ),
+                )
+            )
+
+            quantity = transaction.get(
+                "quantity",
+                0,
+            )
+
+            price = transaction.get(
+                "price",
+                0,
+            )
+
+            fee = transaction.get(
+                "fee",
+                0,
+            )
+
+            tax = transaction.get(
+                "tax",
+                0,
+            )
+
+        else:
+            transaction_type = getattr(
+                transaction,
+                "transaction_type",
+                "",
+            )
+
+            transaction_date_value = getattr(
+                transaction,
+                "transaction_date",
+                None,
+            )
+
+            quantity = getattr(
+                transaction,
+                "quantity",
+                0,
+            )
+
+            price = getattr(
+                transaction,
+                "price",
+                0,
+            )
+
+            fee = getattr(
+                transaction,
+                "fee",
+                0,
+            )
+
+            tax = getattr(
+                transaction,
+                "tax",
+                0,
+            )
+
+        tx_type = str(
+            transaction_type or ""
+        ).strip().upper()
+
+        if tx_type != "BUY":
+            continue
+
+        transaction_date = (
+            _parse_transaction_date(
+                transaction_date_value
+            )
+        )
+
+        if transaction_date is None:
+            continue
+
+        if not (
+            start_date
+            <= transaction_date
+            <= end_date
+        ):
+            continue
+
+        quantity_value = max(
+            0.0,
+            float(
+                quantity or 0
+            ),
+        )
+
+        price_value = max(
+            0.0,
+            float(
+                price or 0
+            ),
+        )
+
+        fee_value = max(
+            0.0,
+            float(
+                fee or 0
+            ),
+        )
+
+        tax_value = max(
+            0.0,
+            float(
+                tax or 0
+            ),
+        )
+
+        buy_amount = (
+            quantity_value
+            * price_value
+            + fee_value
+            + tax_value
+        )
+
+        total_buy_amount += buy_amount
+
+        if (
+            latest_buy_date is None
+            or transaction_date
+            > latest_buy_date
+        ):
+            latest_buy_date = (
+                transaction_date
+            )
+
+    latest_buy_date_str = (
+        latest_buy_date.strftime(
+            "%Y-%m-%d"
+        )
+        if latest_buy_date
+        else None
+    )
+
+    return (
+        total_buy_amount,
+        latest_buy_date_str,
+        period_name,
+    )
