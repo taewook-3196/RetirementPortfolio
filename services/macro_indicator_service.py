@@ -498,13 +498,36 @@ class MacroIndicatorService:
             },
         )
 
-        with urllib.request.urlopen(
-            req,
-            context=self.ssl_context,
-            timeout=8,
-        ) as resp:
-            text = resp.read().decode(
-                "utf-8-sig"
+        last_error = None
+
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(
+                    req,
+                    context=self.ssl_context,
+                    timeout=30,
+                ) as resp:
+                    text = resp.read().decode(
+                        "utf-8-sig"
+                    )
+        
+                last_error = None
+                break
+        
+            except Exception as e:
+                last_error = e
+        
+                logger.warning(
+                    "근원 PCE FRED 조회 실패 "
+                    "(%s/3회): %s",
+                    attempt + 1,
+                    e,
+                )
+        
+        if last_error is not None:
+            raise RuntimeError(
+                "FRED PCE 데이터를 3회 시도했으나 "
+                f"조회하지 못했습니다: {last_error}"
             )
 
         reader = csv.DictReader(
