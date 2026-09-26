@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Find BEA Core PCE table
+      - name: Inspect BEA NIPA table metadata
         env:
           BEA_API_KEY: ${{ secrets.BEA_API_KEY }}
         run: |
@@ -58,10 +58,11 @@ jobs:
 
           bea = result.get("BEAAPI", {})
 
-          if bea.get("Error"):
-              raise RuntimeError(
-                  f"BEA API ERROR: {bea['Error']}"
-              )
+          print("BEA ERROR:", bea.get("Error"))
+          print(
+              "RESULT KEYS:",
+              list(bea.get("Results", {}).keys()),
+          )
 
           values = (
               bea
@@ -69,52 +70,38 @@ jobs:
               .get("ParamValue", [])
           )
 
-          print("BEA TABLE COUNT:", len(values))
-          print("=== PCE / PRICE CANDIDATES ===")
+          print("PARAM VALUE COUNT:", len(values))
 
-          matches = []
+          print("\n=== FIRST 5 RAW VALUES ===")
+
+          for item in values[:5]:
+              print(json.dumps(
+                  item,
+                  ensure_ascii=False,
+                  indent=2,
+              ))
+
+          print("\n=== SEARCH 2.8.4 ===")
 
           for item in values:
-              description = str(
-                  item.get(
-                      "Description",
-                      "",
-                  )
+              text = json.dumps(
+                  item,
+                  ensure_ascii=False,
               )
-
-              table_name = str(
-                  item.get(
-                      "TableName",
-                      item.get("Key", ""),
-                  )
-              )
-
-              text = (
-                  table_name
-                  + " "
-                  + description
-              ).lower()
 
               if (
-                  "personal consumption" in text
-                  or "pce" in text
+                  "2.8.4" in text
+                  or "T20804" in text
+                  or "20804" in text
               ):
-                  matches.append(
-                      (
-                          table_name,
-                          description,
-                      )
-                  )
-
-          print("MATCHES:", len(matches))
-
-          for table_name, description in matches:
-              print(
-                  table_name,
-                  "|",
-                  description,
-              )
+                  print(json.dumps(
+                      item,
+                      ensure_ascii=False,
+                      indent=2,
+                  ))
           PY
+      
+      
       - name: Test macro indicators
         run: |
           python - <<'PY'
