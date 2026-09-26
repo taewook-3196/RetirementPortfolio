@@ -849,12 +849,12 @@ class DailyReportService:
         
         if d_day == 0:
             guide_text = (
-                f"오늘 정기 매수 기준일 "
+                f"오늘 정기 매수 검토 기준일 "
                 f"(매수 가능 예산 최대 {available_budget:,.0f}원)"
             )
         elif d_day is not None:
             guide_text = (
-                f"정기 매수 기준일까지 D-{d_day} "
+                f"정기 매수 검토 기준일까지 D-{d_day} "
                 f"({recommendations.get('next_buy_date', '')})"
             )
         else:
@@ -912,14 +912,85 @@ class DailyReportService:
             except Exception as e:
                 logger.debug(f"카카오 매크로 라인 생성 생략: {e}")
 
-        # Gemini AI 한 줄 시황이 있을 경우 최우선 하이라이트 표시 (투자 성향 배지 포함)
-        if gemini_analysis and gemini_analysis.get("success") and gemini_analysis.get("one_line_summary"):
-            ai_take = gemini_analysis.get("one_line_summary").strip()
-            stance_badge = gemini_analysis.get("stance_badge")
-            if stance_badge:
-                lines.append(f"\n• 🤖 AI 시황 [{stance_badge}]: {ai_take}")
-            else:
-                lines.append(f"\n• 🤖 AI 시황: {ai_take}")
+        # Gemini AI 행동 판단 + 한 줄 요약
+        if (
+            gemini_analysis
+            and gemini_analysis.get("success")
+        ):
+            action = str(
+                gemini_analysis.get(
+                    "action",
+                    "HOLD",
+                )
+                or "HOLD"
+            ).strip().upper()
+        
+            action_label = str(
+                gemini_analysis.get(
+                    "action_label",
+                    "",
+                )
+                or ""
+            ).strip()
+        
+            action_info = {
+                "BUY": (
+                    "매수",
+                    "현재 매수 가능 범위 안에서 매수를 검토하는 판단",
+                ),
+                "PARTIAL": (
+                    "일부 매수",
+                    "현재 매수 가능 범위의 일부만 사용하는 판단",
+                ),
+                "WAIT": (
+                    "대기",
+                    "매수 가능 예산을 지금 사용하지 않고 기다리는 판단",
+                ),
+                "HOLD": (
+                    "기존 계획 유지",
+                    "별도 행동 없이 현재 투자 계획을 유지하는 판단",
+                ),
+            }
+        
+            default_label, action_desc = (
+                action_info.get(
+                    action,
+                    action_info["HOLD"],
+                )
+            )
+        
+            if not action_label:
+                action_label = default_label
+        
+            lines.append(
+                f"\n🤖 AI 행동 판단: {action_label}"
+            )
+            lines.append(
+                f"• {action_desc}"
+            )
+        
+            ai_take = str(
+                gemini_analysis.get(
+                    "one_line_summary",
+                    "",
+                )
+                or ""
+            ).strip()
+        
+            stance_badge = gemini_analysis.get(
+                "stance_badge"
+            )
+        
+            if ai_take:
+                if stance_badge:
+                    lines.append(
+                        f"• AI 요약 [{stance_badge}]: "
+                        f"{ai_take}"
+                    )
+                else:
+                    lines.append(
+                        f"• AI 요약: {ai_take}"
+                    )
 
         # 등록 및 보유 종목 세부 현황 (다중 계좌 시 계좌별 그룹화 표출)
         if account_groups and len(account_groups) > 1:
