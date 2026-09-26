@@ -2,7 +2,7 @@
 strategy/cycle_helper.py
 
 개인별/계좌별 매수 투자 주기 및
-다음 매수 예정일(D-day) 계산 유틸리티.
+다음 정기 매수 검토 기준일(D-day) 계산 유틸리티.
 
 지원 주기:
 - none: 주기 없음
@@ -198,7 +198,7 @@ def _format_status(
     if diff == 0:
         return (
             0,
-            "오늘 매수일",
+            "오늘 정기 매수 검토 기준일",
         )
 
     day_name = WEEKDAY_NAMES_MAP.get(
@@ -365,7 +365,7 @@ def calculate_next_investment_date(
 ]:
     """
     주기 유형 및 세부 설정을 바탕으로
-    다음 매수 예정일, D-day, 설명을 반환합니다.
+    다음 정기 매수 검토 기준일, D-day, 설명을 반환합니다.
 
     반환:
         (
@@ -375,8 +375,8 @@ def calculate_next_investment_date(
         )
 
     days_remaining:
-    - 0: 오늘 매수일
-    - 양수: 예정일까지 남은 일수
+    - 0: 오늘 정기 매수 검토 기준일
+    - 양수: 다음 정기 매수 검토 기준일까지 남은 일수
     - None: 주기 없음
     """
     today = (
