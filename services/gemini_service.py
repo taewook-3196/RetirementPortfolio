@@ -1389,48 +1389,132 @@ JSON 앞뒤에 설명이나 Markdown 코드블록을 붙이지 마세요.
                 except Exception:
                     pass
 
-        # 3. 정규식 기반 개별 필드 추출 (따옴표 오류나 오탈자("one_line"summary 등) 발생 시에도 완벽 복구)
+        # 3. 정규식 기반 개별 필드 추출
+        # JSON 문법이 일부 깨진 경우에도
+        # action / one_line_summary / macro_analysis /
+        # strategy_advice를 최대한 복구합니다.
+
+        action = "HOLD"
         one_line = ""
         macro_text = ""
         strategy_text = ""
 
+        # action 복구
+        action_match = re.search(
+            r'["\']?action["\']?\s*:\s*["\']?'
+            r'(BUY|PARTIAL|WAIT|HOLD)'
+            r'["\']?',
+            clean_text,
+            re.IGNORECASE,
+        )
+
+        if action_match:
+            action = (
+                action_match
+                .group(1)
+                .strip()
+                .upper()
+            )
+
         m1 = re.search(
-            r'["\']?one_line[_\"]?summary["\']?\s*:\s*["\']?(.*?)(?:["\']?\s*,\s*["\']?macro_analysis|\n\s*["\']?macro_analysis|\Z)',
+            r'["\']?one_line[_\"]?summary["\']?\s*:\s*["\']?'
+            r'(.*?)'
+            r'(?:["\']?\s*,\s*["\']?macro_analysis|'
+            r'\n\s*["\']?macro_analysis|\Z)',
             clean_text,
             re.DOTALL | re.IGNORECASE,
         )
+
         if m1:
-            one_line = m1.group(1).strip().strip('"\' ,\r\n')
+            one_line = (
+                m1.group(1)
+                .strip()
+                .strip('"\' ,\r\n')
+            )
 
         m2 = re.search(
-            r'["\']?macro_analysis["\']?\s*:\s*["\']?(.*?)(?:["\']?\s*,\s*["\']?strategy_advice|\n\s*["\']?strategy_advice|\Z)',
+            r'["\']?macro_analysis["\']?\s*:\s*["\']?'
+            r'(.*?)'
+            r'(?:["\']?\s*,\s*["\']?strategy_advice|'
+            r'\n\s*["\']?strategy_advice|\Z)',
             clean_text,
             re.DOTALL | re.IGNORECASE,
         )
+
         if m2:
-            macro_text = m2.group(1).strip().strip('"\' ,\r\n')
+            macro_text = (
+                m2.group(1)
+                .strip()
+                .strip('"\' ,\r\n')
+            )
 
         m3 = re.search(
-            r'["\']?strategy_advice["\']?\s*:\s*["\']?(.*?)(?:["\']?\s*\}|\n\s*\}|\Z)',
+            r'["\']?strategy_advice["\']?\s*:\s*["\']?'
+            r'(.*?)'
+            r'(?:["\']?\s*\}|\n\s*\}|\Z)',
             clean_text,
             re.DOTALL | re.IGNORECASE,
         )
-        if m3:
-            strategy_text = m3.group(1).strip().strip('"\' ,}\r\n')
 
-        stance_info = INVESTMENT_STANCE_PROFILES.get(self.investment_stance, INVESTMENT_STANCE_PROFILES["balanced"])
-        fallback_adv = stance_info.get("fallback_advice", "원칙에 기반한 정기 분할 매수 전략을 유지하시기 바랍니다.")
+        if m3:
+            strategy_text = (
+                m3.group(1)
+                .strip()
+                .strip('"\' ,}\r\n')
+            )
+
+        stance_info = (
+            INVESTMENT_STANCE_PROFILES.get(
+                self.investment_stance,
+                INVESTMENT_STANCE_PROFILES[
+                    "balanced"
+                ],
+            )
+        )
+
+        fallback_adv = stance_info.get(
+            "fallback_advice",
+            (
+                "원칙에 기반한 정기 분할 매수 "
+                "전략을 유지하시기 바랍니다."
+            ),
+        )
 
         if macro_text:
-            macro_text = _sanitize_field(macro_text.replace('\\"', '"').replace('\\n', '\n'))
-            strategy_text = _sanitize_field(strategy_text.replace('\\"', '"').replace('\\n', '\n'))
-            one_line = _sanitize_field(one_line.replace('\\"', '"'))
-            return {
-                "one_line_summary": one_line or "📈 글로벌 매크로 지표 분석이 반영되었습니다.",
-                "macro_analysis": macro_text,
-                "strategy_advice": strategy_text or fallback_adv,
-            }
+            macro_text = _sanitize_field(
+                macro_text
+                .replace('\\"', '"')
+                .replace('\\n', '\n')
+            )
 
+            strategy_text = _sanitize_field(
+                strategy_text
+                .replace('\\"', '"')
+                .replace('\\n', '\n')
+            )
+
+            one_line = _sanitize_field(
+                one_line.replace(
+                    '\\"',
+                    '"',
+                )
+            )
+
+            return {
+                "action": action,
+                "one_line_summary": (
+                    one_line
+                    or
+                    "📈 글로벌 매크로 지표 분석이 반영되었습니다."
+                ),
+                "macro_analysis":
+                    macro_text,
+                "strategy_advice": (
+                    strategy_text
+                    or fallback_adv
+                ),
+            }
+            
         # 4. 최종 Fallback: JSON 키나 마크다운 기호가 노출되지 않도록 완전히 정제된 자연어 텍스트 추출 (500자 잘림 방지)
         sanitized = raw_text
         for tag in ["```json", "```JSON", "'''json", "'''JSON", "```", "'''"]:
@@ -1444,7 +1528,15 @@ JSON 앞뒤에 설명이나 Markdown 코드블록을 붙이지 마세요.
         body_text = "\n".join(lines[1:]) if len(lines) > 1 else clean_prose
 
         return {
-            "one_line_summary": _sanitize_field(one_line) or _sanitize_field(first_line),
-            "macro_analysis": _sanitize_field(body_text or clean_prose),
-            "strategy_advice": fallback_adv,
+            "action": action,
+            "one_line_summary": (
+                _sanitize_field(one_line)
+                or _sanitize_field(first_line)
+            ),
+            "macro_analysis": _sanitize_field(
+                body_text
+                or clean_prose
+            ),
+            "strategy_advice":
+                fallback_adv,
         }
