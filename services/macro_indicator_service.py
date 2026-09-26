@@ -517,9 +517,10 @@ class MacroIndicatorService:
 
         today = datetime.date.today()
 
-        # 최신월 및 직전월의 YoY 계산을 위해
-        # 전년도와 금년 데이터를 함께 요청합니다.
+        # 연초에도 최신월/직전월의 YoY 계산이 가능하도록
+        # 2년 전부터 금년까지 3개 연도를 요청합니다.
         years = (
+            f"{today.year - 2},"
             f"{today.year - 1},"
             f"{today.year}"
         )
