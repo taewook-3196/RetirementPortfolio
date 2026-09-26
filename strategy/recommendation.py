@@ -75,22 +75,20 @@ def _round_buy_amount(
     amount: float,
 ) -> float:
     """
-    추천 매수액을 1만원 단위로 반올림합니다.
+    계산된 매수 가능 예산을 반환합니다.
+
+    중요:
+    - 매수 한도는 상한이므로 반올림으로 늘리지 않습니다.
+    - KRW/USD 등 계좌 통화와 관계없이 계산된 예산을 보존합니다.
+    - 실제 주문 가능한 주식 수와 주문금액은
+      현재가를 기준으로 별도로 계산합니다.
     """
-    amount = max(
+    return max(
         0.0,
         float(
             amount or 0
         ),
     )
-
-    return float(
-        round(
-            amount,
-            -4,
-        )
-    )
-
 
 def generate_recommendations(
     inputs: List[ETFRecommendationInput],
