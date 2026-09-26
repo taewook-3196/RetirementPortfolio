@@ -1214,6 +1214,11 @@ class GeminiService:
   대기를 제시한다면 사용 가능한 예산이 있더라도 왜 지금 사용하지 않는지가 드러나도록 설명하세요.
   strategy_advice의 실제 행동 내용은 반드시 action 필드와 일치해야 합니다.
 
+one_line_summary, macro_analysis, strategy_advice에는
+BUY, PARTIAL, WAIT, HOLD 같은 내부 action 코드명을 직접 표시하지 마세요.
+사용자에게 보여지는 설명에서는 반드시
+'매수', '일부 매수', '대기', '기존 계획 유지'와 같은 자연스러운 한국어 표현을 사용하세요.
+내부 코드값은 action 필드에만 출력하세요.
 제공되지 않은 시장 수치나 계좌 수치를 만들어내지 마세요.
 
 JSON 앞뒤에 설명이나 Markdown 코드블록을 붙이지 마세요.
