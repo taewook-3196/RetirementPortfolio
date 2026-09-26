@@ -506,8 +506,19 @@ def generate_recommendations(
     # ---------------------------------------------------------
     # 5. 추가매수 예산 배분
     #
-    # 낙폭 조건이 발생한 종목 가운데
-    # priority_score 기준으로 배분한다.
+    # 각 종목의 낙폭 단계와 비중 부족 정도를 함께 반영합니다.
+    #
+    # 예:
+    # - 종목 A 낙폭 -20% -> 추가매수 강도 100%
+    # - 종목 B 낙폭 -5%  -> 추가매수 강도 25%
+    #
+    # 단순히 전체 예산을 동일 단계로 나누지 않고,
+    # 각 종목의 낙폭 강도를 priority_score에 곱하여
+    # 배분 가중치를 계산합니다.
+    #
+    # 전체 추가매수 금액은 현재 포트폴리오에서
+    # 가장 높은 낙폭 단계가 허용하는 누적 한도를
+    # 초과하지 않습니다.
     # ---------------------------------------------------------
 
     additional_candidates = [
@@ -520,12 +531,71 @@ def generate_recommendations(
         )
     ]
 
-    total_additional_priority = sum(
-        max(
-            0.0,
-            float(
-                parsed["priority_score"]
-            ),
+    # 종목별 추가매수 배분 가중치
+    #
+    # priority_score:
+    #   비중 부족 + 낙폭을 반영한 기존 우선순위
+    #
+    # additional_ratio:
+    #   현재 낙폭 단계의 강도
+    #   0.25 / 0.50 / 0.75 / 1.00
+    #
+    # 둘을 함께 사용하여 낙폭이 더 큰 종목이
+    # 더 높은 추가매수 우선순위를 갖도록 합니다.
+    for parsed in parsed_items:
+
+        parsed[
+            "additional_weight"
+        ] = 0.0
+
+        if (
+            parsed["target_weight"] > 0
+            and parsed["weight_gap"] > 0
+            and parsed["additional_ratio"] > 0
+        ):
+
+            priority = max(
+                0.0,
+                float(
+                    parsed[
+                        "priority_score"
+                    ]
+                ),
+            )
+
+            gap = max(
+                0.0,
+                float(
+                    parsed[
+                        "weight_gap"
+                    ]
+                ),
+            )
+
+            # priority_score가 0인 특수 상황에서도
+            # 비중 부족분을 fallback 가중치로 사용
+            base_weight = (
+                priority
+                if priority > 0
+                else gap
+            )
+
+            parsed[
+                "additional_weight"
+            ] = (
+                base_weight
+                * float(
+                    parsed[
+                        "additional_ratio"
+                    ]
+                )
+            )
+
+    total_additional_weight = sum(
+        float(
+            parsed[
+                "additional_weight"
+            ]
         )
         for parsed in additional_candidates
     )
@@ -543,19 +613,20 @@ def generate_recommendations(
         ):
             continue
 
-        if total_additional_priority > 0:
+        if total_additional_weight > 0:
 
-            ratio = (
-                max(
-                    0.0,
-                    parsed["priority_score"],
+            allocation_ratio = (
+                float(
+                    parsed[
+                        "additional_weight"
+                    ]
                 )
-                / total_additional_priority
+                / total_additional_weight
             )
 
         else:
 
-            ratio = (
+            allocation_ratio = (
                 1.0
                 / len(
                     additional_candidates
@@ -566,13 +637,19 @@ def generate_recommendations(
             "additional_buy"
         ] = _round_buy_amount(
             remaining_additional_budget
-            * ratio
+            * allocation_ratio
         )
 
+    # ---------------------------------------------------------
+    # 반올림으로 추가매수 허용액을 초과하는 경우 보정
+    # ---------------------------------------------------------
+
     total_additional_buy = sum(
-        parsed[
-            "additional_buy"
-        ]
+        float(
+            parsed[
+                "additional_buy"
+            ]
+        )
         for parsed in parsed_items
     )
 
@@ -588,6 +665,14 @@ def generate_recommendations(
         )
 
         for parsed in parsed_items:
+
+            if (
+                parsed[
+                    "additional_buy"
+                ] <= 0
+            ):
+                continue
+
             parsed[
                 "additional_buy"
             ] = _round_buy_amount(
@@ -597,6 +682,49 @@ def generate_recommendations(
                 * scale
             )
 
+        # 1만원 단위 반올림 후에도 아주 작은 초과가
+        # 발생할 수 있으므로 마지막으로 다시 제한합니다.
+        rounded_total = sum(
+            float(
+                parsed[
+                    "additional_buy"
+                ]
+            )
+            for parsed in parsed_items
+        )
+
+        if (
+            rounded_total
+            > remaining_additional_budget
+        ):
+
+            excess = (
+                rounded_total
+                - remaining_additional_budget
+            )
+
+            # 추천금액이 가장 큰 종목에서
+            # 초과분을 제거합니다.
+            largest_item = max(
+                parsed_items,
+                key=lambda item: float(
+                    item[
+                        "additional_buy"
+                    ]
+                ),
+            )
+
+            largest_item[
+                "additional_buy"
+            ] = max(
+                0.0,
+                float(
+                    largest_item[
+                        "additional_buy"
+                    ]
+                )
+                - excess,
+            )
     # ---------------------------------------------------------
     # 6. 전체 투자 가능 원금 한도
     # ---------------------------------------------------------
