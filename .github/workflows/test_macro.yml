@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Test BEA API
+      - name: Find BEA Core PCE table
         env:
           BEA_API_KEY: ${{ secrets.BEA_API_KEY }}
         run: |
@@ -30,11 +30,9 @@ jobs:
 
           params = {
               "UserID": api_key,
-              "method": "GetData",
+              "method": "GetParameterValues",
               "datasetname": "NIPA",
-              "TableName": "T20804",
-              "Frequency": "M",
-              "Year": "X",
+              "ParameterName": "TableName",
               "ResultFormat": "JSON",
           }
 
@@ -45,10 +43,15 @@ jobs:
 
           req = urllib.request.Request(
               url,
-              headers={"User-Agent": "RetirementPortfolio/1.0"},
+              headers={
+                  "User-Agent": "RetirementPortfolio/1.0"
+              },
           )
 
-          with urllib.request.urlopen(req, timeout=30) as response:
+          with urllib.request.urlopen(
+              req,
+              timeout=30,
+          ) as response:
               result = json.loads(
                   response.read().decode("utf-8")
               )
@@ -60,32 +63,58 @@ jobs:
                   f"BEA API ERROR: {bea['Error']}"
               )
 
-          results = bea.get("Results", {})
-          data = results.get("Data", [])
+          values = (
+              bea
+              .get("Results", {})
+              .get("ParamValue", [])
+          )
 
-          print("BEA API STATUS: OK")
-          print("ROWS:", len(data))
+          print("BEA TABLE COUNT:", len(values))
+          print("=== PCE / PRICE CANDIDATES ===")
 
-          core_rows = []
+          matches = []
 
-          for row in data:
-              line_description = str(
-                  row.get("LineDescription", "")
+          for item in values:
+              description = str(
+                  item.get(
+                      "Description",
+                      "",
+                  )
               )
 
-              if "excluding food and energy" in line_description.lower():
-                  core_rows.append(row)
+              table_name = str(
+                  item.get(
+                      "TableName",
+                      item.get("Key", ""),
+                  )
+              )
 
-          print("CORE PCE ROWS:", len(core_rows))
+              text = (
+                  table_name
+                  + " "
+                  + description
+              ).lower()
 
-          for row in core_rows[-5:]:
+              if (
+                  "personal consumption" in text
+                  or "pce" in text
+              ):
+                  matches.append(
+                      (
+                          table_name,
+                          description,
+                      )
+                  )
+
+          print("MATCHES:", len(matches))
+
+          for table_name, description in matches:
               print(
-                  row.get("TimePeriod"),
-                  row.get("LineDescription"),
-                  row.get("DataValue"),
+                  table_name,
+                  "|",
+                  description,
               )
           PY
-
       - name: Test macro indicators
         run: |
           python - <<'PY'
