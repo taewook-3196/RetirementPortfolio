@@ -23,6 +23,8 @@ jobs:
         
       
       - name: Test macro indicators
+        env:
+          BEA_API_KEY: ${{ secrets.BEA_API_KEY }}
         run: |
           python - <<'PY'
           from services.macro_indicator_service import MacroIndicatorService
