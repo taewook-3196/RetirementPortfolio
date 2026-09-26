@@ -11,21 +11,26 @@ services/macro_indicator_service.py
 - USD/KRW
 
 미국 경제지표
-- 근원 PCE 물가: FRED의 BEA 원자료(PCEPILFE) 기반 자동 계산
-- 비농업 고용: BLS CES0000000001 기반 월간 증감 자동 계산
-- 실업률: BLS LNS14000000
+- 근원 PCE 물가:
+  BEA NIPA Table 2.8.4(T20804)의
+  PCE excluding food and energy 기반 전년동월비 자동 계산
+- 비농업 고용:
+  BLS CES0000000001 기반 월간 증감 자동 계산
+- 실업률:
+  BLS LNS14000000
 
-경제지표 조회에 실패한 경우 오래된 하드코딩 값을 대신 사용하지 않습니다.
+경제지표 조회에 실패한 경우
+오래된 하드코딩 값을 대신 사용하지 않습니다.
 """
 
 from __future__ import annotations
 
-import csv
 import datetime
-import io
 import json
 import logging
+import os
 import ssl
+import urllib.parse
 import urllib.request
 from typing import Any, Dict, List
 
@@ -109,9 +114,17 @@ BLS_API_URL = (
 BLS_NFP_SERIES = "CES0000000001"
 BLS_UNEMPLOYMENT_SERIES = "LNS14000000"
 
-FRED_CORE_PCE_CSV_URL = (
-    "https://fred.stlouisfed.org/graph/fredgraph.csv"
-    "?id=PCEPILFE"
+
+BEA_API_URL = "https://apps.bea.gov/api/data/"
+
+BEA_CORE_PCE_TABLE = "T20804"
+
+# Table 2.8.4
+# Line 25 = PCE excluding food and energy
+BEA_CORE_PCE_LINE_NUMBER = "25"
+
+BEA_CORE_PCE_DESCRIPTION = (
+    "PCE excluding food and energy"
 )
 
 
@@ -420,7 +433,7 @@ class MacroIndicatorService:
             ),
         }
 
-        # PCE
+        # BEA 근원 PCE
         try:
             fundamentals["core_pce"] = (
                 self._fetch_core_pce()
@@ -478,135 +491,220 @@ class MacroIndicatorService:
         }
 
     # ========================================================
-    # 근원 PCE
+    # BEA 근원 PCE
     # ========================================================
 
     def _fetch_core_pce(
         self,
     ) -> Dict[str, Any]:
         """
-        FRED의 BEA 원자료 PCEPILFE를 이용합니다.
-
-        최신 월의 근원 PCE 전년동월비(YoY)를
+        BEA NIPA Table 2.8.4(T20804)의
+        Line 25 'PCE excluding food and energy' 가격지수를
+        이용해 최신 월과 직전 월의 전년동월비(YoY)를
         직접 계산합니다.
         """
 
+        api_key = os.getenv(
+            "BEA_API_KEY",
+            "",
+        ).strip()
+
+        if not api_key:
+            raise RuntimeError(
+                "BEA_API_KEY 환경변수가 "
+                "설정되지 않았습니다."
+            )
+
+        today = datetime.date.today()
+
+        # 최신월 및 직전월의 YoY 계산을 위해
+        # 전년도와 금년 데이터를 함께 요청합니다.
+        years = (
+            f"{today.year - 1},"
+            f"{today.year}"
+        )
+
+        params = {
+            "UserID": api_key,
+            "method": "GetData",
+            "datasetname": "NIPA",
+            "TableName": BEA_CORE_PCE_TABLE,
+            "Frequency": "M",
+            "Year": years,
+            "ResultFormat": "JSON",
+        }
+
+        url = (
+            BEA_API_URL
+            + "?"
+            + urllib.parse.urlencode(params)
+        )
+
         req = urllib.request.Request(
-            FRED_CORE_PCE_CSV_URL,
+            url,
             headers={
                 "User-Agent": self.USER_AGENT,
             },
         )
 
-        last_error = None
-
-        for attempt in range(3):
-            try:
-                with urllib.request.urlopen(
-                    req,
-                    context=self.ssl_context,
-                    timeout=30,
-                ) as resp:
-                    text = resp.read().decode(
-                        "utf-8-sig"
-                    )
-        
-                last_error = None
-                break
-        
-            except Exception as e:
-                last_error = e
-        
-                logger.warning(
-                    "근원 PCE FRED 조회 실패 "
-                    "(%s/3회): %s",
-                    attempt + 1,
-                    e,
-                )
-        
-        if last_error is not None:
-            raise RuntimeError(
-                "FRED PCE 데이터를 3회 시도했으나 "
-                f"조회하지 못했습니다: {last_error}"
+        with urllib.request.urlopen(
+            req,
+            context=self.ssl_context,
+            timeout=30,
+        ) as resp:
+            result = json.loads(
+                resp.read().decode("utf-8")
             )
 
-        reader = csv.DictReader(
-            io.StringIO(text)
+        bea_api = result.get(
+            "BEAAPI",
+            {},
         )
+
+        results = bea_api.get(
+            "Results",
+            {},
+        )
+
+        error = (
+            results.get("Error")
+            or bea_api.get("Error")
+        )
+
+        if error:
+            raise RuntimeError(
+                "BEA API 오류: "
+                + json.dumps(
+                    error,
+                    ensure_ascii=False,
+                )
+            )
+
+        rows = results.get(
+            "Data",
+            [],
+        )
+
+        if not rows:
+            raise RuntimeError(
+                "BEA PCE 데이터가 비어 있습니다."
+            )
 
         observations = []
 
-        for row in reader:
-            date_text = (
-                row.get("DATE")
-                or row.get("observation_date")
-                or ""
+        for row in rows:
+            line_number = str(
+                row.get(
+                    "LineNumber",
+                    "",
+                )
             ).strip()
 
-            value_text = (
-                row.get("PCEPILFE")
-                or ""
+            description = str(
+                row.get(
+                    "LineDescription",
+                    "",
+                )
             ).strip()
 
+            # Market-based PCE excluding food and energy
+            # (Line 31)와 혼동하지 않도록
+            # Line 25를 우선적으로 정확히 확인합니다.
             if (
-                not date_text
-                or not value_text
-                or value_text == "."
+                line_number
+                != BEA_CORE_PCE_LINE_NUMBER
             ):
                 continue
 
-            try:
-                date_value = (
-                    datetime.datetime.strptime(
-                        date_text,
-                        "%Y-%m-%d",
-                    ).date()
+            if (
+                description.lower()
+                != BEA_CORE_PCE_DESCRIPTION.lower()
+            ):
+                logger.warning(
+                    "BEA T20804 Line 25 설명이 "
+                    "예상과 다릅니다: %s",
+                    description,
                 )
-
-                value = float(value_text)
-
-            except (ValueError, TypeError):
                 continue
 
-            observations.append(
-                (
-                    date_value,
-                    value,
+            period = str(
+                row.get(
+                    "TimePeriod",
+                    "",
                 )
+            ).strip()
+
+            value_text = str(
+                row.get(
+                    "DataValue",
+                    "",
+                )
+            ).strip()
+
+            parsed_period = (
+                self._parse_bea_month(
+                    period
+                )
+            )
+
+            if parsed_period is None:
+                continue
+
+            try:
+                value = float(
+                    value_text.replace(
+                        ",",
+                        "",
+                    )
+                )
+            except (
+                ValueError,
+                TypeError,
+            ):
+                continue
+
+            if value <= 0:
+                continue
+
+            year, month = parsed_period
+
+            observations.append(
+                {
+                    "year": year,
+                    "month": month,
+                    "value": value,
+                }
             )
 
         observations.sort(
-            key=lambda x: x[0]
+            key=lambda x: (
+                x["year"],
+                x["month"],
+            )
         )
 
-        # 최신 YoY + 직전월 YoY를 계산하려면
-        # 최소 14개월 정도가 필요합니다.
         if len(observations) < 14:
             raise RuntimeError(
-                "PCE 관측치가 부족합니다."
+                "BEA 근원 PCE 관측치가 "
+                "충분하지 않습니다."
             )
 
-        latest_date, latest_index = (
-            observations[-1]
-        )
-
-        previous_date, previous_index = (
-            observations[-2]
-        )
+        latest = observations[-1]
+        previous = observations[-2]
 
         latest_year_ago = (
-            self._find_observation_months_ago(
+            self._find_bea_observation(
                 observations,
-                latest_date,
-                12,
+                latest["year"] - 1,
+                latest["month"],
             )
         )
 
         previous_year_ago = (
-            self._find_observation_months_ago(
+            self._find_bea_observation(
                 observations,
-                previous_date,
-                12,
+                previous["year"] - 1,
+                previous["month"],
             )
         )
 
@@ -615,12 +713,14 @@ class MacroIndicatorService:
             or previous_year_ago is None
         ):
             raise RuntimeError(
-                "PCE 전년동월 관측치를 찾지 못했습니다."
+                "BEA 근원 PCE의 "
+                "전년동월 관측치를 "
+                "찾지 못했습니다."
             )
 
         latest_yoy = (
             (
-                latest_index
+                latest["value"]
                 / latest_year_ago
             )
             - 1.0
@@ -628,7 +728,7 @@ class MacroIndicatorService:
 
         previous_yoy = (
             (
-                previous_index
+                previous["value"]
                 / previous_year_ago
             )
             - 1.0
@@ -657,59 +757,77 @@ class MacroIndicatorService:
                 f"{previous_yoy:.1f}%"
             ),
             "change_text": (
-                f"전월 발표 대비 "
+                "전월 발표 대비 "
                 f"{change:+.1f}%p"
             ),
             "trend": trend,
             "trend_badge": trend_badge,
             "period": (
-                f"{latest_date.year}."
-                f"{latest_date.month:02d}월"
+                f"{latest['year']}."
+                f"{latest['month']:02d}월"
             ),
             "description": (
-                "BEA 근원 PCE 가격지수의 "
+                "BEA NIPA Table 2.8.4 "
+                "Line 25 근원 PCE 가격지수의 "
                 "전년동월비 자동 계산"
             ),
             "source": (
-                "FRED / U.S. Bureau "
-                "of Economic Analysis"
+                "U.S. Bureau of Economic Analysis"
             ),
             "success": True,
         }
 
-    def _find_observation_months_ago(
+    def _parse_bea_month(
         self,
-        observations,
-        base_date,
-        months: int,
-    ):
+        period: str,
+    ) -> tuple[int, int] | None:
+        """
+        BEA 월별 TimePeriod 형식
+        예: 2026M07
+        """
 
-        total_months = (
-            base_date.year * 12
-            + base_date.month
-            - 1
-            - months
+        if (
+            len(period) != 7
+            or period[4] != "M"
+        ):
+            return None
+
+        try:
+            year = int(
+                period[:4]
+            )
+
+            month = int(
+                period[5:]
+            )
+        except ValueError:
+            return None
+
+        if not 1 <= month <= 12:
+            return None
+
+        return (
+            year,
+            month,
         )
 
-        target_year = (
-            total_months // 12
-        )
+    def _find_bea_observation(
+        self,
+        observations: List[Dict[str, Any]],
+        year: int,
+        month: int,
+    ) -> float | None:
 
-        target_month = (
-            total_months % 12
-            + 1
-        )
-
-        for date_value, value in reversed(
+        for item in reversed(
             observations
         ):
             if (
-                date_value.year
-                == target_year
-                and date_value.month
-                == target_month
+                item["year"] == year
+                and item["month"] == month
             ):
-                return value
+                return float(
+                    item["value"]
+                )
 
         return None
 
