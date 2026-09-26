@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Inspect BEA NIPA table metadata
+      - name: Inspect BEA API error
         env:
           BEA_API_KEY: ${{ secrets.BEA_API_KEY }}
         run: |
@@ -57,50 +57,37 @@ jobs:
               )
 
           bea = result.get("BEAAPI", {})
+          results = bea.get("Results", {})
 
-          print("BEA ERROR:", bea.get("Error"))
+          print("=== BEA REQUEST ===")
+
+          for item in bea.get("Request", {}).get(
+              "RequestParam", []
+          ):
+              name = item.get("ParameterName")
+              value = item.get("ParameterValue")
+
+              if str(name).upper() == "USERID":
+                  value = "***HIDDEN***"
+
+              print(name, "=", value)
+
+          print("\n=== BEA RESULTS KEYS ===")
+          print(list(results.keys()))
+
+          print("\n=== BEA ERROR ===")
           print(
-              "RESULT KEYS:",
-              list(bea.get("Results", {}).keys()),
-          )
-
-          values = (
-              bea
-              .get("Results", {})
-              .get("ParamValue", [])
-          )
-
-          print("PARAM VALUE COUNT:", len(values))
-
-          print("\n=== FIRST 5 RAW VALUES ===")
-
-          for item in values[:5]:
-              print(json.dumps(
-                  item,
+              json.dumps(
+                  results.get("Error"),
                   ensure_ascii=False,
                   indent=2,
-              ))
-
-          print("\n=== SEARCH 2.8.4 ===")
-
-          for item in values:
-              text = json.dumps(
-                  item,
-                  ensure_ascii=False,
               )
+          )
 
-              if (
-                  "2.8.4" in text
-                  or "T20804" in text
-                  or "20804" in text
-              ):
-                  print(json.dumps(
-                      item,
-                      ensure_ascii=False,
-                      indent=2,
-                  ))
-          PY
-      
+          print("\n=== PARAM VALUE COUNT ===")
+          values = results.get("ParamValue", [])
+          print(len(values))
+          PY      
       
       - name: Test macro indicators
         run: |
