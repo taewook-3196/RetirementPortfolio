@@ -403,7 +403,10 @@ class RecommendationService:
                     remaining_base_budget
                 ),
                 max_additional_monthly=(
-                    remaining_additional_budget
+                    max_additional_monthly
+                ),
+                additional_budget_used=(
+                    additional_budget_used
                 ),
                 total_invested_so_far=float(
                     summary.total_invested
@@ -454,8 +457,12 @@ class RecommendationService:
                         remaining_base_budget
                         <= 0
                         and
-                        remaining_additional_budget
-                        <= 0
+                        not bool(
+                            result_summary.get(
+                                "additional_buy_triggered",
+                                False,
+                            )
+                        )
                     ),
 
                 "cycle_desc":
