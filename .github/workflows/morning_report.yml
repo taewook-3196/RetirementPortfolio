@@ -42,6 +42,7 @@ jobs:
       - name: 모닝 리포트 HTML 생성 및 데이터 분석
         env:
           KRX_API_KEY: ${{ secrets.KRX_API_KEY }}
+          BEA_API_KEY: ${{ secrets.BEA_API_KEY }}
           KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
           KAKAO_ACCESS_TOKEN: ${{ secrets.KAKAO_ACCESS_TOKEN }}
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
