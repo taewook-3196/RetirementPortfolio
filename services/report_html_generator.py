@@ -2271,13 +2271,134 @@ class ReportHtmlGenerator:
         model_name = gemini_analysis.get("model_used", "gemini-3.8-flash")
         model_display = model_name.upper().replace("-", " ")
         stance_badge = gemini_analysis.get("stance_badge", "")
-        one_line = self._clean_display_text(gemini_analysis.get("one_line_summary", ""))
-        macro_text = self._clean_display_text(gemini_analysis.get("macro_analysis", "")).replace("\n", "<br>")
-        strategy_text = self._clean_display_text(gemini_analysis.get("strategy_advice", "")).replace("\n", "<br>")
-        usd_krw = gemini_analysis.get("usd_krw", "").strip()
 
-        usd_tag_html = f'<span class="gemini-tag">USD/KRW {usd_krw}</span>' if usd_krw else ""
-        stance_badge_html = f'<span class="badge" style="background: rgba(192, 132, 252, 0.25); color: #f3e8ff; border: 1px solid rgba(192, 132, 252, 0.5); font-weight: 700;">{stance_badge}</span>' if stance_badge else ""
+        one_line = self._clean_display_text(
+            gemini_analysis.get("one_line_summary", "")
+        )
+
+        macro_text = self._clean_display_text(
+            gemini_analysis.get("macro_analysis", "")
+        ).replace("\n", "<br>")
+
+        strategy_text = self._clean_display_text(
+            gemini_analysis.get("strategy_advice", "")
+        ).replace("\n", "<br>")
+
+        usd_krw = str(
+            gemini_analysis.get("usd_krw", "") or ""
+        ).strip()
+
+        # -------------------------------------------------
+        # Gemini 최종 행동 판단
+        # -------------------------------------------------
+
+        action = str(
+            gemini_analysis.get("action", "HOLD") or "HOLD"
+        ).strip().upper()
+
+        action_info = {
+            "BUY": {
+                "label": "매수",
+                "icon": "🟢",
+                "description": "현재 매수 가능 범위 내에서 매수를 실행하는 판단",
+                "background": "rgba(34, 197, 94, 0.12)",
+                "border": "rgba(34, 197, 94, 0.35)",
+                "color": "#86efac",
+            },
+            "PARTIAL": {
+                "label": "일부 매수",
+                "icon": "🟡",
+                "description": "매수 가능 범위의 일부만 분할매수하는 판단",
+                "background": "rgba(234, 179, 8, 0.12)",
+                "border": "rgba(234, 179, 8, 0.35)",
+                "color": "#fde047",
+            },
+            "WAIT": {
+                "label": "대기",
+                "icon": "⏸️",
+                "description": "매수 가능 예산을 지금 사용하지 않고 기다리는 판단",
+                "background": "rgba(59, 130, 246, 0.12)",
+                "border": "rgba(59, 130, 246, 0.35)",
+                "color": "#93c5fd",
+            },
+            "HOLD": {
+                "label": "기존 계획 유지",
+                "icon": "⚪",
+                "description": "별도 행동 없이 현재 자산배분과 투자 계획을 유지하는 판단",
+                "background": "rgba(148, 163, 184, 0.12)",
+                "border": "rgba(148, 163, 184, 0.35)",
+                "color": "#cbd5e1",
+            },
+        }
+
+        if action not in action_info:
+            action = "HOLD"
+
+        action_data = action_info[action]
+
+        usd_tag_html = (
+            f'<span class="gemini-tag">USD/KRW {usd_krw}</span>'
+            if usd_krw
+            else ""
+        )
+
+        stance_badge_html = (
+            '<span class="badge" '
+            'style="background: rgba(192, 132, 252, 0.25); '
+            'color: #f3e8ff; '
+            'border: 1px solid rgba(192, 132, 252, 0.5); '
+            'font-weight: 700;">'
+            f'{stance_badge}'
+            '</span>'
+            if stance_badge
+            else ""
+        )
+
+        action_html = f"""
+            <div style="
+                margin: 14px 0 18px 0;
+                padding: 14px 16px;
+                border-radius: 12px;
+                background: {action_data['background']};
+                border: 1px solid {action_data['border']};
+            ">
+                <div style="
+                    font-size: 12px;
+                    font-weight: 700;
+                    opacity: 0.75;
+                    margin-bottom: 6px;
+                ">
+                    AI 행동 판단
+                </div>
+
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-bottom: 5px;
+                ">
+                    <span style="font-size: 18px;">
+                        {action_data['icon']}
+                    </span>
+
+                    <span style="
+                        font-size: 18px;
+                        font-weight: 800;
+                        color: {action_data['color']};
+                    ">
+                        {action_data['label']}
+                    </span>
+                </div>
+
+                <div style="
+                    font-size: 13px;
+                    line-height: 1.5;
+                    opacity: 0.82;
+                ">
+                    {action_data['description']}
+                </div>
+            </div>
+        """
 
         return f"""
         <section class="card" style="border: 1px solid rgba(168, 85, 247, 0.35);">
@@ -2286,9 +2407,15 @@ class ReportHtmlGenerator:
                     <span class="card-icon">✨</span>
                     <h2 class="card-title">Gemini AI 매크로 투자 가이드</h2>
                 </div>
+
                 <div style="display: flex; gap: 6px; align-items: center;">
                     {stance_badge_html}
-                    <span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4);">
+
+                    <span class="badge" style="
+                        background: rgba(168, 85, 247, 0.2);
+                        color: #c084fc;
+                        border: 1px solid rgba(168, 85, 247, 0.4);
+                    ">
                         {model_display}
                     </span>
                 </div>
@@ -2300,11 +2427,14 @@ class ReportHtmlGenerator:
                 </div>
             </div>
 
+            {action_html}
+
             <div class="gemini-block">
                 <div class="gemini-block-title">
                     <span>🌍 글로벌 매크로 & 시황 분석</span>
                     {usd_tag_html}
                 </div>
+
                 <div class="gemini-block-content">
                     {macro_text}
                 </div>
@@ -2312,12 +2442,12 @@ class ReportHtmlGenerator:
 
             <div class="gemini-block" style="margin-bottom: 0;">
                 <div class="gemini-block-title" style="color: #c084fc;">
-                    <span>🎯 포트폴리오 맞춤 분할매수 전략</span>
+                    <span>🎯 포트폴리오 맞춤 투자 전략</span>
                 </div>
+
                 <div class="gemini-block-content">
                     {strategy_text}
                 </div>
             </div>
         </section>
         """
-
