@@ -16,78 +16,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Inspect BEA API error
+      - name: Test BEA Core PCE
         env:
           BEA_API_KEY: ${{ secrets.BEA_API_KEY }}
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          import urllib.parse
-          import urllib.request
-
-          api_key = os.environ["BEA_API_KEY"]
-
-          params = {
-              "UserID": api_key,
-              "method": "GetParameterValues",
-              "datasetname": "NIPA",
-              "ParameterName": "TableName",
-              "ResultFormat": "JSON",
-          }
-
-          url = (
-              "https://apps.bea.gov/api/data/?"
-              + urllib.parse.urlencode(params)
-          )
-
-          req = urllib.request.Request(
-              url,
-              headers={
-                  "User-Agent": "RetirementPortfolio/1.0"
-              },
-          )
-
-          with urllib.request.urlopen(
-              req,
-              timeout=30,
-          ) as response:
-              result = json.loads(
-                  response.read().decode("utf-8")
-              )
-
-          bea = result.get("BEAAPI", {})
-          results = bea.get("Results", {})
-
-          print("=== BEA REQUEST ===")
-
-          for item in bea.get("Request", {}).get(
-              "RequestParam", []
-          ):
-              name = item.get("ParameterName")
-              value = item.get("ParameterValue")
-
-              if str(name).upper() == "USERID":
-                  value = "***HIDDEN***"
-
-              print(name, "=", value)
-
-          print("\n=== BEA RESULTS KEYS ===")
-          print(list(results.keys()))
-
-          print("\n=== BEA ERROR ===")
-          print(
-              json.dumps(
-                  results.get("Error"),
-                  ensure_ascii=False,
-                  indent=2,
-              )
-          )
-
-          print("\n=== PARAM VALUE COUNT ===")
-          values = results.get("ParamValue", [])
-          print(len(values))
-          PY      
+        run: python scripts/test_bea_pce.py      
+        
       
       - name: Test macro indicators
         run: |
