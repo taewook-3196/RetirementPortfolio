@@ -14,6 +14,7 @@ strategy/recommendation.py
   additional_budget_used로 차감합니다.
 - 목표 비중이 0이거나 현재 비중이 목표 이상인 종목에는
   추가매수를 추천하지 않습니다.
+- 추천 금액의 표시 통화는 계좌 기준통화를 사용합니다.
 """
 
 from __future__ import annotations
@@ -90,6 +91,7 @@ def _round_buy_amount(
         ),
     )
 
+
 def generate_recommendations(
     inputs: List[ETFRecommendationInput],
     initial_capital: float = 100_000_000.0,
@@ -99,6 +101,7 @@ def generate_recommendations(
     already_invested_in_cycle: bool = False,
     cycle_desc: str = "",
     additional_budget_used: float = 0.0,
+    currency: str = "KRW",
 ) -> Dict[str, Any]:
     """
     종목별 매수 추천을 계산합니다.
@@ -116,7 +119,32 @@ def generate_recommendations(
     already_invested_in_cycle은 기존 호출부와의
     호환성을 위해 유지하지만 매수 차단 조건으로
     사용하지 않습니다.
+
+    currency는 추천 금액을 설명 문구에 표시할 때
+    사용하는 계좌 기준통화입니다.
     """
+
+    currency = str(
+        currency or "KRW"
+    ).strip().upper()
+
+    def format_money(
+        amount: float,
+    ) -> str:
+        value = float(
+            amount or 0
+        )
+
+        if currency == "KRW":
+            return f"{value:,.0f}원"
+
+        if currency == "USD":
+            return f"${value:,.2f}"
+
+        return (
+            f"{value:,.2f} "
+            f"{currency}"
+        )
 
     initial_capital = max(
         0.0,
@@ -426,9 +454,6 @@ def generate_recommendations(
 
     # ---------------------------------------------------------
     # 4. 기본 매수 예산 배분
-    #
-    # 목표비중보다 부족한 종목에만 배분한다.
-    # 부족 정도를 기준으로 비례 배분한다.
     # ---------------------------------------------------------
 
     eligible_base_items = [
@@ -476,7 +501,6 @@ def generate_recommendations(
         else:
             parsed["base_buy"] = 0.0
 
-    # 반올림으로 기본 한도 초과 방지
     total_base_buy = sum(
         parsed["base_buy"]
         for parsed in parsed_items
@@ -503,20 +527,6 @@ def generate_recommendations(
 
     # ---------------------------------------------------------
     # 5. 추가매수 예산 배분
-    #
-    # 각 종목의 낙폭 단계와 비중 부족 정도를 함께 반영합니다.
-    #
-    # 예:
-    # - 종목 A 낙폭 -20% -> 추가매수 강도 100%
-    # - 종목 B 낙폭 -5%  -> 추가매수 강도 25%
-    #
-    # 단순히 전체 예산을 동일 단계로 나누지 않고,
-    # 각 종목의 낙폭 강도를 priority_score에 곱하여
-    # 배분 가중치를 계산합니다.
-    #
-    # 전체 추가매수 금액은 현재 포트폴리오에서
-    # 가장 높은 낙폭 단계가 허용하는 누적 한도를
-    # 초과하지 않습니다.
     # ---------------------------------------------------------
 
     additional_candidates = [
@@ -529,17 +539,6 @@ def generate_recommendations(
         )
     ]
 
-    # 종목별 추가매수 배분 가중치
-    #
-    # priority_score:
-    #   비중 부족 + 낙폭을 반영한 기존 우선순위
-    #
-    # additional_ratio:
-    #   현재 낙폭 단계의 강도
-    #   0.25 / 0.50 / 0.75 / 1.00
-    #
-    # 둘을 함께 사용하여 낙폭이 더 큰 종목이
-    # 더 높은 추가매수 우선순위를 갖도록 합니다.
     for parsed in parsed_items:
 
         parsed[
@@ -570,8 +569,6 @@ def generate_recommendations(
                 ),
             )
 
-            # priority_score가 0인 특수 상황에서도
-            # 비중 부족분을 fallback 가중치로 사용
             base_weight = (
                 priority
                 if priority > 0
@@ -638,10 +635,6 @@ def generate_recommendations(
             * allocation_ratio
         )
 
-    # ---------------------------------------------------------
-    # 반올림으로 추가매수 허용액을 초과하는 경우 보정
-    # ---------------------------------------------------------
-
     total_additional_buy = sum(
         float(
             parsed[
@@ -680,8 +673,6 @@ def generate_recommendations(
                 * scale
             )
 
-        # 1만원 단위 반올림 후에도 아주 작은 초과가
-        # 발생할 수 있으므로 마지막으로 다시 제한합니다.
         rounded_total = sum(
             float(
                 parsed[
@@ -701,8 +692,6 @@ def generate_recommendations(
                 - remaining_additional_budget
             )
 
-            # 추천금액이 가장 큰 종목에서
-            # 초과분을 제거합니다.
             largest_item = max(
                 parsed_items,
                 key=lambda item: float(
@@ -723,6 +712,7 @@ def generate_recommendations(
                 )
                 - excess,
             )
+
     # ---------------------------------------------------------
     # 6. 전체 투자 가능 원금 한도
     # ---------------------------------------------------------
@@ -955,27 +945,27 @@ def generate_recommendations(
 
         if result.base_buy > 0:
 
-          reasons.append(
-              "이번 주기 남은 기본 매수 가능 한도는 "
-              f"{result.base_buy:,.0f}원입니다."
-          )
+            reasons.append(
+                "이번 주기 남은 기본 매수 가능 한도는 "
+                f"{format_money(result.base_buy)}입니다."
+            )
 
         if result.additional_buy > 0:
 
-          ratio_pct = (
-              parsed[
-                  "additional_ratio"
-              ]
-              * 100
-          )
-      
-          reasons.append(
-              f"현재 낙폭 단계에 따라 "
-              f"추가매수 한도의 "
-              f"{ratio_pct:.0f}% 단계가 활성화되어 있으며, "
-              f"현재 추가매수 가능 한도는 "
-              f"{result.additional_buy:,.0f}원입니다."
-          )
+            ratio_pct = (
+                parsed[
+                    "additional_ratio"
+                ]
+                * 100
+            )
+
+            reasons.append(
+                "현재 낙폭 단계에 따라 "
+                "추가매수 한도의 "
+                f"{ratio_pct:.0f}% 단계가 활성화되어 있으며, "
+                "현재 추가매수 가능 한도는 "
+                f"{format_money(result.additional_buy)}입니다."
+            )
 
         elif (
             parsed[
@@ -1057,6 +1047,9 @@ def generate_recommendations(
 
         "cycle_desc":
             cycle_desc,
+
+        "currency":
+            currency,
     }
 
     return {
