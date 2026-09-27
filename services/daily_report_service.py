@@ -687,9 +687,30 @@ class DailyReportService:
 
             # 4. Google Gemini AI 매크로 투자 가이드 생성 (활성화된 경우)
             gemini_analysis = {}
-            if getattr(self.config.morning_report, "gemini_enabled", True) and self.gemini_service.is_configured():
+
+            ai_advice_enabled = bool(
+                investment_profile_data.get(
+                    "ai_advice_enabled",
+                    True,
+                )
+            )
+
+            gemini_enabled = getattr(
+                self.config.morning_report,
+                "gemini_enabled",
+                True,
+            )
+
+            if (
+                gemini_enabled
+                and ai_advice_enabled
+                and self.gemini_service.is_configured()
+            ):
                 try:
-                    logger.info("Google Gemini AI 매크로 투자 가이드 생성 요청 중...")
+                    logger.info(
+                        "Google Gemini AI 매크로 투자 가이드 생성 요청 중..."
+                    )
+
                     gemini_analysis = (
                         self.gemini_service
                         .generate_macro_investment_guide(
@@ -729,9 +750,19 @@ class DailyReportService:
                             }
                         )
                     )
-                except Exception as e:
-                    logger.warning(f"Gemini AI 가이드 생성 중 오류 (기본 룰로 대체): {e}")
 
+                except Exception as e:
+                    logger.warning(
+                        "Gemini AI 가이드 생성 중 오류 "
+                        f"(기본 룰로 대체): {e}"
+                    )
+
+            elif not ai_advice_enabled:
+                logger.info(
+                    "사용자 설정에서 AI 투자 가이드가 "
+                    "비활성화되어 Gemini 호출을 건너뜁니다."
+                )
+                
             report_data = {
                 "account_name": account_name,
                 "summary": summary,
