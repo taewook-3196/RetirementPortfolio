@@ -731,6 +731,7 @@ class RecommendationService:
                 ),
                 already_invested_in_cycle=False,
                 cycle_desc=cycle_desc,
+                currency=account_currency,
             )
         )
 
