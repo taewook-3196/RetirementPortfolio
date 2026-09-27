@@ -74,6 +74,35 @@ class PortfolioService:
             etf.ticker: etf.name
             for etf in target_etfs
         }
+        
+        # 종목별 원래 거래/가격 통화
+        currencies: Dict[str, str] = {}
+
+        # 목표 종목의 자산 마스터에서
+        # 이름과 통화 정보를 보완합니다.
+        for etf in target_etfs:
+            master = self.repo.get_etf_master(
+                etf.ticker
+            )
+
+            if master:
+                names[etf.ticker] = (
+                    master.name
+                    or names.get(
+                        etf.ticker,
+                        etf.ticker,
+                    )
+                )
+
+                currencies[etf.ticker] = (
+                    str(
+                        master.currency
+                        or "KRW"
+                    )
+                    .strip()
+                    .upper()
+                )
+                
 
         # 계좌가 전혀 없는 초기 상태에서만
         # 기본 config ETF 이름을 사용
@@ -83,17 +112,47 @@ class PortfolioService:
                     names[etf.ticker] = etf.name
 
         # 실제 거래 종목이 목표 종목에 없을 수도 있으므로
-        # asset_master에서 이름을 보완
+        # asset_master에서 이름과 통화를 보완
         for tx in transactions:
-            if tx.ticker not in names:
-                master = self.repo.get_etf_master(tx.ticker)
+            ticker = str(
+                tx.ticker
+            ).strip()
 
-                names[tx.ticker] = (
-                    master.name
-                    if master
-                    else tx.ticker
+            if (
+                ticker not in names
+                or ticker not in currencies
+            ):
+                master = (
+                    self.repo
+                    .get_etf_master(ticker)
                 )
 
+                if master:
+                    names[ticker] = (
+                        master.name
+                        or ticker
+                    )
+
+                    currencies[ticker] = (
+                        str(
+                            master.currency
+                            or "KRW"
+                        )
+                        .strip()
+                        .upper()
+                    )
+
+                else:
+                    names.setdefault(
+                        ticker,
+                        ticker,
+                    )
+
+                    currencies.setdefault(
+                        ticker,
+                        "KRW",
+                    )
+                    
         # 가격이 외부에서 전달되지 않았다면
         # DB의 최신 가격 사용
         if latest_prices is None:
@@ -115,6 +174,7 @@ class PortfolioService:
             dividends,
             latest_prices,
             ticker_names=names,
+            ticker_currencies=currencies,
         )
 
     def get_summary(
