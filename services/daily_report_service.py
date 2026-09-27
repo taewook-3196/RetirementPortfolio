@@ -69,6 +69,37 @@ class DailyReportService:
         self.gemini_service = GeminiService(self.config)
         self.macro_service = MacroIndicatorService()
 
+    @staticmethod
+    def _format_money(
+        value: Any,
+        currency: str = "KRW",
+    ) -> str:
+        """
+        계좌 기준 통화에 맞춰 금액을 표시합니다.
+
+        KRW: 1,000,000원
+        USD: $1,000.00
+        """
+        try:
+            amount = float(value or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+
+        currency_code = str(
+            currency or "KRW"
+        ).strip().upper()
+
+        if currency_code == "USD":
+            return f"${amount:,.2f}"
+
+        if currency_code == "KRW":
+            return f"{amount:,.0f}원"
+
+        return (
+            f"{amount:,.2f} "
+            f"{currency_code}"
+        )
+
     def generate_and_send(
         self,
         send_kakao: bool = True,
