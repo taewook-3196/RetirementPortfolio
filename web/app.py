@@ -1808,6 +1808,19 @@ AI 조언 방식
 
 </select>
 
+<div class="checkbox-row">
+
+<input
+    id="ai-advice-enabled"
+    type="checkbox"
+    checked
+>
+
+<label for="ai-advice-enabled">
+Gemini AI 투자 가이드 사용
+</label>
+
+</div>
 
 <label for="investment-preference-text">
 나의 투자 원칙 / 전략
@@ -4737,7 +4750,9 @@ investmentProfileForm.addEventListener(
                 ).value,
 
             ai_advice_enabled:
-                true,
+                document.getElementById(
+                    "ai-advice-enabled"
+                ).checked,
 
             investment_preference_text:
                 document.getElementById(
@@ -4934,6 +4949,14 @@ loginForm.addEventListener(
                     .ai_advice_style
                     || "balanced";
 
+
+                document.getElementById(
+                    "ai-advice-enabled"
+                ).checked =
+                    investmentProfile
+                    .ai_advice_enabled
+                    !== false;
+                    
 
                 document.getElementById(
                     "investment-preference-text"
