@@ -73,6 +73,78 @@ class PortfolioService:
 
         return rate
 
+    def get_usd_krw_rate(
+        self,
+    ) -> float:
+        """
+        DB에 저장된 가장 최근 USD/KRW 환율을 반환합니다.
+
+        다른 서비스에서 통화 환산이 필요할 때 사용하는
+        공개 인터페이스입니다.
+        """
+        return self._get_usd_krw_rate()
+
+    def convert_amount(
+        self,
+        value: float,
+        from_currency: str,
+        to_currency: str,
+    ) -> float:
+        """
+        금액을 지정한 통화로 변환합니다.
+
+        현재 지원:
+        - KRW -> KRW
+        - USD -> USD
+        - USD -> KRW
+        - KRW -> USD
+
+        서로 다른 통화 간 환산이 필요한 경우
+        DB에 저장된 최신 USD/KRW 환율을 사용합니다.
+
+        동일 통화끼리는 환율 조회 없이 그대로 반환합니다.
+        """
+
+        source_currency = (
+            str(
+                from_currency
+                or "KRW"
+            )
+            .strip()
+            .upper()
+        )
+
+        target_currency = (
+            str(
+                to_currency
+                or "KRW"
+            )
+            .strip()
+            .upper()
+        )
+
+        amount = float(
+            value or 0
+        )
+
+        if (
+            source_currency
+            == target_currency
+        ):
+            return amount
+
+        usd_krw_rate = (
+            self._get_usd_krw_rate()
+        )
+
+        return convert_currency(
+            value=amount,
+            from_currency=source_currency,
+            to_currency=target_currency,
+            usd_krw_rate=usd_krw_rate,
+        )
+        
+
     # =========================================================
     # 목표 종목
     # =========================================================
