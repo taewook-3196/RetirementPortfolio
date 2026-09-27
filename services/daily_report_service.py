@@ -116,6 +116,76 @@ class DailyReportService:
         반환값: (성공 여부, 결과 메시지, 생성된 HTML 파일 경로)
         """
         try:
+            # 0-0. 포트폴리오 계산 전에 최신 USD/KRW 환율 동기화
+            #
+            # 혼합통화 계좌의 평가액/비중 계산에서
+            # 최신 환율을 사용할 수 있도록 가장 먼저 수집합니다.
+            macro_data = {}
+            macro_summary = ""
+
+            try:
+                macro_data = (
+                    self.macro_service
+                    .fetch_all_macro_data()
+                )
+
+                macro_summary = (
+                    self.macro_service
+                    .build_summary_for_gemini(
+                        macro_data
+                    )
+                )
+
+                usd_krw_data = (
+                    macro_data
+                    .get(
+                        "macro_commodity",
+                        {},
+                    )
+                    .get(
+                        "usd_krw",
+                        {},
+                    )
+                )
+
+                if (
+                    usd_krw_data.get("success")
+                    is True
+                ):
+                    usd_krw_rate = float(
+                        usd_krw_data.get(
+                            "price",
+                            0,
+                        )
+                        or 0
+                    )
+
+                    if usd_krw_rate > 0:
+                        self.repo.save_exchange_rate(
+                            rate_date=date.today(),
+                            from_currency="USD",
+                            to_currency="KRW",
+                            rate=usd_krw_rate,
+                        )
+
+                        logger.info(
+                            "포트폴리오 계산용 USD/KRW "
+                            "환율 저장 완료: %.2f",
+                            usd_krw_rate,
+                        )
+
+                logger.info(
+                    "글로벌 10대 매크로 지표 및 "
+                    "5일 트렌드 데이터 수집 완료"
+                )
+
+            except Exception as e:
+                logger.warning(
+                    "매크로 지표 사전 수집 중 오류 "
+                    "(DB의 기존 환율로 계속 진행): %s",
+                    e,
+                )
+            
             # 0. 리포트 생성 전 최신 시장 가격 데이터 수집 및 DB 동기화 (KRX 공식 Open API 또는 Mock)
             if update_prices:
                 try:
@@ -799,87 +869,6 @@ class DailyReportService:
                         "change_pct": round(chg_pct, 2),
                     }
                 
-            # 3-1. 글로벌 10대 거시경제 지표 및 5일 트렌드 데이터 수집
-            macro_data = {}
-            macro_summary = ""
-
-            try:
-                macro_data = (
-                    self.macro_service
-                    .fetch_all_macro_data()
-                )
-
-                macro_summary = (
-                    self.macro_service
-                    .build_summary_for_gemini(
-                        macro_data
-                    )
-                )
-
-                # --------------------------------------------
-                # USD/KRW 환율 저장
-                # --------------------------------------------
-                # Yahoo Finance의 KRW=X에서 정상적으로
-                # 조회된 현재 환율을 공용 환율 테이블에
-                # 저장합니다.
-                #
-                # 저장 형식:
-                #   USD -> KRW
-                #   예: 1 USD = 1354.4 KRW
-                # --------------------------------------------
-
-                usd_krw_data = (
-                    macro_data
-                    .get(
-                        "macro_commodity",
-                        {},
-                    )
-                    .get(
-                        "usd_krw",
-                        {},
-                    )
-                )
-
-                if (
-                    usd_krw_data.get(
-                        "success"
-                    )
-                    is True
-                ):
-                    usd_krw_rate = float(
-                        usd_krw_data.get(
-                            "price",
-                            0,
-                        )
-                        or 0
-                    )
-
-                    if usd_krw_rate > 0:
-                        self.repo.save_exchange_rate(
-                            rate_date=date.today(),
-                            from_currency="USD",
-                            to_currency="KRW",
-                            rate=usd_krw_rate,
-                        )
-
-                        logger.info(
-                            "USD/KRW 환율 저장 완료: %.2f",
-                            usd_krw_rate,
-                        )
-
-                logger.info(
-                    "글로벌 10대 매크로 지표 및 "
-                    "5일 트렌드 데이터 수집 완료"
-                )
-
-            except Exception as e:
-                logger.warning(
-                    "매크로 10대 지표 수집 중 오류 "
-                    "(생략 진행): %s",
-                    e,
-                )
-                
-
             # 3-2. 사용자 투자 성향 및 투자 원칙 조회
             investment_profile_data = {}
 
