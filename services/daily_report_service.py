@@ -616,42 +616,119 @@ class DailyReportService:
             total_val = summary["total_eval"] or 1.0
 
             positions = []
+
             # 1) 실제 보유 종목 (수량 > 0)
             if isinstance(positions_raw, dict):
                 for ticker, pos in positions_raw.items():
                     if pos.quantity <= 0:
                         continue
-                    cur_w = (pos.current_value / total_val) if total_val > 0 else 0.0
-                    t_weight = registered_etfs_map.get(ticker, ETFConfig(ticker, "", 0.0)).target_weight
+
+                    cur_w = (
+                        pos.current_value / total_val
+                    ) if total_val > 0 else 0.0
+
+                    t_weight = registered_etfs_map.get(
+                        ticker,
+                        ETFConfig(
+                            ticker,
+                            "",
+                            0.0,
+                        ),
+                    ).target_weight
+
+                    asset = (
+                        self.repo
+                        .get_etf_master(ticker)
+                    )
+
+                    asset_currency = (
+                        getattr(
+                            asset,
+                            "currency",
+                            None,
+                        )
+                        or "KRW"
+                    )
+
                     positions.append({
                         "ticker": ticker,
-                        "name": pos.name or ticker,
-                        "shares": pos.quantity,
-                        "current_price": pos.current_price,
-                        "eval_amount": pos.current_value,
-                        "pl_pct": pos.unrealized_roi * 100.0,
-                        "current_weight": cur_w,
-                        "target_weight": t_weight,
+                        "name":
+                            pos.name
+                            or ticker,
+                        "currency":
+                            asset_currency,
+                        "shares":
+                            pos.quantity,
+                        "current_price":
+                            pos.current_price,
+                        "eval_amount":
+                            pos.current_value,
+                        "pl_pct":
+                            pos.unrealized_roi
+                            * 100.0,
+                        "current_weight":
+                            cur_w,
+                        "target_weight":
+                            t_weight,
                     })
+
             elif isinstance(positions_raw, list):
                 positions = positions_raw
 
-            # 2) 등록된 목표 ETF 중 아직 수량이 0인 종목도 등록 종목 목록에 포함
-            held_tickers = {p["ticker"] for p in positions}
+            # 2) 등록된 목표 ETF 중 아직 수량이 0인 종목도
+            # 등록 종목 목록에 포함
+            held_tickers = {
+                p["ticker"]
+                for p in positions
+            }
+
             for ticker, etf in registered_etfs_map.items():
-                if ticker not in held_tickers and etf.target_weight > 0:
-                    latest_p = self.repo.get_latest_price(ticker)
-                    cur_p = latest_p.close_price if latest_p else 0.0
+                if (
+                    ticker not in held_tickers
+                    and etf.target_weight > 0
+                ):
+                    latest_p = (
+                        self.repo
+                        .get_latest_price(ticker)
+                    )
+
+                    cur_p = (
+                        latest_p.close_price
+                        if latest_p
+                        else 0.0
+                    )
+
+                    asset = (
+                        self.repo
+                        .get_etf_master(ticker)
+                    )
+
+                    asset_currency = (
+                        getattr(
+                            asset,
+                            "currency",
+                            None,
+                        )
+                        or "KRW"
+                    )
+
                     positions.append({
                         "ticker": ticker,
-                        "name": etf.name or ticker,
+                        "name":
+                            etf.name
+                            or ticker,
+                        "currency":
+                            asset_currency,
                         "shares": 0,
-                        "current_price": cur_p,
+                        "current_price":
+                            cur_p,
                         "eval_amount": 0.0,
                         "pl_pct": 0.0,
                         "current_weight": 0.0,
-                        "target_weight": etf.target_weight,
+                        "target_weight":
+                            etf.target_weight,
                     })
+                    
 
             # 2. 맞춤 뉴스 수집 (전체 등록 종목 대상)
             news_items = []
@@ -1167,72 +1244,279 @@ class DailyReportService:
                         f"• AI 요약: {ai_take}"
                     )
 
-        # 등록 및 보유 종목 세부 현황 (다중 계좌 시 계좌별 그룹화 표출)
+        # 등록 및 보유 종목 세부 현황
+        # 개별 종목 가격은 계좌 통화가 아니라
+        # asset_master에 저장된 종목 통화를 기준으로 표시합니다.
         if account_groups and len(account_groups) > 1:
-            total_stocks = sum(len(ag.get("positions", [])) for ag in account_groups)
-            lines.append(f"\n📋 계좌별 등록·보유 종목 현황 ({total_stocks}개):")
+            total_stocks = sum(
+                len(
+                    ag.get(
+                        "positions",
+                        [],
+                    )
+                )
+                for ag in account_groups
+            )
+
+            lines.append(
+                f"\n📋 계좌별 등록·보유 종목 현황 "
+                f"({total_stocks}개):"
+            )
+
             for ag in account_groups:
-                ag_currency = (
-                    ag.get("currency", "KRW")
-                    or "KRW"
-                )                
-                ag_name = ag.get("account_name", "")
-                ag_pos = ag.get("positions", [])
+                ag_name = ag.get(
+                    "account_name",
+                    "",
+                )
+
+                ag_pos = ag.get(
+                    "positions",
+                    [],
+                )
+
                 if not ag_pos:
                     continue
-                ag_pct = ag.get("total_pl_pct", 0.0)
-                ag_sign = "+" if ag_pct > 0 else ""
-                lines.append(f"\n[{ag_name}] ({ag_sign}{ag_pct:.1f}%)")
+
+                ag_pct = float(
+                    ag.get(
+                        "total_pl_pct",
+                        0.0,
+                    )
+                    or 0.0
+                )
+
+                ag_sign = (
+                    "+"
+                    if ag_pct > 0
+                    else ""
+                )
+
+                lines.append(
+                    f"\n[{ag_name}] "
+                    f"({ag_sign}{ag_pct:.1f}%)"
+                )
+
                 for p in ag_pos:
-                    p_name = p.get("name", "")
-                    p_price = p.get("current_price", 0)
-                    p_pl = p.get("pl_pct", 0.0)
-                    p_cur_w = p.get("current_weight", 0.0) * 100
-                    p_tgt_w = p.get("target_weight", 0.0) * 100
-                    p_shares = p.get("shares", 0)
-                    p_sign = "+" if p_pl > 0 else ""
+                    p_name = p.get(
+                        "name",
+                        "",
+                    )
+
+                    p_price = float(
+                        p.get(
+                            "current_price",
+                            0,
+                        )
+                        or 0
+                    )
+
+                    # 중요:
+                    # 종목 가격은 Account.currency가 아니라
+                    # AssetMaster.currency를 사용합니다.
+                    p_currency = (
+                        p.get(
+                            "currency",
+                            "KRW",
+                        )
+                        or "KRW"
+                    )
+
+                    formatted_price = (
+                        self._format_money(
+                            p_price,
+                            p_currency,
+                        )
+                    )
+
+                    p_pl = float(
+                        p.get(
+                            "pl_pct",
+                            0.0,
+                        )
+                        or 0.0
+                    )
+
+                    p_cur_w = (
+                        float(
+                            p.get(
+                                "current_weight",
+                                0.0,
+                            )
+                            or 0.0
+                        )
+                        * 100
+                    )
+
+                    p_tgt_w = (
+                        float(
+                            p.get(
+                                "target_weight",
+                                0.0,
+                            )
+                            or 0.0
+                        )
+                        * 100
+                    )
+
+                    p_shares = float(
+                        p.get(
+                            "shares",
+                            0,
+                        )
+                        or 0
+                    )
+
+                    p_sign = (
+                        "+"
+                        if p_pl > 0
+                        else ""
+                    )
 
                     if p_shares > 0:
                         line = (
                             f"• {p_name}: "
-                            f"{self._format_money(p_price, ag_currency)} "
+                            f"{formatted_price} "
                             f"({p_sign}{p_pl:.1f}% | "
                             f"비중 {p_cur_w:.1f}%)"
                         )
+
                     else:
                         line = (
                             f"• {p_name}: "
-                            f"{self._format_money(p_price, ag_currency)} "
-                            f"(미보유 | 목표 {p_tgt_w:.1f}%)"
+                            f"{formatted_price} "
+                            f"(미보유 | "
+                            f"목표 {p_tgt_w:.1f}%)"
                         )
-                        
 
-                    # 1000자 초과 방지 체크
-                    if sum(len(l) for l in lines) + len(line) > 900:
-                        lines.append("• ... (상세 종목은 모바일 리포트에서 확인)")
+                    if (
+                        sum(
+                            len(l)
+                            for l in lines
+                        )
+                        + len(line)
+                        > 900
+                    ):
+                        lines.append(
+                            "• ... "
+                            "(상세 종목은 모바일 "
+                            "리포트에서 확인)"
+                        )
                         break
+
                     lines.append(line)
+
         elif positions:
-            lines.append(f"\n📋 전체 등록 종목 현황 ({len(positions)}개):")
+            lines.append(
+                f"\n📋 전체 등록 종목 현황 "
+                f"({len(positions)}개):"
+            )
+
             for p in positions:
-                p_name = p.get("name", "")
-                p_price = p.get("current_price", 0)
-                p_pl = p.get("pl_pct", 0.0)
-                p_cur_w = p.get("current_weight", 0.0) * 100
-                p_tgt_w = p.get("target_weight", 0.0) * 100
-                p_shares = p.get("shares", 0)
-                p_sign = "+" if p_pl > 0 else ""
+                p_name = p.get(
+                    "name",
+                    "",
+                )
+
+                p_price = float(
+                    p.get(
+                        "current_price",
+                        0,
+                    )
+                    or 0
+                )
+
+                p_currency = (
+                    p.get(
+                        "currency",
+                        "KRW",
+                    )
+                    or "KRW"
+                )
+
+                formatted_price = (
+                    self._format_money(
+                        p_price,
+                        p_currency,
+                    )
+                )
+
+                p_pl = float(
+                    p.get(
+                        "pl_pct",
+                        0.0,
+                    )
+                    or 0.0
+                )
+
+                p_cur_w = (
+                    float(
+                        p.get(
+                            "current_weight",
+                            0.0,
+                        )
+                        or 0.0
+                    )
+                    * 100
+                )
+
+                p_tgt_w = (
+                    float(
+                        p.get(
+                            "target_weight",
+                            0.0,
+                        )
+                        or 0.0
+                    )
+                    * 100
+                )
+
+                p_shares = float(
+                    p.get(
+                        "shares",
+                        0,
+                    )
+                    or 0
+                )
+
+                p_sign = (
+                    "+"
+                    if p_pl > 0
+                    else ""
+                )
 
                 if p_shares > 0:
-                    line = f"• {p_name}: {p_price:,.0f}원 ({p_sign}{p_pl:.1f}% | 비중 {p_cur_w:.1f}%)"
+                    line = (
+                        f"• {p_name}: "
+                        f"{formatted_price} "
+                        f"({p_sign}{p_pl:.1f}% | "
+                        f"비중 {p_cur_w:.1f}%)"
+                    )
+
                 else:
-                    line = f"• {p_name}: {p_price:,.0f}원 (미보유 | 목표 {p_tgt_w:.1f}%)"
+                    line = (
+                        f"• {p_name}: "
+                        f"{formatted_price} "
+                        f"(미보유 | "
+                        f"목표 {p_tgt_w:.1f}%)"
+                    )
 
-                if sum(len(l) for l in lines) + len(line) > 900:
-                    lines.append("• ... (상세 종목은 모바일 리포트에서 확인)")
+                if (
+                    sum(
+                        len(l)
+                        for l in lines
+                    )
+                    + len(line)
+                    > 900
+                ):
+                    lines.append(
+                        "• ... "
+                        "(상세 종목은 모바일 "
+                        "리포트에서 확인)"
+                    )
                     break
-                lines.append(line)
 
+                lines.append(line)
+                
         # 매수 가능 범위
         # 정량 엔진은 매수 여부를 결정하지 않고,
         # 현재 계좌 규칙상 사용할 수 있는 최대 범위만 표시합니다.
