@@ -441,6 +441,18 @@ class DailyReportService:
                         "account_id": acc.id,
                         "account_name": acc.account_name,
                         "broker": acc.broker,
+
+                        # 계좌 평가액 / 매수 가능 예산 등에
+                        # 사용할 계좌 기준 통화
+                        "currency": (
+                            getattr(
+                                acc,
+                                "currency",
+                                "KRW",
+                            )
+                            or "KRW"
+                        ),
+
                         "d_day": d_day,
                         "next_buy_date": (
                             next_dt.strftime("%Y-%m-%d")
@@ -1073,22 +1085,47 @@ class DailyReportService:
                 0,
             ) or 0
         )
+
+        # 단일 계좌일 때 매수 가능 예산은
+        # 해당 계좌의 기준 통화로 표시합니다.
+        single_account_currency = "KRW"
+
+        if account_groups and len(account_groups) == 1:
+            single_account_currency = (
+                account_groups[0].get(
+                    "currency",
+                    "KRW",
+                )
+                or "KRW"
+            )
+
+        formatted_available_budget = (
+            self._format_money(
+                available_budget,
+                single_account_currency,
+            )
+        )        
         
         if d_day == 0:
             guide_text = (
                 f"오늘 정기 매수 검토 기준일 "
-                f"(매수 가능 예산 최대 {available_budget:,.0f}원)"
+                f"(매수 가능 예산 최대 "
+                f"{formatted_available_budget})"
             )
+
         elif d_day is not None:
             guide_text = (
-                f"정기 매수 검토 기준일까지 D-{d_day} "
+                f"정기 매수 검토 기준일까지 "
+                f"D-{d_day} "
                 f"({recommendations.get('next_buy_date', '')})"
             )
+
         else:
             guide_text = (
                 f"매수 가능 예산 최대 "
-                f"{available_budget:,.0f}원"
+                f"{formatted_available_budget}"
             )
+            
 
         already_invested = recommendations.get(
             "already_invested_this_month",
