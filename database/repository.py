@@ -390,41 +390,43 @@ class Repository:
                 "환율은 0보다 커야 합니다."
             )
 
-        existing = (
-            self.session
-            .query(ExchangeRate)
-            .filter(
-                ExchangeRate.rate_date
-                == rate_date,
-                ExchangeRate.from_currency
-                == source,
-                ExchangeRate.to_currency
-                == target,
+        with get_db_session() as session:
+            existing = (
+                session.query(ExchangeRate)
+                .filter(
+                    ExchangeRate.rate_date
+                    == rate_date,
+                    ExchangeRate.from_currency
+                    == source,
+                    ExchangeRate.to_currency
+                    == target,
+                )
+                .one_or_none()
             )
-            .one_or_none()
-        )
 
-        if existing:
-            existing.rate = rate_value
+            if existing:
+                existing.rate = rate_value
 
-            self.session.flush()
+                session.flush()
 
-            return existing
+                # 세션 종료 후에도 사용할 수 있도록
+                # connection.py의 expire_on_commit=False를 사용합니다.
+                return existing
 
-        exchange_rate = ExchangeRate(
-            rate_date=rate_date,
-            from_currency=source,
-            to_currency=target,
-            rate=rate_value,
-        )
+            exchange_rate = ExchangeRate(
+                rate_date=rate_date,
+                from_currency=source,
+                to_currency=target,
+                rate=rate_value,
+            )
 
-        self.session.add(
-            exchange_rate
-        )
+            session.add(
+                exchange_rate
+            )
 
-        self.session.flush()
+            session.flush()
 
-        return exchange_rate
+            return exchange_rate
 
     def get_latest_exchange_rate(
         self,
@@ -443,25 +445,28 @@ class Repository:
             to_currency
         ).strip().upper()
 
+        if not source or not target:
+            return None
+
         if source == target:
             return None
 
-        return (
-            self.session
-            .query(ExchangeRate)
-            .filter(
-                ExchangeRate.from_currency
-                == source,
-                ExchangeRate.to_currency
-                == target,
-            )
-            .order_by(
-                ExchangeRate.rate_date.desc(),
-                ExchangeRate.id.desc(),
-            )
-            .first()
-        )
-        
+        with get_db_session() as session:
+            return (
+                session.query(ExchangeRate)
+                .filter(
+                    ExchangeRate.from_currency
+                    == source,
+                    ExchangeRate.to_currency
+                    == target,
+                    ExchangeRate.rate > 0,
+                )
+                .order_by(
+                    ExchangeRate.rate_date.desc(),
+                    ExchangeRate.id.desc(),
+                )
+                .first()
+            )        
     
     # -------------------------------------------------------------
     # 계좌 (Account) 관리
