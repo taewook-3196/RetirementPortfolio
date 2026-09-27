@@ -23,6 +23,7 @@ from database.models import (
     AccountTarget,
     AssetMaster,
     Dividend,
+    ExchangeRate,
     InvestmentProfile,
     Price,
     RecommendationLog,
@@ -339,6 +340,129 @@ class Repository:
                 ),
             )
 
+    def save_exchange_rate(
+        self,
+        rate_date,
+        from_currency: str,
+        to_currency: str,
+        rate: float,
+    ) -> ExchangeRate:
+        """
+        환율을 저장하거나 갱신합니다.
+
+        예:
+            USD -> KRW
+            rate = 1350.0
+
+        같은 날짜/통화쌍이 이미 존재하면
+        기존 값을 갱신합니다.
+        """
+
+        source = str(
+            from_currency
+        ).strip().upper()
+
+        target = str(
+            to_currency
+        ).strip().upper()
+
+        rate_value = float(
+            rate or 0
+        )
+
+        if not source:
+            raise ValueError(
+                "기준 통화가 필요합니다."
+            )
+
+        if not target:
+            raise ValueError(
+                "대상 통화가 필요합니다."
+            )
+
+        if source == target:
+            raise ValueError(
+                "서로 다른 통화를 지정해야 합니다."
+            )
+
+        if rate_value <= 0:
+            raise ValueError(
+                "환율은 0보다 커야 합니다."
+            )
+
+        existing = (
+            self.session
+            .query(ExchangeRate)
+            .filter(
+                ExchangeRate.rate_date
+                == rate_date,
+                ExchangeRate.from_currency
+                == source,
+                ExchangeRate.to_currency
+                == target,
+            )
+            .one_or_none()
+        )
+
+        if existing:
+            existing.rate = rate_value
+
+            self.session.flush()
+
+            return existing
+
+        exchange_rate = ExchangeRate(
+            rate_date=rate_date,
+            from_currency=source,
+            to_currency=target,
+            rate=rate_value,
+        )
+
+        self.session.add(
+            exchange_rate
+        )
+
+        self.session.flush()
+
+        return exchange_rate
+
+    def get_latest_exchange_rate(
+        self,
+        from_currency: str,
+        to_currency: str,
+    ) -> ExchangeRate | None:
+        """
+        지정한 통화쌍의 가장 최근 환율을 반환합니다.
+        """
+
+        source = str(
+            from_currency
+        ).strip().upper()
+
+        target = str(
+            to_currency
+        ).strip().upper()
+
+        if source == target:
+            return None
+
+        return (
+            self.session
+            .query(ExchangeRate)
+            .filter(
+                ExchangeRate.from_currency
+                == source,
+                ExchangeRate.to_currency
+                == target,
+            )
+            .order_by(
+                ExchangeRate.rate_date.desc(),
+                ExchangeRate.id.desc(),
+            )
+            .first()
+        )
+        
+    
     # -------------------------------------------------------------
     # 계좌 (Account) 관리
     # -------------------------------------------------------------
