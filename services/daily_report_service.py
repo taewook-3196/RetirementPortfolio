@@ -176,36 +176,116 @@ class DailyReportService:
                         for ticker, pos in acc_pos_raw.items():
                             if pos.quantity <= 0:
                                 continue
-                            cur_w = (pos.current_value / acc_eval) if acc_eval > 0 else 0.0
-                            tgt_w = acc_targets_map.get(ticker, ETFConfig(ticker, "", 0.0)).target_weight
+
+                            cur_w = (
+                                pos.current_value / acc_eval
+                            ) if acc_eval > 0 else 0.0
+
+                            tgt_w = acc_targets_map.get(
+                                ticker,
+                                ETFConfig(
+                                    ticker,
+                                    "",
+                                    0.0,
+                                ),
+                            ).target_weight
+
+                            asset = (
+                                self.repo
+                                .get_etf_master(ticker)
+                            )
+
+                            asset_currency = (
+                                getattr(
+                                    asset,
+                                    "currency",
+                                    None,
+                                )
+                                or getattr(
+                                    acc,
+                                    "currency",
+                                    "KRW",
+                                )
+                                or "KRW"
+                            )
+
                             acc_positions.append({
                                 "ticker": ticker,
-                                "name": pos.name or ticker,
-                                "shares": pos.quantity,
-                                "current_price": pos.current_price,
-                                "eval_amount": pos.current_value,
-                                "pl_pct": pos.unrealized_roi * 100.0,
-                                "current_weight": cur_w,
-                                "target_weight": tgt_w,
+                                "name":
+                                    pos.name
+                                    or ticker,
+                                "currency":
+                                    asset_currency,
+                                "shares":
+                                    pos.quantity,
+                                "current_price":
+                                    pos.current_price,
+                                "eval_amount":
+                                    pos.current_value,
+                                "pl_pct":
+                                    pos.unrealized_roi
+                                    * 100.0,
+                                "current_weight":
+                                    cur_w,
+                                "target_weight":
+                                    tgt_w,
                             })
-
+                            
                     # 해당 계좌 목표 ETF 중 미보유(수량=0) 종목도 편입 대기로 추가
                     acc_held_tickers = {p["ticker"] for p in acc_positions}
                     for ticker, etf in acc_targets_map.items():
-                        if ticker not in acc_held_tickers and etf.target_weight > 0:
-                            latest_p = self.repo.get_latest_price(ticker)
-                            cur_p = latest_p.close_price if latest_p else 0.0
+                        if (
+                            ticker
+                            not in acc_held_tickers
+                            and etf.target_weight > 0
+                        ):
+                            latest_p = (
+                                self.repo
+                                .get_latest_price(ticker)
+                            )
+
+                            cur_p = (
+                                latest_p.close_price
+                                if latest_p
+                                else 0.0
+                            )
+
+                            asset = (
+                                self.repo
+                                .get_etf_master(ticker)
+                            )
+
+                            asset_currency = (
+                                getattr(
+                                    asset,
+                                    "currency",
+                                    None,
+                                )
+                                or getattr(
+                                    acc,
+                                    "currency",
+                                    "KRW",
+                                )
+                                or "KRW"
+                            )
+
                             acc_positions.append({
                                 "ticker": ticker,
-                                "name": etf.name or ticker,
+                                "name":
+                                    etf.name
+                                    or ticker,
+                                "currency":
+                                    asset_currency,
                                 "shares": 0,
-                                "current_price": cur_p,
+                                "current_price":
+                                    cur_p,
                                 "eval_amount": 0.0,
                                 "pl_pct": 0.0,
                                 "current_weight": 0.0,
-                                "target_weight": etf.target_weight,
+                                "target_weight":
+                                    etf.target_weight,
                             })
-
+                            
                     account_groups.append({
                         "account_id": acc.id,
                         "account_name": acc.account_name,
