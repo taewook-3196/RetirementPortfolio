@@ -248,8 +248,66 @@ class DailyReportService:
                             if pos.quantity <= 0:
                                 continue
 
+                            account_currency = (
+                                str(
+                                    getattr(
+                                        acc,
+                                        "currency",
+                                        "KRW",
+                                    )
+                                    or "KRW"
+                                )
+                                .strip()
+                                .upper()
+                            )
+
+                            asset = (
+                                self.repo
+                                .get_etf_master(
+                                    ticker
+                                )
+                            )
+
+                            asset_currency = (
+                                str(
+                                    getattr(
+                                        asset,
+                                        "currency",
+                                        None,
+                                    )
+                                    or getattr(
+                                        pos,
+                                        "currency",
+                                        None,
+                                    )
+                                    or account_currency
+                                )
+                                .strip()
+                                .upper()
+                            )
+
+                            # 종목 평가액은 native 통화이므로
+                            # 계좌 전체 평가액과 비교하기 전에
+                            # Account.currency로 환산합니다.
+                            position_value_in_account_currency = (
+                                self.portfolio_service
+                                .convert_amount(
+                                    value=float(
+                                        pos.current_value
+                                        or 0
+                                    ),
+                                    from_currency=(
+                                        asset_currency
+                                    ),
+                                    to_currency=(
+                                        account_currency
+                                    ),
+                                )
+                            )
+
                             cur_w = (
-                                pos.current_value / acc_eval
+                                position_value_in_account_currency
+                                / acc_eval
                             ) if acc_eval > 0 else 0.0
 
                             tgt_w = acc_targets_map.get(
@@ -260,26 +318,7 @@ class DailyReportService:
                                     0.0,
                                 ),
                             ).target_weight
-
-                            asset = (
-                                self.repo
-                                .get_etf_master(ticker)
-                            )
-
-                            asset_currency = (
-                                getattr(
-                                    asset,
-                                    "currency",
-                                    None,
-                                )
-                                or getattr(
-                                    acc,
-                                    "currency",
-                                    "KRW",
-                                )
-                                or "KRW"
-                            )
-
+                            
                             acc_positions.append({
                                 "ticker": ticker,
                                 "name":
@@ -454,60 +493,210 @@ class DailyReportService:
                     acc_rec_items = []
 
                     for r in recs_raw:
+                        account_currency = (
+                            str(
+                                getattr(
+                                    acc,
+                                    "currency",
+                                    "KRW",
+                                )
+                                or "KRW"
+                            )
+                            .strip()
+                            .upper()
+                        )
+
                         available_amount = (
-                            float(r.recommended_buy or 0)
+                            float(
+                                r.recommended_buy
+                                or 0
+                            )
                             if not already_inv
                             else 0.0
                         )
 
-                        available_shares = (
-                            int(
-                                available_amount
-                                // float(r.current_price)
+                        # 추천 엔진의 available_amount는
+                        # 계좌 기준통화 금액입니다.
+                        #
+                        # 실제 주문 수량 계산에는
+                        # 종목 native 통화의 현재가를 사용해야 합니다.
+                        position = (
+                            acc_pos_raw.get(
+                                r.ticker
                             )
-                            if (
-                                float(r.current_price or 0) > 0
-                                and available_amount > 0
+                            if isinstance(
+                                acc_pos_raw,
+                                dict,
                             )
-                            else 0
+                            else None
                         )
 
-                        executable_amount = (
+                        asset = (
+                            self.repo
+                            .get_etf_master(
+                                r.ticker
+                            )
+                        )
+
+                        asset_currency = (
+                            str(
+                                getattr(
+                                    asset,
+                                    "currency",
+                                    None,
+                                )
+                                or getattr(
+                                    position,
+                                    "currency",
+                                    None,
+                                )
+                                or account_currency
+                            )
+                            .strip()
+                            .upper()
+                        )
+
+                        native_current_price = (
+                            float(
+                                getattr(
+                                    position,
+                                    "current_price",
+                                    0,
+                                )
+                                or 0
+                            )
+                            if position
+                            else 0.0
+                        )
+
+                        # 미보유 목표 종목 등으로 position 가격이
+                        # 없으면 DB의 최신 native 가격을 사용합니다.
+                        if native_current_price <= 0:
+                            latest_price = (
+                                self.repo
+                                .get_latest_price(
+                                    r.ticker
+                                )
+                            )
+
+                            if latest_price:
+                                native_current_price = float(
+                                    latest_price.close_price
+                                    or 0
+                                )
+
+                        # 계좌통화 예산을 종목통화 예산으로
+                        # 변환한 뒤 실제 매수 가능 주수를 계산합니다.
+                        if (
+                            available_amount > 0
+                            and native_current_price > 0
+                        ):
+                            available_asset_budget = (
+                                self.portfolio_service
+                                .convert_amount(
+                                    value=(
+                                        available_amount
+                                    ),
+                                    from_currency=(
+                                        account_currency
+                                    ),
+                                    to_currency=(
+                                        asset_currency
+                                    ),
+                                )
+                            )
+
+                            available_shares = int(
+                                available_asset_budget
+                                // native_current_price
+                            )
+
+                        else:
+                            available_asset_budget = 0.0
+                            available_shares = 0
+
+                        # 실제 주문금액은 우선 종목 native
+                        # 통화로 계산합니다.
+                        executable_asset_amount = (
                             available_shares
-                            * float(r.current_price or 0)
+                            * native_current_price
+                        )
+
+                        # 계좌의 매수한도와 비교/표시할 수 있도록
+                        # 실제 주문금액의 계좌통화 환산값도 보관합니다.
+                        executable_account_amount = (
+                            self.portfolio_service
+                            .convert_amount(
+                                value=(
+                                    executable_asset_amount
+                                ),
+                                from_currency=(
+                                    asset_currency
+                                ),
+                                to_currency=(
+                                    account_currency
+                                ),
+                            )
+                            if executable_asset_amount > 0
+                            else 0.0
                         )
 
                         acc_rec_items.append({
-                            "ticker": r.ticker,
-                            "name": r.name,
+                            "ticker":
+                                r.ticker,
 
-                            # 정량 엔진이 계산한 값은
-                            # '매수 권고'가 아니라
-                            # 현재 규칙상 사용할 수 있는 예산입니다.
+                            "name":
+                                r.name,
+
+                            "account_currency":
+                                account_currency,
+
+                            "asset_currency":
+                                asset_currency,
+
+                            "current_price":
+                                native_current_price,
+
+                            # 계좌 기준통화의 사용 가능 예산
                             "available_buy_budget":
                                 available_amount,
+
+                            # 종목통화로 환산한 사용 가능 예산
+                            "available_asset_budget":
+                                available_asset_budget,
 
                             "available_buy_shares":
                                 available_shares,
 
-                            "executable_buy_amount":
-                                executable_amount,
+                            # 종목 native 통화의 실제 주문금액
+                            "executable_asset_amount":
+                                executable_asset_amount,
 
-                            # 기존 HTML/코드와의 호환성을 위해
-                            # 필드명은 유지하되 실제 주문 가능한 값으로 전달합니다.
+                            # 계좌 기준통화로 환산한 실제 주문금액
+                            "executable_account_amount":
+                                executable_account_amount,
+
+                            # 기존 HTML 코드와의 호환성을 위해
+                            # 이 필드는 계좌 기준통화 금액으로 유지합니다.
+                            "executable_buy_amount":
+                                executable_account_amount,
+
                             "recommended_shares":
                                 available_shares,
-                            
-                            "recommended_amount":
-                                executable_amount,
 
-                            "reason": r.reason,
+                            "recommended_amount":
+                                executable_account_amount,
+
+                            "reason":
+                                r.reason,
+
                             "target_weight":
                                 r.target_weight,
+
                             "current_weight":
                                 r.current_weight,
                         })
-
+                        
                     account_recommendations.append({
                         "account_id": acc.id,
                         "account_name": acc.account_name,
@@ -1712,8 +1901,17 @@ class DailyReportService:
                 if ar_budget <= 0 and not ar_items:
                     continue
 
+                ar_currency = (
+                    ar.get(
+                        "currency",
+                        "KRW",
+                    )
+                    or "KRW"
+                )
+
                 capacity_blocks.append(
-                    f"[{ar_name}] 최대 {ar_budget:,.0f}원"
+                    f"[{ar_name}] 최대 "
+                    f"{self._format_money(ar_budget, ar_currency)}"
                 )
 
                 for it in ar_items:
@@ -1726,17 +1924,22 @@ class DailyReportService:
 
                     executable_amount = float(
                         it.get(
-                            "executable_buy_amount",
-                            0,
-                        ) or 0
+                            "executable_account_amount",
+                            it.get(
+                                "executable_buy_amount",
+                                0,
+                            ),
+                        )
+                        or 0
                     )
 
                     if shares > 0:
                         capacity_blocks.append(
                             f"• {it.get('name')}: "
                             f"최대 {shares:,}주 "
-                            f"({executable_amount:,.0f}원)"
+                            f"({self._format_money(executable_amount, ar_currency)})"
                         )
+                        
 
             if capacity_blocks:
                 lines.append(
@@ -1778,7 +1981,8 @@ class DailyReportService:
             ):
                 lines.append(
                     f"\n📐 매수 가능 범위: "
-                    f"최대 {available_budget:,.0f}원"
+                    f"최대 "
+                    f"{self._format_money(available_budget, single_account_currency)}"
                 )
 
                 for it in capacity_items:
@@ -1791,18 +1995,22 @@ class DailyReportService:
 
                     executable_amount = float(
                         it.get(
-                            "executable_buy_amount",
-                            0,
-                        ) or 0
+                            "executable_account_amount",
+                            it.get(
+                                "executable_buy_amount",
+                                0,
+                            ),
+                        )
+                        or 0
                     )
 
                     if shares > 0:
                         lines.append(
                             f"• {it.get('name')}: "
                             f"최대 {shares:,}주 "
-                            f"({executable_amount:,.0f}원)"
+                            f"({self._format_money(executable_amount, single_account_currency)})"
                         )
-
+                        
                 lines.append(
                     "• 위 금액은 자동 매수 지시가 아닌 "
                     "현재 규칙상 사용 가능한 최대 범위"
