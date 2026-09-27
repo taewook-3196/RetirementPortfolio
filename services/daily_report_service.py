@@ -840,6 +840,11 @@ class DailyReportService:
                     )
                 )
 
+                logger.info(
+                    "USD/KRW DEBUG: %s",
+                    usd_krw_data,
+                )                
+
                 if (
                     usd_krw_data.get(
                         "success"
