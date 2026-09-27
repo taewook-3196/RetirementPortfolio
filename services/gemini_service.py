@@ -3,7 +3,7 @@ services/gemini_service.py
 Google Gemini 생성형 AI (기본 모델: gemini-3.8-flash) 연동 매크로 투자 가이드 서비스.
 - 환율(USD/KRW), 글로벌 시황, 수집 뉴스, 포트폴리오 현황을 결합한 심층 AI 브리핑 생성
 - 카카오톡 모닝 브리핑용 'AI 한 줄 시황' 및 모바일 웹 리포트용 '글로벌 매크로 분석 & 투자 조언' 제공
-- 모델 장애 시 자동 하위 모델(3.8 -> 3.7 -> 2.5 -> 2.0) 폴백(Auto-Fallback) 지원
+- 모델 장애 시 자동 하위 모델(3.8 -> 3.7 -> 3.6 -> 3.5 -> 3.5 Flash-Lite) 폴백(Auto-Fallback) 지원
 - API Key 미설정 또는 장애 시에도 무중단 안전 대체의 Graceful Degradation 보장
 """
 
@@ -24,10 +24,10 @@ logger = logging.getLogger("RetirementPortfolio.GeminiService")
 # 자동 폴백 모델 우선순위 리스트 (Google 권장 Flash 라인업)
 FALLBACK_MODELS = [
     "gemini-3.8-flash",
+    "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-3.7-flash",
 ]
 
 INVESTMENT_STANCE_PROFILES: Dict[str, Dict[str, str]] = {
