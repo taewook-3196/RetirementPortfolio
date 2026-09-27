@@ -25,6 +25,10 @@ class ETFPosition:
     ticker: str
     name: str = ""
 
+    # 종목 자체의 거래/가격 통화
+    # 예: 국내주식 KRW, 미국주식 USD
+    currency: str = "KRW"
+
     # 미국 주식의 소수점 수량까지 지원하기 위해 float 사용
     quantity: float = 0.0
 
@@ -78,6 +82,7 @@ def calculate_etf_positions(
     dividends: List[Dividend],
     latest_prices: Dict[str, Price],
     ticker_names: Optional[Dict[str, str]] = None,
+    ticker_currencies: Optional[Dict[str, str]] = None,
 ) -> Dict[str, ETFPosition]:
     """
     거래 내역과 분배금 내역을 시간순으로 재생하여
@@ -86,6 +91,7 @@ def calculate_etf_positions(
     positions: Dict[str, ETFPosition] = {}
 
     names_map = ticker_names or {}
+    currencies_map = ticker_currencies or {}    
 
     # ---------------------------------------------------------
     # 종목별 거래 분류
@@ -126,6 +132,13 @@ def calculate_etf_positions(
                 ticker,
                 ticker,
             ),
+            currency=str(
+                currencies_map.get(
+                    ticker,
+                    "KRW",
+                )
+                or "KRW"
+            ).strip().upper(),
         )
 
         current_quantity = 0.0
