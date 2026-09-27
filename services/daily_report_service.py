@@ -153,11 +153,19 @@ class DailyReportService:
                         "id": acc.id,
                         "name": acc.account_name,
                         "broker": acc.broker,
+                        "currency": (
+                            getattr(
+                                acc,
+                                "currency",
+                                "KRW",
+                            )
+                            or "KRW"
+                        ),
                         "total_eval": acc_eval,
                         "total_pl": acc_pl,
                         "total_pl_pct": acc_pl_pct,
                     })
-
+                    
                     # 해당 계좌의 목표 ETF 맵 구성
                     acc_targets = self.portfolio_service.get_target_etfs(account_id=acc.id)
                     acc_targets_map: Dict[str, ETFConfig] = {e.ticker: e for e in acc_targets}
@@ -939,11 +947,36 @@ class DailyReportService:
         # 다중 계좌 등록 시 계좌별 요약 한 줄 표시
         if account_summaries and len(account_summaries) > 1:
             acc_strs = []
-            for a in account_summaries:
-                s_sign = "+" if a["total_pl"] > 0 else ""
-                acc_strs.append(f"{a['name']} {a['total_eval']/10000:,.0f}만({s_sign}{a['total_pl_pct']:.1f}%)")
-            lines.append(f"• 계좌별: {' | '.join(acc_strs)}")
 
+            for a in account_summaries:
+                s_sign = (
+                    "+"
+                    if a["total_pl"] > 0
+                    else ""
+                )
+
+                currency = (
+                    a.get("currency", "KRW")
+                    or "KRW"
+                )
+
+                formatted_eval = self._format_money(
+                    a.get("total_eval", 0),
+                    currency,
+                )
+
+                acc_strs.append(
+                    f"{a['name']} "
+                    f"{formatted_eval}"
+                    f"({s_sign}"
+                    f"{a['total_pl_pct']:.1f}%)"
+                )
+
+            lines.append(
+                f"• 계좌별: "
+                f"{' | '.join(acc_strs)}"
+            )
+            
         # 계좌별 투자 가이드 및 D-Day 표출
         if account_recommendations and len(account_recommendations) > 1:
             g_lines = []
@@ -1059,6 +1092,10 @@ class DailyReportService:
             total_stocks = sum(len(ag.get("positions", [])) for ag in account_groups)
             lines.append(f"\n📋 계좌별 등록·보유 종목 현황 ({total_stocks}개):")
             for ag in account_groups:
+                ag_currency = (
+                    ag.get("currency", "KRW")
+                    or "KRW"
+                )                
                 ag_name = ag.get("account_name", "")
                 ag_pos = ag.get("positions", [])
                 if not ag_pos:
@@ -1076,9 +1113,19 @@ class DailyReportService:
                     p_sign = "+" if p_pl > 0 else ""
 
                     if p_shares > 0:
-                        line = f"• {p_name}: {p_price:,.0f}원 ({p_sign}{p_pl:.1f}% | 비중 {p_cur_w:.1f}%)"
+                        line = (
+                            f"• {p_name}: "
+                            f"{self._format_money(p_price, ag_currency)} "
+                            f"({p_sign}{p_pl:.1f}% | "
+                            f"비중 {p_cur_w:.1f}%)"
+                        )
                     else:
-                        line = f"• {p_name}: {p_price:,.0f}원 (미보유 | 목표 {p_tgt_w:.1f}%)"
+                        line = (
+                            f"• {p_name}: "
+                            f"{self._format_money(p_price, ag_currency)} "
+                            f"(미보유 | 목표 {p_tgt_w:.1f}%)"
+                        )
+                        
 
                     # 1000자 초과 방지 체크
                     if sum(len(l) for l in lines) + len(line) > 900:
