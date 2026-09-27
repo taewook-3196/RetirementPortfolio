@@ -1167,6 +1167,7 @@ def get_cycle_buy_amount(
     cycle_type: str,
     cycle_detail: str = "",
     base_date: Optional[date] = None,
+    amount_converter=None,
 ) -> Tuple[
     float,
     Optional[str],
@@ -1175,8 +1176,20 @@ def get_cycle_buy_amount(
     """
     현재 투자 주기 안에서 실제 BUY 거래금액 합계를 계산합니다.
 
-    거래금액 계산:
+    기본 거래금액:
         quantity * price + fee + tax
+
+    amount_converter가 전달되면 각 거래의 금액을
+    호출자가 원하는 기준통화로 변환한 뒤 합산합니다.
+
+    amount_converter 형식:
+        amount_converter(
+            transaction,
+            native_buy_amount,
+        ) -> converted_amount
+
+    이를 통해 이 유틸리티는 환율이나 계좌통화를
+    직접 알 필요 없이 사용할 수 있습니다.
 
     반환:
         (
@@ -1185,6 +1198,7 @@ def get_cycle_buy_amount(
             period_name,
         )
     """
+
     (
         start_date,
         end_date,
@@ -1206,11 +1220,19 @@ def get_cycle_buy_amount(
         )
 
     total_buy_amount = 0.0
-    latest_buy_date: Optional[date] = None
+
+    latest_buy_date: Optional[
+        date
+    ] = None
 
     for transaction in (
         transactions or []
     ):
+
+        # -----------------------------------------------------
+        # dict 형태
+        # -----------------------------------------------------
+
         if isinstance(
             transaction,
             dict,
@@ -1254,6 +1276,10 @@ def get_cycle_buy_amount(
                 "tax",
                 0,
             )
+
+        # -----------------------------------------------------
+        # SQLAlchemy 객체 형태
+        # -----------------------------------------------------
 
         else:
             transaction_type = getattr(
@@ -1343,14 +1369,39 @@ def get_cycle_buy_amount(
             ),
         )
 
-        buy_amount = (
+        # -----------------------------------------------------
+        # 종목 원래 통화 기준 거래금액
+        # -----------------------------------------------------
+
+        native_buy_amount = (
             quantity_value
             * price_value
             + fee_value
             + tax_value
         )
 
-        total_buy_amount += buy_amount
+        # -----------------------------------------------------
+        # 필요하면 호출자가 계좌 기준통화로 변환
+        # -----------------------------------------------------
+
+        if amount_converter is not None:
+            converted_buy_amount = float(
+                amount_converter(
+                    transaction,
+                    native_buy_amount,
+                )
+                or 0
+            )
+        else:
+            # 기존 호출과 완전히 호환
+            converted_buy_amount = (
+                native_buy_amount
+            )
+
+        total_buy_amount += max(
+            0.0,
+            converted_buy_amount,
+        )
 
         if (
             latest_buy_date is None
