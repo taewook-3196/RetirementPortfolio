@@ -1599,6 +1599,14 @@ class MacroIndicatorService:
         self,
         macro_data: Dict[str, Any],
     ) -> List[str]:
+        """
+        카카오톡 모닝 리포트용
+        핵심 매크로 지표 요약을 생성합니다.
+
+        - 주가지수: 당일 등락률
+        - 미국 10년물: 당일 bp + 5일 bp
+        - 미국 경제지표: 최신 발표값 + 기준월
+        """
 
         raw = macro_data.get(
             "raw_items",
@@ -1610,12 +1618,35 @@ class MacroIndicatorService:
             {},
         )
 
-        sp = raw.get("sp500", {})
-        ndx = raw.get("nasdaq100", {})
-        kospi = raw.get("kospi", {})
-        usd = raw.get("usd_krw", {})
-        oil = raw.get("wti_oil", {})
-        tnx = raw.get("us10y_yield", {})
+        sp = raw.get(
+            "sp500",
+            {},
+        )
+
+        ndx = raw.get(
+            "nasdaq100",
+            {},
+        )
+
+        kospi = raw.get(
+            "kospi",
+            {},
+        )
+
+        usd = raw.get(
+            "usd_krw",
+            {},
+        )
+
+        oil = raw.get(
+            "wti_oil",
+            {},
+        )
+
+        tnx = raw.get(
+            "us10y_yield",
+            {},
+        )
 
         pce = fund.get(
             "core_pce",
@@ -1632,50 +1663,199 @@ class MacroIndicatorService:
             {},
         )
 
-        pce_text = (
-            pce.get("latest_value")
-            if pce.get("success")
-            else "조회 실패"
+        # ----------------------------------------------------
+        # 경제지표 기준월 간단 표시
+        # 예:
+        # 2026.07월 -> 7월
+        # 2026.08월 -> 8월
+        # ----------------------------------------------------
+
+        def short_period(
+            data: Dict[str, Any],
+        ) -> str:
+
+            if not data.get("success"):
+                return ""
+
+            period = str(
+                data.get(
+                    "period",
+                    "",
+                )
+                or ""
+            ).strip()
+
+            if not period:
+                return ""
+
+            try:
+                if "." in period:
+                    month_part = (
+                        period
+                        .split(".", 1)[1]
+                        .replace("월", "")
+                        .strip()
+                    )
+
+                    month = int(
+                        month_part
+                    )
+
+                    if 1 <= month <= 12:
+                        return f"{month}월"
+
+            except (
+                ValueError,
+                TypeError,
+            ):
+                pass
+
+            return period
+
+        def fundamental_text(
+            data: Dict[str, Any],
+        ) -> str:
+
+            if not data.get("success"):
+                return "조회 실패"
+
+            value = str(
+                data.get(
+                    "latest_value",
+                    "-",
+                )
+            )
+
+            period = short_period(
+                data
+            )
+
+            if period:
+                return (
+                    f"{value}({period})"
+                )
+
+            return value
+
+        pce_text = fundamental_text(
+            pce
         )
 
-        job_text = (
-            job.get("latest_value")
-            if job.get("success")
-            else "조회 실패"
+        job_text = fundamental_text(
+            job
         )
 
         unemployment_text = (
-            unemployment.get("latest_value")
-            if unemployment.get("success")
-            else "조회 실패"
+            fundamental_text(
+                unemployment
+            )
         )
 
+        # ----------------------------------------------------
+        # 미국 10년물 국채금리
+        # ----------------------------------------------------
+        # 당일 변화는 change_str의 bp 값을 그대로 사용하고,
+        # 5일 변화는 5d_change_bp를 사용합니다.
+        # 여기서는 다시 계산하지 않습니다.
+        # ----------------------------------------------------
+
+        tnx_price = float(
+            tnx.get(
+                "price",
+                0,
+            )
+            or 0
+        )
+
+        tnx_change = str(
+            tnx.get(
+                "change_str",
+                "",
+            )
+            or ""
+        ).strip()
+
+        five_d_bp = tnx.get(
+            "5d_change_bp"
+        )
+
+        tnx_parts = []
+
+        if tnx_change:
+            tnx_parts.append(
+                tnx_change
+            )
+
+        if five_d_bp is not None:
+            try:
+                five_d_bp_value = float(
+                    five_d_bp
+                )
+
+                tnx_parts.append(
+                    "5일 "
+                    f"{five_d_bp_value:+.1f}bp"
+                )
+
+            except (
+                ValueError,
+                TypeError,
+            ):
+                pass
+
+        if tnx_parts:
+            tnx_text = (
+                f"{tnx_price:.2f}%"
+                f"({', '.join(tnx_parts)})"
+            )
+        else:
+            tnx_text = (
+                f"{tnx_price:.2f}%"
+            )
+
+        # ----------------------------------------------------
+        # 카카오 출력
+        # ----------------------------------------------------
+
         lines = [
-            "📊 글로벌 주요 지표 & 최근 트렌드:",
+            (
+                "📊 글로벌 주요 지표 "
+                "& 최근 트렌드:"
+            ),
+
             (
                 "• 美증시: "
-                f"S&P {sp.get('price', 0):,.0f}"
+                f"S&P "
+                f"{sp.get('price', 0):,.0f}"
                 f"({sp.get('change_str', '')}) / "
-                f"나스닥 {ndx.get('price', 0):,.0f}"
+                f"나스닥 "
+                f"{ndx.get('price', 0):,.0f}"
                 f"({ndx.get('change_str', '')})"
             ),
+
             (
                 "• 韓증시: "
-                f"코스피 {kospi.get('price', 0):,.0f}"
+                f"코스피 "
+                f"{kospi.get('price', 0):,.0f}"
                 f"({kospi.get('change_str', '')}) "
                 f"[{kospi.get('trend_badge', '')}]"
             ),
+
             (
                 "• 거시: "
-                f"환율 {usd.get('price', 0):,.1f}원 / "
-                f"10년금리 {tnx.get('price', 0):.2f}% / "
-                f"유가 {oil.get('price', 0):.1f}$"
+                f"환율 "
+                f"{usd.get('price', 0):,.1f}원 / "
+                f"10년금리 {tnx_text} / "
+                f"유가 "
+                f"{oil.get('price', 0):.1f}$"
             ),
+
             (
                 "• 경제: "
                 f"근원PCE {pce_text} / "
                 f"NFP {job_text} / "
-                f"실업률 {unemployment_text}"
+                f"실업률 "
+                f"{unemployment_text}"
             ),
         ]
 
