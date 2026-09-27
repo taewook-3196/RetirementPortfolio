@@ -1171,26 +1171,88 @@ class DailyReportService:
                 f"{' | '.join(acc_strs)}"
             )
             
-        # 계좌별 투자 가이드 및 D-Day 표출
-        if account_recommendations and len(account_recommendations) > 1:
+        # 계좌별 투자 가이드 및 매수 가능 예산
+        if (
+            account_recommendations
+            and len(account_recommendations) > 1
+        ):
             g_lines = []
-            for ar in account_recommendations:
-                ar_name = ar.get("account_name", "")
-                ar_already = ar.get("already_invested_this_month", False)
-                ar_dday = ar.get("d_day")
-                ar_next = ar.get("next_buy_date", "")
-                if ar_already:
-                    g_lines.append(f"{ar_name}: 완료")
-                elif ar_dday == 0:
-                    g_lines.append(f"{ar_name}: 🚨D-Day")
-                elif ar_dday is not None:
-                    g_lines.append(f"{ar_name}: D-{ar_dday}({ar_next})")
-                else:
-                    g_lines.append(f"{ar_name}: 수시")
-            lines.append(f"• 매수주기: {' | '.join(g_lines)}")
-        else:
-            lines.append(f"• 투자 가이드: {guide_text}")
 
+            for ar in account_recommendations:
+                ar_name = ar.get(
+                    "account_name",
+                    "",
+                )
+
+                ar_already = ar.get(
+                    "already_invested_this_month",
+                    False,
+                )
+
+                ar_dday = ar.get("d_day")
+
+                ar_next = ar.get(
+                    "next_buy_date",
+                    "",
+                )
+
+                ar_currency = (
+                    ar.get(
+                        "currency",
+                        "KRW",
+                    )
+                    or "KRW"
+                )
+
+                ar_budget = float(
+                    ar.get(
+                        "total_available_buy_budget",
+                        0,
+                    )
+                    or 0
+                )
+
+                formatted_ar_budget = (
+                    self._format_money(
+                        ar_budget,
+                        ar_currency,
+                    )
+                )
+
+                if ar_already:
+                    g_lines.append(
+                        f"{ar_name}: 완료"
+                    )
+
+                elif ar_dday == 0:
+                    g_lines.append(
+                        f"{ar_name}: 🚨D-Day "
+                        f"(최대 {formatted_ar_budget})"
+                    )
+
+                elif ar_dday is not None:
+                    g_lines.append(
+                        f"{ar_name}: "
+                        f"D-{ar_dday}({ar_next}) "
+                        f"(최대 {formatted_ar_budget})"
+                    )
+
+                else:
+                    g_lines.append(
+                        f"{ar_name}: 수시 "
+                        f"(최대 {formatted_ar_budget})"
+                    )
+
+            lines.append(
+                f"• 매수주기: "
+                f"{' | '.join(g_lines)}"
+            )
+
+        else:
+            lines.append(
+                f"• 투자 가이드: {guide_text}"
+            )
+            
         # 10대 글로벌 매크로 및 트렌드 요약 (미국 3대, 국내 2대, 환율/유가/금리, PCE/고용)
         if macro_data:
             try:
