@@ -22,6 +22,7 @@ from database.models import (
     Account,
     AccountTarget,
     AssetMaster,
+    CashFlow,
     Dividend,
     ExchangeRate,
     InvestmentProfile,
@@ -848,6 +849,318 @@ class Repository:
     
             return True
 
+    # -------------------------------------------------------------
+    # 현금 입출금 (CashFlow) 관리
+    # -------------------------------------------------------------
+
+    def get_cash_flows(
+        self,
+        account_id: int,
+    ) -> List[CashFlow]:
+        """
+        현재 사용자가 소유한 계좌의
+        현금 입출금 내역을 조회합니다.
+
+        최신 내역부터 반환합니다.
+        """
+
+        if not self.user_id:
+            return []
+
+        clean_account_id = int(
+            account_id
+        )
+
+        with get_db_session() as session:
+            account = (
+                session.query(Account)
+                .filter(
+                    Account.id
+                    == clean_account_id,
+                    Account.user_id
+                    == self.user_id,
+                )
+                .first()
+            )
+
+            if account is None:
+                return []
+
+            return list(
+                session.query(CashFlow)
+                .filter(
+                    CashFlow.account_id
+                    == clean_account_id
+                )
+                .order_by(
+                    CashFlow.flow_date.desc(),
+                    CashFlow.id.desc(),
+                )
+                .all()
+            )
+
+    def create_cash_flow(
+        self,
+        account_id: int,
+        flow_date,
+        flow_type: str,
+        amount: float,
+        currency: str,
+        memo: str = "",
+    ) -> CashFlow:
+        """
+        현재 사용자의 계좌에
+        입금 또는 출금 내역을 등록합니다.
+
+        flow_type:
+        - DEPOSIT
+        - WITHDRAWAL
+
+        amount는 항상 양수로 저장합니다.
+        """
+
+        if not self.user_id:
+            raise ValueError(
+                "현금 입출금을 등록하려면 "
+                "user_id가 필요합니다."
+            )
+
+        clean_account_id = int(
+            account_id
+        )
+
+        clean_flow_type = (
+            str(
+                flow_type or ""
+            )
+            .strip()
+            .upper()
+        )
+
+        if clean_flow_type not in (
+            "DEPOSIT",
+            "WITHDRAWAL",
+        ):
+            raise ValueError(
+                "입출금 유형은 "
+                "DEPOSIT 또는 WITHDRAWAL이어야 합니다."
+            )
+
+        clean_amount = float(
+            amount or 0
+        )
+
+        if clean_amount <= 0:
+            raise ValueError(
+                "입출금 금액은 0보다 커야 합니다."
+            )
+
+        clean_currency = (
+            str(
+                currency or ""
+            )
+            .strip()
+            .upper()
+        )
+
+        if clean_currency not in (
+            "KRW",
+            "USD",
+        ):
+            raise ValueError(
+                "지원하지 않는 통화입니다."
+            )
+
+        with get_db_session() as session:
+            account = (
+                session.query(Account)
+                .filter(
+                    Account.id
+                    == clean_account_id,
+                    Account.user_id
+                    == self.user_id,
+                )
+                .first()
+            )
+
+            if account is None:
+                raise ValueError(
+                    "계좌를 찾을 수 없습니다."
+                )
+
+            cash_flow = CashFlow(
+                account_id=clean_account_id,
+                flow_date=flow_date,
+                flow_type=clean_flow_type,
+                amount=clean_amount,
+                currency=clean_currency,
+                memo=str(
+                    memo or ""
+                ).strip(),
+            )
+
+            session.add(
+                cash_flow
+            )
+
+            session.flush()
+            session.refresh(
+                cash_flow
+            )
+
+            return cash_flow
+
+    def update_cash_flow(
+        self,
+        cash_flow_id: int,
+        flow_date,
+        flow_type: str,
+        amount: float,
+        currency: str,
+        memo: str = "",
+    ) -> bool:
+        """
+        현재 사용자가 소유한 계좌의
+        현금 입출금 내역을 수정합니다.
+        """
+
+        if not self.user_id:
+            return False
+
+        clean_cash_flow_id = int(
+            cash_flow_id
+        )
+
+        clean_flow_type = (
+            str(
+                flow_type or ""
+            )
+            .strip()
+            .upper()
+        )
+
+        if clean_flow_type not in (
+            "DEPOSIT",
+            "WITHDRAWAL",
+        ):
+            raise ValueError(
+                "입출금 유형은 "
+                "DEPOSIT 또는 WITHDRAWAL이어야 합니다."
+            )
+
+        clean_amount = float(
+            amount or 0
+        )
+
+        if clean_amount <= 0:
+            raise ValueError(
+                "입출금 금액은 0보다 커야 합니다."
+            )
+
+        clean_currency = (
+            str(
+                currency or ""
+            )
+            .strip()
+            .upper()
+        )
+
+        if clean_currency not in (
+            "KRW",
+            "USD",
+        ):
+            raise ValueError(
+                "지원하지 않는 통화입니다."
+            )
+
+        with get_db_session() as session:
+            cash_flow = (
+                session.query(CashFlow)
+                .join(
+                    Account,
+                    CashFlow.account_id
+                    == Account.id,
+                )
+                .filter(
+                    CashFlow.id
+                    == clean_cash_flow_id,
+                    Account.user_id
+                    == self.user_id,
+                )
+                .first()
+            )
+
+            if cash_flow is None:
+                return False
+
+            cash_flow.flow_date = (
+                flow_date
+            )
+
+            cash_flow.flow_type = (
+                clean_flow_type
+            )
+
+            cash_flow.amount = (
+                clean_amount
+            )
+
+            cash_flow.currency = (
+                clean_currency
+            )
+
+            cash_flow.memo = str(
+                memo or ""
+            ).strip()
+
+            cash_flow.updated_at = (
+                datetime.now()
+            )
+
+            return True
+
+    def delete_cash_flow(
+        self,
+        cash_flow_id: int,
+    ) -> bool:
+        """
+        현재 사용자가 소유한 계좌의
+        현금 입출금 내역을 삭제합니다.
+        """
+
+        if not self.user_id:
+            return False
+
+        clean_cash_flow_id = int(
+            cash_flow_id
+        )
+
+        with get_db_session() as session:
+            cash_flow = (
+                session.query(CashFlow)
+                .join(
+                    Account,
+                    CashFlow.account_id
+                    == Account.id,
+                )
+                .filter(
+                    CashFlow.id
+                    == clean_cash_flow_id,
+                    Account.user_id
+                    == self.user_id,
+                )
+                .first()
+            )
+
+            if cash_flow is None:
+                return False
+
+            session.delete(
+                cash_flow
+            )
+
+            return True
+    
     
     def update_account(
         self,
