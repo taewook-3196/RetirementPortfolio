@@ -976,6 +976,73 @@ def register_us_asset_api(
         )
 
 # =========================================================
+# 등록 자산 검색 API
+# =========================================================
+
+@app.get("/api/assets")
+def search_assets_api(
+    q: str = "",
+    limit: int = 50,
+    authorization: str | None = Header(default=None),
+):
+    """
+    asset_master에 등록된 활성 자산을 검색합니다.
+
+    종목코드 또는 종목명으로 검색할 수 있으며
+    한국/미국 자산을 모두 반환합니다.
+    """
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    clean_keyword = (
+        str(q or "")
+        .strip()
+    )
+
+    safe_limit = max(
+        1,
+        min(
+            int(limit),
+            100,
+        ),
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        assets = repo.search_etf_master(
+            keyword=clean_keyword,
+            limit=safe_limit,
+        )
+
+        return {
+            "query":
+                clean_keyword,
+
+            "count":
+                len(assets),
+
+            "assets":
+                assets,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="등록된 종목을 검색하지 못했습니다.",
+        )
+
+# =========================================================
 # 거래 API
 # =========================================================
 
