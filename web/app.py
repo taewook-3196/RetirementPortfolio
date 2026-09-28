@@ -3999,7 +3999,7 @@ function createTransactionForm(
 
 
     /*
-    등록 자산 검색
+    종목 검색
     */
 
     const assetSearchInput =
@@ -4015,6 +4015,9 @@ function createTransactionForm(
 
     assetSearchInput.autocomplete =
         "off";
+
+    assetSearchInput.autocapitalize =
+        "characters";
 
 
     const tickerSelect =
@@ -4034,6 +4037,20 @@ function createTransactionForm(
         "transaction-message";
 
 
+    /*
+    미등록 미국 종목을 Yahoo에서 찾았을 때
+    보여줄 영역입니다.
+    */
+
+    const yahooResult =
+        document.createElement(
+            "div"
+        );
+
+    yahooResult.style.display =
+        "none";
+
+
     const button =
         document.createElement(
             "button"
@@ -4046,27 +4063,20 @@ function createTransactionForm(
         "거래 저장";
 
 
-    async function loadAssetOptions(
-        keyword = ""
+    let currentYahooAsset = null;
+
+
+    function buildAssetMap(
+        assets
     ) {
-        tickerSelect.innerHTML = "";
-
-        const assets =
-            await searchRegisteredAssets(
-                accessToken,
-                keyword
-            );
-
-
-        /*
-        목표 종목과 asset_master 검색 결과를 합칩니다.
-
-        기존 퇴직연금 목표 ETF는 그대로 유지하고,
-        등록된 미국 주식/ETF도 선택할 수 있습니다.
-        */
         const assetMap =
             new Map();
 
+
+        /*
+        기존 목표 종목은 항상 선택할 수 있도록
+        목록에 포함합니다.
+        */
 
         for (const target of targets) {
 
@@ -4089,6 +4099,12 @@ function createTransactionForm(
         }
 
 
+        /*
+        asset_master에 등록된 종목을 추가합니다.
+        같은 ticker가 있으면 등록 자산 정보를
+        우선 사용합니다.
+        */
+
         for (const asset of assets) {
 
             assetMap.set(
@@ -4098,19 +4114,35 @@ function createTransactionForm(
         }
 
 
+        return assetMap;
+    }
+
+
+    function renderAssetOptions(
+        assets,
+        preferredTicker = ""
+    ) {
+        tickerSelect.innerHTML = "";
+
+        const assetMap =
+            buildAssetMap(
+                assets
+            );
+
+
         for (
             const asset
             of assetMap.values()
         ) {
-        
+
             const option =
                 document.createElement(
                     "option"
                 );
-        
+
             option.value =
                 asset.ticker;
-        
+
             option.textContent =
                 asset.ticker
                 + " · "
@@ -4123,37 +4155,29 @@ function createTransactionForm(
                     asset.currency
                     || "-"
                 );
-        
+
             option.dataset.currency =
                 asset.currency || "";
-        
+
             option.dataset.market =
                 asset.market || "";
-        
+
             tickerSelect.appendChild(
                 option
             );
         }
-        
-        
-        /*
-        검색 결과가 정확히 하나라면
-        그 종목을 자동으로 선택합니다.
-        
-        예:
-        AAPL 검색
-        → AAPL · Apple Inc. · USD 자동 선택
-        */
-        const cleanKeyword =
+
+
+        const cleanPreferred =
             String(
-                keyword || ""
+                preferredTicker || ""
             )
             .trim()
             .toUpperCase();
-        
-        
-        if (cleanKeyword) {
-        
+
+
+        if (cleanPreferred) {
+
             const exactOption =
                 Array.from(
                     tickerSelect.options
@@ -4161,32 +4185,22 @@ function createTransactionForm(
                     option =>
                         option.value
                         .toUpperCase()
-                        === cleanKeyword
+                        === cleanPreferred
                 );
-        
-        
+
+
             if (exactOption) {
-        
+
                 tickerSelect.value =
                     exactOption.value;
-        
-            } else if (
-                assets.length === 1
-            ) {
-        
-                tickerSelect.value =
-                    assets[0].ticker;
             }
         }
-        
-        
+
+
         button.disabled =
             tickerSelect.options.length
             === 0;
-        
-        assetInfo.className =
-            "transaction-message";
-        
+
         updateAssetInfo();
     }
 
@@ -4197,6 +4211,7 @@ function createTransactionForm(
             tickerSelect
             .selectedOptions[0];
 
+
         if (!option) {
 
             assetInfo.textContent =
@@ -4204,6 +4219,10 @@ function createTransactionForm(
 
             return;
         }
+
+
+        assetInfo.className =
+            "transaction-message";
 
 
         assetInfo.textContent =
@@ -4222,11 +4241,233 @@ function createTransactionForm(
     }
 
 
+    function clearYahooResult() {
+
+        currentYahooAsset =
+            null;
+
+        yahooResult.innerHTML =
+            "";
+
+        yahooResult.style.display =
+            "none";
+    }
+
+
+    function showYahooAsset(
+        asset
+    ) {
+        currentYahooAsset =
+            asset;
+
+        yahooResult.innerHTML =
+            "";
+
+        yahooResult.style.display =
+            "block";
+
+
+        const box =
+            document.createElement(
+                "div"
+            );
+
+        box.className =
+            "settings-summary";
+
+
+        const title =
+            document.createElement(
+                "div"
+            );
+
+        title.style.fontWeight =
+            "700";
+
+        title.textContent =
+            asset.name
+            + " ("
+            + asset.ticker
+            + ")";
+
+
+        box.appendChild(
+            title
+        );
+
+
+        box.appendChild(
+            createDetail(
+                "Yahoo Finance에서 확인된 미국 종목"
+            )
+        );
+
+
+        box.appendChild(
+            createDetail(
+                "시장: "
+                + asset.market
+                + " · 거래소: "
+                + asset.exchange
+            )
+        );
+
+
+        box.appendChild(
+            createDetail(
+                "자산 유형: "
+                + asset.asset_type
+                + " · 통화: "
+                + asset.currency
+            )
+        );
+
+
+        const registerButton =
+            document.createElement(
+                "button"
+            );
+
+        registerButton.type =
+            "button";
+
+        registerButton.textContent =
+            "이 종목 등록";
+
+
+        const registerMessage =
+            document.createElement(
+                "div"
+            );
+
+        registerMessage.className =
+            "transaction-message";
+
+
+        registerButton.addEventListener(
+            "click",
+            async () => {
+
+                registerButton.disabled =
+                    true;
+
+                registerButton.textContent =
+                    "등록 중...";
+
+                registerMessage.textContent =
+                    "";
+
+
+                try {
+
+                    const response =
+                        await registerUsAsset(
+                            accessToken,
+                            asset.ticker
+                        );
+
+
+                    if (
+                        !response.registered
+                        || !response.asset
+                    ) {
+
+                        throw new Error(
+                            "종목 등록에 실패했습니다."
+                        );
+                    }
+
+
+                    const savedAsset =
+                        response.asset;
+
+
+                    /*
+                    DB에 실제 저장된 값을 다시 검색합니다.
+                    */
+
+                    const assets =
+                        await searchRegisteredAssets(
+                            accessToken,
+                            savedAsset.ticker
+                        );
+
+
+                    renderAssetOptions(
+                        assets,
+                        savedAsset.ticker
+                    );
+
+
+                    assetSearchInput.value =
+                        savedAsset.ticker;
+
+
+                    registerMessage.textContent =
+                        savedAsset.name
+                        + " ("
+                        + savedAsset.ticker
+                        + ") 등록 완료 · 거래 종목으로 선택되었습니다.";
+
+
+                    registerMessage.className =
+                        "transaction-message success";
+
+
+                    registerButton.textContent =
+                        "등록 완료";
+
+                    registerButton.disabled =
+                        true;
+
+
+                } catch (error) {
+
+                    registerMessage.textContent =
+                        error.message
+                        || "종목 등록에 실패했습니다.";
+
+                    registerMessage.className =
+                        "transaction-message error";
+
+                    registerButton.disabled =
+                        false;
+
+                    registerButton.textContent =
+                        "이 종목 등록";
+                }
+            }
+        );
+
+
+        box.appendChild(
+            registerButton
+        );
+
+        box.appendChild(
+            registerMessage
+        );
+
+
+        yahooResult.appendChild(
+            box
+        );
+    }
+
+
     tickerSelect.addEventListener(
         "change",
         updateAssetInfo
     );
 
+
+    /*
+    검색창 입력 처리
+
+    1. asset_master 검색
+    2. 정확한 ticker가 있으면 자동 선택
+    3. 등록 종목이 없으면 Yahoo Finance 조회
+    */
 
     let searchTimer = null;
 
@@ -4238,20 +4479,176 @@ function createTransactionForm(
                 searchTimer
             );
 
+
             searchTimer =
                 setTimeout(
                     async () => {
 
+                        const keyword =
+                            assetSearchInput
+                            .value
+                            .trim();
+
+
+                        clearYahooResult();
+
+
+                        if (!keyword) {
+
+                            try {
+
+                                const assets =
+                                    await searchRegisteredAssets(
+                                        accessToken,
+                                        ""
+                                    );
+
+
+                                renderAssetOptions(
+                                    assets
+                                );
+
+
+                            } catch (error) {
+
+                                assetInfo.textContent =
+                                    error.message
+                                    || "종목 목록을 불러오지 못했습니다.";
+
+                                assetInfo.className =
+                                    "transaction-message error";
+                            }
+
+                            return;
+                        }
+
+
                         assetInfo.textContent =
-                            "등록 종목을 검색하는 중...";
+                            "등록된 종목을 검색하는 중...";
+
+                        assetInfo.className =
+                            "transaction-message";
+
 
                         try {
 
-                            await loadAssetOptions(
-                                assetSearchInput
-                                .value
-                                .trim()
-                            );
+                            const assets =
+                                await searchRegisteredAssets(
+                                    accessToken,
+                                    keyword
+                                );
+
+
+                            const cleanKeyword =
+                                keyword
+                                .toUpperCase();
+
+
+                            const exactAsset =
+                                assets.find(
+                                    asset =>
+                                        String(
+                                            asset.ticker
+                                        )
+                                        .toUpperCase()
+                                        === cleanKeyword
+                                );
+
+
+                            /*
+                            이미 등록된 ticker라면
+                            즉시 자동 선택합니다.
+                            */
+
+                            if (exactAsset) {
+
+                                renderAssetOptions(
+                                    assets,
+                                    exactAsset.ticker
+                                );
+
+                                return;
+                            }
+
+
+                            /*
+                            종목명 검색 결과가 있으면
+                            목록을 보여줍니다.
+
+                            예:
+                            "Apple" 검색
+                            */
+
+                            if (assets.length > 0) {
+
+                                renderAssetOptions(
+                                    assets
+                                );
+
+                                return;
+                            }
+
+
+                            /*
+                            등록 자산에 없고
+                            미국 ticker 형태로 보이는 경우
+                            Yahoo Finance에서 확인합니다.
+                            */
+
+                            tickerSelect.innerHTML =
+                                "";
+
+                            button.disabled =
+                                true;
+
+
+                            assetInfo.textContent =
+                                "등록되지 않은 종목입니다. Yahoo Finance에서 확인 중...";
+
+
+                            try {
+
+                                const response =
+                                    await lookupUsAsset(
+                                        accessToken,
+                                        cleanKeyword
+                                    );
+
+
+                                if (
+                                    !response.found
+                                    || !response.asset
+                                ) {
+
+                                    throw new Error(
+                                        "종목 정보를 찾지 못했습니다."
+                                    );
+                                }
+
+
+                                showYahooAsset(
+                                    response.asset
+                                );
+
+
+                                assetInfo.textContent =
+                                    "미등록 미국 종목을 찾았습니다. 아래에서 등록해주세요.";
+
+
+                            } catch (lookupError) {
+
+                                clearYahooResult();
+
+
+                                assetInfo.textContent =
+                                    lookupError.message
+                                    || "등록된 종목을 찾지 못했습니다.";
+
+
+                                assetInfo.className =
+                                    "transaction-message error";
+                            }
+
 
                         } catch (error) {
 
@@ -4261,15 +4658,18 @@ function createTransactionForm(
                             button.disabled =
                                 true;
 
+
                             assetInfo.textContent =
                                 error.message
                                 || "종목 검색에 실패했습니다.";
 
+
                             assetInfo.className =
                                 "transaction-message error";
                         }
+
                     },
-                    350
+                    500
                 );
         }
     );
@@ -4366,9 +4766,16 @@ function createTransactionForm(
         tickerSelect
     );
 
+
     form.appendChild(
         assetInfo
     );
+
+
+    form.appendChild(
+        yahooResult
+    );
+
 
     appendField(
         "수량",
@@ -4405,29 +4812,46 @@ function createTransactionForm(
         "transaction-message";
 
 
-    form.appendChild(button);
-    form.appendChild(result);
+    form.appendChild(
+        button
+    );
+
+    form.appendChild(
+        result
+    );
 
 
     /*
     처음 화면을 열었을 때
-    등록된 자산 전체를 불러옵니다.
+    등록된 자산을 불러옵니다.
     */
-    loadAssetOptions("")
-        .catch(
-            (error) => {
 
-                button.disabled =
-                    true;
+    searchRegisteredAssets(
+        accessToken,
+        ""
+    )
+    .then(
+        assets => {
 
-                assetInfo.textContent =
-                    error.message
-                    || "종목 목록을 불러오지 못했습니다.";
+            renderAssetOptions(
+                assets
+            );
+        }
+    )
+    .catch(
+        error => {
 
-                assetInfo.className =
-                    "transaction-message error";
-            }
-        );
+            button.disabled =
+                true;
+
+            assetInfo.textContent =
+                error.message
+                || "종목 목록을 불러오지 못했습니다.";
+
+            assetInfo.className =
+                "transaction-message error";
+        }
+    );
 
 
     form.addEventListener(
@@ -4440,7 +4864,7 @@ function createTransactionForm(
             if (!tickerSelect.value) {
 
                 result.textContent =
-                    "거래 종목을 선택해주세요.";
+                    "거래 종목을 먼저 선택해주세요.";
 
                 result.className =
                     "transaction-message error";
