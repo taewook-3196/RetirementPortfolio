@@ -753,6 +753,102 @@ class Repository:
 
             return account
 
+    def delete_account(
+        self,
+        account_id: int,
+    ) -> bool:
+        """
+        현재 사용자의 계좌를 삭제합니다.
+    
+        transactions, dividends, account_targets는
+        DB의 ON DELETE CASCADE에 의해 함께 삭제됩니다.
+    
+        삭제한 계좌가 기본 계좌였다면
+        남아 있는 가장 오래된 계좌를
+        새로운 기본 계좌로 지정합니다.
+        """
+    
+        if not self.user_id:
+            raise ValueError(
+                "계좌를 삭제하려면 "
+                "user_id가 필요합니다."
+            )
+    
+        clean_account_id = int(
+            account_id
+        )
+    
+        with get_db_session() as session:
+    
+            account = (
+                session.query(Account)
+                .filter(
+                    Account.id
+                    == clean_account_id,
+    
+                    Account.user_id
+                    == self.user_id,
+                )
+                .first()
+            )
+    
+            if account is None:
+                return False
+    
+    
+            was_default = bool(
+                account.is_default
+            )
+    
+    
+            # -----------------------------------------------------
+            # 계좌 삭제
+            #
+            # DB Foreign Key의 ON DELETE CASCADE에 의해
+            # transactions
+            # dividends
+            # account_targets
+            # 도 함께 삭제됩니다.
+            # -----------------------------------------------------
+    
+            session.delete(
+                account
+            )
+    
+            # 실제 DELETE를 DB에 먼저 반영해서
+            # 이후 조회에서 삭제된 계좌가 제외되도록 합니다.
+    
+            session.flush()
+    
+    
+            # -----------------------------------------------------
+            # 삭제한 계좌가 기본 계좌였다면
+            # 남은 계좌 중 가장 오래된 계좌를
+            # 새로운 기본 계좌로 지정합니다.
+            # -----------------------------------------------------
+    
+            if was_default:
+    
+                next_account = (
+                    session.query(Account)
+                    .filter(
+                        Account.user_id
+                        == self.user_id
+                    )
+                    .order_by(
+                        Account.id.asc()
+                    )
+                    .first()
+                )
+    
+                if next_account is not None:
+    
+                    next_account.is_default = True
+    
+    
+            return True
+
+    
     def update_account(
         self,
         account_id: int,
