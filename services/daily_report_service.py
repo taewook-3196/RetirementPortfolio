@@ -967,131 +967,219 @@ class DailyReportService:
                 "cash_balance": getattr(summary_raw, "remaining_cash", 0),
             }
 
-            # 1-1. 전체 등록된 종목(목표 ETF + 보유 종목 + 설정 ETF) 맵 구성
-            target_etfs = self.portfolio_service.get_target_etfs(account_id=None)
-            registered_etfs_map: Dict[str, ETFConfig] = {}
-            for e in target_etfs:
-                registered_etfs_map[e.ticker] = e
-            for e in self.config.etfs:
-                if e.ticker not in registered_etfs_map:
-                    registered_etfs_map[e.ticker] = e
+            # 1-1. 전체 등록 종목 맵 구성
+            #
+            # 전체 포트폴리오의 종목 표시 데이터는 더 이상
+            # account_id=None으로 합쳐진 positions_raw를 사용하지 않습니다.
+            #
+            # 계좌별로 이미 계산된 account_groups의 positions를 기반으로
+            # 전체 표시용 목록을 만듭니다.
+            #
+            # 이유:
+            # - 같은 ticker가 여러 계좌에 존재할 수 있음
+            # - 계좌마다 기준통화가 다를 수 있음
+            # - 종목 자체의 거래통화도 다를 수 있음
+            # - 종목 비중은 계좌 기준통화로 환산된 계좌별 비중을 사용해야 함
 
-            total_val = summary["total_eval"] or 1.0
+            target_etfs = (
+                self.portfolio_service
+                .get_target_etfs(
+                    account_id=None
+                )
+            )
+
+            registered_etfs_map: Dict[
+                str,
+                ETFConfig,
+            ] = {}
+
+            for e in target_etfs:
+                registered_etfs_map[
+                    e.ticker
+                ] = e
+
+            for e in self.config.etfs:
+                if (
+                    e.ticker
+                    not in registered_etfs_map
+                ):
+                    registered_etfs_map[
+                        e.ticker
+                    ] = e
 
             positions = []
 
-            # 1) 실제 보유 종목 (수량 > 0)
-            if isinstance(positions_raw, dict):
-                for ticker, pos in positions_raw.items():
-                    if pos.quantity <= 0:
-                        continue
+            # ---------------------------------------------------------
+            # 계좌별 포지션을 그대로 유지하면서
+            # 전체 리포트 전달용 positions를 구성합니다.
+            #
+            # current_weight는 account_groups 생성 단계에서 이미
+            # 종목 평가액을 Account.currency로 환산하여 계산했습니다.
+            # 따라서 여기서 native 평가액을 전체 KRW 평가액으로
+            # 다시 나누지 않습니다.
+            # ---------------------------------------------------------
 
-                    cur_w = (
-                        pos.current_value / total_val
-                    ) if total_val > 0 else 0.0
-
-                    t_weight = registered_etfs_map.get(
-                        ticker,
-                        ETFConfig(
-                            ticker,
-                            "",
-                            0.0,
-                        ),
-                    ).target_weight
-
-                    asset = (
-                        self.repo
-                        .get_etf_master(ticker)
+            for account_group in account_groups:
+                group_account_id = (
+                    account_group.get(
+                        "account_id"
                     )
+                )
 
-                    asset_currency = (
-                        getattr(
-                            asset,
+                group_account_name = (
+                    account_group.get(
+                        "account_name",
+                        "",
+                    )
+                )
+
+                group_account_currency = (
+                    str(
+                        account_group.get(
                             "currency",
-                            None,
+                            "KRW",
                         )
                         or "KRW"
                     )
+                    .strip()
+                    .upper()
+                )
 
-                    positions.append({
-                        "ticker": ticker,
-                        "name":
-                            pos.name
-                            or ticker,
-                        "currency":
-                            asset_currency,
-                        "shares":
-                            pos.quantity,
-                        "current_price":
-                            pos.current_price,
-                        "eval_amount":
-                            pos.current_value,
-                        "pl_pct":
-                            pos.unrealized_roi
-                            * 100.0,
-                        "current_weight":
-                            cur_w,
-                        "target_weight":
-                            t_weight,
-                    })
-
-            elif isinstance(positions_raw, list):
-                positions = positions_raw
-
-            # 2) 등록된 목표 ETF 중 아직 수량이 0인 종목도
-            # 등록 종목 목록에 포함
-            held_tickers = {
-                p["ticker"]
-                for p in positions
-            }
-
-            for ticker, etf in registered_etfs_map.items():
-                if (
-                    ticker not in held_tickers
-                    and etf.target_weight > 0
+                for position in (
+                    account_group.get(
+                        "positions",
+                        [],
+                    )
+                    or []
                 ):
+                    position_data = dict(
+                        position
+                    )
+
+                    # 어느 계좌의 종목인지 명시적으로 유지합니다.
+                    position_data[
+                        "account_id"
+                    ] = group_account_id
+
+                    position_data[
+                        "account_name"
+                    ] = group_account_name
+
+                    position_data[
+                        "account_currency"
+                    ] = group_account_currency
+
+                    # currency는 개별 종목의 native 거래통화입니다.
+                    position_data[
+                        "currency"
+                    ] = (
+                        str(
+                            position_data.get(
+                                "currency",
+                                group_account_currency,
+                            )
+                            or group_account_currency
+                        )
+                        .strip()
+                        .upper()
+                    )
+
+                    positions.append(
+                        position_data
+                    )
+
+            # ---------------------------------------------------------
+            # 계좌가 아직 없는 초기 상태에서 config에 등록된 ETF가
+            # 있을 경우에만 fallback 목록을 만듭니다.
+            #
+            # 실제 계좌가 하나라도 있으면 account_groups가
+            # source of truth입니다.
+            # ---------------------------------------------------------
+
+            if not account_groups:
+                for ticker, etf in (
+                    registered_etfs_map.items()
+                ):
+                    if (
+                        etf.target_weight
+                        <= 0
+                    ):
+                        continue
+
                     latest_p = (
                         self.repo
-                        .get_latest_price(ticker)
+                        .get_latest_price(
+                            ticker
+                        )
                     )
 
                     cur_p = (
-                        latest_p.close_price
+                        float(
+                            latest_p.close_price
+                            or 0
+                        )
                         if latest_p
                         else 0.0
                     )
 
                     asset = (
                         self.repo
-                        .get_etf_master(ticker)
+                        .get_etf_master(
+                            ticker
+                        )
                     )
 
                     asset_currency = (
-                        getattr(
-                            asset,
-                            "currency",
-                            None,
+                        str(
+                            getattr(
+                                asset,
+                                "currency",
+                                None,
+                            )
+                            or "KRW"
                         )
-                        or "KRW"
+                        .strip()
+                        .upper()
                     )
 
                     positions.append({
-                        "ticker": ticker,
+                        "account_id":
+                            None,
+
+                        "account_name":
+                            "",
+
+                        "account_currency":
+                            "KRW",
+
+                        "ticker":
+                            ticker,
+
                         "name":
                             etf.name
                             or ticker,
+
                         "currency":
                             asset_currency,
-                        "shares": 0,
+
+                        "shares":
+                            0,
+
                         "current_price":
                             cur_p,
-                        "eval_amount": 0.0,
-                        "pl_pct": 0.0,
-                        "current_weight": 0.0,
+
+                        "eval_amount":
+                            0.0,
+
+                        "pl_pct":
+                            0.0,
+
+                        "current_weight":
+                            0.0,
+
                         "target_weight":
                             etf.target_weight,
-                    })
-                    
+                    })                    
 
             # 2. 맞춤 뉴스 수집 (전체 등록 종목 대상)
             news_items = []
