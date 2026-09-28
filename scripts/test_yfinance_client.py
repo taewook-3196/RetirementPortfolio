@@ -23,6 +23,38 @@ def main() -> None:
 
     client = YFinanceClient()
 
+    asset_info = client.fetch_asset_info(
+        ticker
+    )
+
+    print()
+    print("미국 종목 정보")
+    print(
+        f"Ticker: {asset_info['ticker']}"
+    )
+    print(
+        f"Name: {asset_info['name']}"
+    )
+    print(
+        f"Market: {asset_info['market']}"
+    )
+    print(
+        f"Exchange: {asset_info['exchange']}"
+    )
+    print(
+        f"Asset type: {asset_info['asset_type']}"
+    )
+    print(
+        f"Currency: {asset_info['currency']}"
+    )
+
+    assert asset_info["ticker"] == "AAPL"
+    assert asset_info["market"] == "US"
+    assert asset_info["currency"] == "USD"
+    assert asset_info["asset_type"] == "STOCK"
+    assert asset_info["name"]
+    
+
     records = client.fetch_historical_prices(
         target_tickers=[ticker],
         days=days,
