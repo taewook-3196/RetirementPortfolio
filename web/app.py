@@ -348,6 +348,104 @@ def account_to_dict(account):
     }
 
 
+@app.post(
+    "/api/accounts",
+    status_code=201,
+)
+def create_account_api(
+    request: AccountUpdateRequest,
+    authorization: str | None = Header(default=None),
+):
+    """
+    로그인한 사용자의 신규 계좌를 생성합니다.
+
+    계좌만 생성하며 기존 계좌의 목표 종목이나
+    거래내역은 복사하지 않습니다.
+    """
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.create_account(
+            account_name=
+                request.account_name,
+
+            account_number=
+                request.account_number,
+
+            broker=
+                request.broker,
+
+            initial_capital=
+                request.initial_capital,
+
+            base_monthly=
+                request.base_monthly,
+
+            max_additional_monthly=
+                request.max_additional_monthly,
+
+            buy_cycle_type=
+                request.buy_cycle_type,
+
+            buy_cycle_detail=
+                request.buy_cycle_detail,
+
+            currency=
+                request.currency,
+
+            account_type=
+                request.account_type,
+
+            market_scope=
+                request.market_scope,
+
+            contribution_type=
+                request.contribution_type,
+
+            contribution_amount=
+                request.contribution_amount,
+
+            contribution_month=
+                request.contribution_month,
+
+            strategy_type=
+                request.strategy_type,
+
+            is_default=
+                int(request.is_default),
+
+            memo=
+                request.memo,
+        )
+
+        return {
+            "created": True,
+            "account":
+                account_to_dict(
+                    account
+                ),
+        }
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="계좌를 생성하지 못했습니다.",
+        )
+        
+
 @app.get("/api/accounts")
 def get_accounts_api(
     authorization: str | None = Header(default=None),
