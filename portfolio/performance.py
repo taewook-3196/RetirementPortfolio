@@ -15,12 +15,14 @@ portfolio/performance.py
 주의:
 - ETFPosition 내부 금액은 종목의 원래 통화 기준입니다.
 - 이 모듈에서는 합산할 때만 기준 통화로 환산합니다.
+- 서로 다른 통화 간 환산이 필요한데 유효한 환율이 없으면
+  계산을 중단하여 잘못된 금액이 조용히 사용되지 않도록 합니다.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 
 from portfolio.holdings import ETFPosition
 
@@ -65,23 +67,34 @@ def convert_currency(
     value: float,
     from_currency: str,
     to_currency: str,
-    usd_krw_rate: float,
+    usd_krw_rate: Optional[float] = None,
 ) -> float:
     """
-    KRW와 USD 사이의 금액을 환산합니다.
+    금액을 지정된 통화로 환산합니다.
+
+    현재 지원:
+    - KRW -> KRW
+    - USD -> USD
+    - USD -> KRW
+    - KRW -> USD
 
     usd_krw_rate:
         1 USD당 KRW 금액.
         예: 1350.0
 
-    같은 통화끼리는 환산하지 않습니다.
+    같은 통화끼리는 환율이 없어도 그대로 반환합니다.
 
-    현재는 KRW/USD만 지원합니다.
-    지원하지 않는 통화 조합은 오류를 발생시켜
-    잘못된 금액을 조용히 합산하지 않도록 합니다.
+    서로 다른 KRW/USD 통화 간 환산에는 반드시
+    유효한 USD/KRW 환율이 필요합니다.
+
+    지원하지 않는 통화 조합 또는 유효하지 않은 환율은
+    오류를 발생시켜 잘못된 금액을 조용히 계산하지
+    않도록 합니다.
     """
 
-    amount = float(value or 0)
+    amount = float(
+        value or 0
+    )
 
     source = str(
         from_currency or "KRW"
@@ -91,24 +104,66 @@ def convert_currency(
         to_currency or "KRW"
     ).strip().upper()
 
+    # 같은 통화끼리는 환율이 필요하지 않습니다.
     if source == target:
         return amount
 
-    rate = float(
-        usd_krw_rate or 0
-    )
+    # 현재 시스템에서 지원하는 교차통화는
+    # KRW와 USD 사이뿐입니다.
+    supported_cross_pairs = {
+        ("USD", "KRW"),
+        ("KRW", "USD"),
+    }
+
+    if (
+        source,
+        target,
+    ) not in supported_cross_pairs:
+        raise ValueError(
+            "지원하지 않는 통화 환산입니다: "
+            f"{source} -> {target}"
+        )
+
+    # 서로 다른 통화 간 환산에서만
+    # 환율을 검사합니다.
+    if usd_krw_rate is None:
+        raise ValueError(
+            "USD/KRW 환율이 없습니다. "
+            f"{source} -> {target} "
+            "환산을 수행할 수 없습니다."
+        )
+
+    try:
+        rate = float(
+            usd_krw_rate
+        )
+    except (
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise ValueError(
+            "USD/KRW 환율이 올바른 숫자가 아닙니다."
+        ) from exc
 
     if rate <= 0:
         raise ValueError(
             "USD/KRW 환율은 0보다 커야 합니다."
         )
 
-    if source == "USD" and target == "KRW":
+    if (
+        source == "USD"
+        and target == "KRW"
+    ):
         return amount * rate
 
-    if source == "KRW" and target == "USD":
+    if (
+        source == "KRW"
+        and target == "USD"
+    ):
         return amount / rate
 
+    # 위 supported_cross_pairs 검증 때문에
+    # 정상적으로는 도달하지 않는 안전장치입니다.
     raise ValueError(
         "지원하지 않는 통화 환산입니다: "
         f"{source} -> {target}"
@@ -119,7 +174,7 @@ def calculate_portfolio_summary(
     positions: Dict[str, ETFPosition],
     initial_capital: float = 100_000_000.0,
     base_currency: str = "KRW",
-    usd_krw_rate: float = 1.0,
+    usd_krw_rate: Optional[float] = None,
 ) -> PortfolioSummary:
     """
     모든 종목의 포지션을 기준 통화로 환산한 뒤
@@ -129,6 +184,17 @@ def calculate_portfolio_summary(
         KRW 계좌 안에 USD 종목이 있는 경우
         USD 금액을 USD/KRW 환율로 KRW 환산한 뒤
         계좌 합계에 포함합니다.
+
+    같은 통화만 존재하는 계좌:
+        USD/KRW 환율이 없어도 계산할 수 있습니다.
+
+        예:
+        - KRW 계좌 + KRW 종목
+        - USD 계좌 + USD 종목
+
+    혼합통화 계좌:
+        서로 다른 통화 간 환산이 필요하므로
+        유효한 USD/KRW 환율이 반드시 필요합니다.
 
     주의:
         현재 시스템에는 거래 당시 환율/실제 결제금액이
@@ -156,12 +222,14 @@ def calculate_portfolio_summary(
         value: float,
         position: ETFPosition,
     ) -> float:
+        position_currency = str(
+            position.currency
+            or summary_currency
+        ).strip().upper()
+
         return convert_currency(
             value=value,
-            from_currency=(
-                position.currency
-                or summary_currency
-            ),
+            from_currency=position_currency,
             to_currency=summary_currency,
             usd_krw_rate=usd_krw_rate,
         )
