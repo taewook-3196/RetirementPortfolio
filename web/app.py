@@ -841,6 +841,140 @@ def lookup_us_asset_api(
             ),
         )
 
+@app.post(
+    "/api/assets/us/{ticker}/register",
+    status_code=201,
+)
+def register_us_asset_api(
+    ticker: str,
+    authorization: str | None = Header(default=None),
+):
+    """
+    미국 주식/ETF를 Yahoo Finance에서 확인한 뒤
+    asset_master에 등록하거나 최신 정보로 갱신합니다.
+
+    사용자가 입력한 이름/시장/통화를 그대로 신뢰하지 않고
+    서버가 Yahoo Finance에서 다시 확인합니다.
+    """
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    clean_ticker = (
+        str(ticker or "")
+        .strip()
+        .upper()
+    )
+
+    if not clean_ticker:
+        raise HTTPException(
+            status_code=400,
+            detail="미국 종목 ticker를 입력해주세요.",
+        )
+
+    if len(clean_ticker) > 30:
+        raise HTTPException(
+            status_code=400,
+            detail="ticker가 너무 깁니다.",
+        )
+
+    try:
+        # 브라우저에서 전달받은 종목정보를
+        # 그대로 저장하지 않고 서버에서 다시 확인합니다.
+        client = YFinanceClient()
+
+        asset = client.fetch_asset_info(
+            clean_ticker
+        )
+
+        repo = Repository(
+            user_id=user_id
+        )
+
+        saved_count = repo.save_etf_master(
+            [
+                {
+                    "ticker":
+                        asset["ticker"],
+
+                    "name":
+                        asset["name"],
+
+                    "market":
+                        asset["market"],
+
+                    "exchange":
+                        asset["exchange"],
+
+                    "asset_type":
+                        asset["asset_type"],
+
+                    "currency":
+                        asset["currency"],
+                }
+            ]
+        )
+
+        if saved_count != 1:
+            raise RuntimeError(
+                "자산 마스터 저장 결과가 올바르지 않습니다."
+            )
+
+        saved_asset = repo.get_etf_master(
+            asset["ticker"]
+        )
+
+        if saved_asset is None:
+            raise RuntimeError(
+                "저장한 종목을 다시 확인하지 못했습니다."
+            )
+
+        return {
+            "registered": True,
+
+            "asset": {
+                "ticker":
+                    saved_asset.ticker,
+
+                "name":
+                    saved_asset.name,
+
+                "market":
+                    saved_asset.market,
+
+                "exchange":
+                    saved_asset.exchange,
+
+                "asset_type":
+                    saved_asset.asset_type,
+
+                "currency":
+                    saved_asset.currency,
+            },
+        }
+
+    except HTTPException:
+        raise
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="미국 종목을 등록하지 못했습니다.",
+        )
+
 # =========================================================
 # 거래 API
 # =========================================================
