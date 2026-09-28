@@ -43,15 +43,15 @@ class PortfolioService:
 
     def _get_usd_krw_rate(
         self,
-    ) -> float:
+    ) -> Optional[float]:
         """
         DB에 저장된 가장 최근 USD/KRW 환율을 반환합니다.
 
-        환율이 없으면 0을 반환합니다.
+        유효한 환율이 없으면 None을 반환합니다.
 
-        실제 통화 환산이 필요한 상황에서 환율이 0이면
-        portfolio.performance.convert_currency()가 오류를
-        발생시켜 서로 다른 통화를 잘못 합산하지 않도록 합니다.
+        동일 통화끼리의 계산에는 환율이 필요하지 않습니다.
+        실제 KRW/USD 교차 환산이 필요한 경우에만
+        convert_currency()가 유효한 환율을 요구합니다.
         """
 
         exchange_rate = (
@@ -62,20 +62,27 @@ class PortfolioService:
         )
 
         if exchange_rate is None:
-            return 0.0
+            return None
 
-        rate = float(
-            exchange_rate.rate or 0
-        )
+        try:
+            rate = float(
+                exchange_rate.rate
+            )
+        except (
+            TypeError,
+            ValueError,
+        ):
+            return None
 
         if rate <= 0:
-            return 0.0
+            return None
 
         return rate
+        
 
     def get_usd_krw_rate(
         self,
-    ) -> float:
+    ) -> Optional[float]:
         """
         DB에 저장된 가장 최근 USD/KRW 환율을 반환합니다.
 
@@ -405,9 +412,6 @@ class PortfolioService:
         직접 섞어서 계산하지 않습니다.
         """
 
-        usd_krw_rate = (
-            self._get_usd_krw_rate()
-        )
 
         # -----------------------------------------------------
         # 1. 개별 계좌 요약
@@ -457,6 +461,32 @@ class PortfolioService:
                     )
                 )
 
+            # 계좌 기준통화와 다른 통화의 종목이 있을 때만
+            # USD/KRW 환율을 조회합니다.
+            needs_fx = any(
+                str(
+                    position.currency
+                    or base_currency
+                )
+                .strip()
+                .upper()
+                != base_currency
+                for position in current_positions.values()
+            )
+
+            usd_krw_rate = (
+                self._get_usd_krw_rate()
+                if needs_fx
+                else None
+            )
+
+            return calculate_portfolio_summary(
+                current_positions,
+                initial_capital=initial_capital,
+                base_currency=base_currency,
+                usd_krw_rate=usd_krw_rate,
+            )
+
             return calculate_portfolio_summary(
                 current_positions,
                 initial_capital=initial_capital,
@@ -471,7 +501,16 @@ class PortfolioService:
         accounts = (
             self.repo.get_accounts()
         )
+        # 전체 포트폴리오 계산에서는 USD 계좌 또는
+        # 혼합통화 계좌가 존재할 수 있으므로 최신 환율을 준비합니다.
+        #
+        # 실제 환산이 발생하지 않는 KRW-only 경로에서는
+        # convert_currency()가 이 값을 사용하지 않습니다.
+        usd_krw_rate = (
+            self._get_usd_krw_rate()
+        )
 
+        
         # 계좌가 아직 없는 초기 상태에서는
         # 기존 config 기반 계산을 유지합니다.
         if not accounts:
