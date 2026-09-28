@@ -6942,12 +6942,11 @@ async function renderAccounts(
                     window.confirm(
                         "'"
                         + account.account_name
-                        + "' 계좌를 정말 삭제하시겠습니까?\n\n"
+                        + "' 계좌를 정말 삭제하시겠습니까?\\n\\n"
                         + "이 계좌의 거래내역, 배당내역, "
-                        + "목표 포트폴리오도 함께 삭제됩니다.\n\n"
+                        + "목표 포트폴리오도 함께 삭제됩니다.\\n\\n"
                         + "삭제 후에는 되돌릴 수 없습니다."
-                    );
-        
+                    );        
         
                 if (!confirmed) {
                     return;
