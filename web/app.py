@@ -13,6 +13,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from supabase import create_client
+from services.portfolio_service import PortfolioService
 
 from database.repository import Repository
 from portfolio.holdings import calculate_etf_positions
@@ -1170,22 +1171,32 @@ def get_account_positions_api(
                 detail="계좌를 찾을 수 없습니다.",
             )
 
-        transactions = repo.get_transactions(
-            account_id=account_id
+        account_currency = (
+            str(
+                account.currency
+                or "KRW"
+            )
+            .strip()
+            .upper()
         )
 
-        dividends = repo.get_dividends(
-            account_id=account_id
+        portfolio_service = PortfolioService(
+            repo=repo
+        )
+
+        # PortfolioService를 사용하여
+        # 각 종목의 원래 통화 정보를 유지한
+        # 포지션을 계산합니다.
+        positions = (
+            portfolio_service
+            .get_positions(
+                account_id=account_id
+            )
         )
 
         targets = repo.get_account_targets(
             account_id=account_id
         )
-
-        ticker_names = {
-            target.ticker: target.name
-            for target in targets
-        }
 
         target_weights = {
             target.ticker:
@@ -1196,52 +1207,85 @@ def get_account_positions_api(
             for target in targets
         }
 
-        # 목표종목뿐 아니라 실제 거래종목도 포함합니다.
-        for transaction in transactions:
-            if transaction.ticker not in ticker_names:
-                ticker_names[
-                    transaction.ticker
-                ] = transaction.ticker
+        # -----------------------------------------------------
+        # 계좌 내 종목별 평가금액을
+        # 계좌 기준통화로 환산합니다.
+        #
+        # 예:
+        # KRW 계좌
+        # - 삼성전자 5,000,000 KRW
+        # - AAPL 4,000 USD
+        #
+        # AAPL 평가액을 KRW로 환산한 뒤
+        # 계좌 전체 평가금액과 비중을 계산합니다.
+        #
+        # 개별 종목의 가격/평가액 자체는
+        # 원래 종목 통화를 그대로 유지합니다.
+        # -----------------------------------------------------
 
-        latest_prices = {}
+        converted_values = {}
 
-        for ticker in ticker_names:
-            latest_price = repo.get_latest_price(
-                ticker
+        for ticker, position in (
+            positions.items()
+        ):
+            asset_currency = (
+                str(
+                    position.currency
+                    or account_currency
+                )
+                .strip()
+                .upper()
             )
 
-            if latest_price is not None:
-                latest_prices[ticker] = (
-                    latest_price
+            converted_values[ticker] = (
+                portfolio_service
+                .convert_amount(
+                    value=float(
+                        position.current_value
+                        or 0
+                    ),
+                    from_currency=(
+                        asset_currency
+                    ),
+                    to_currency=(
+                        account_currency
+                    ),
                 )
-
-        positions = calculate_etf_positions(
-            transactions=transactions,
-            dividends=dividends,
-            latest_prices=latest_prices,
-            ticker_names=ticker_names,
-        )
+            )
 
         total_current_value = sum(
-            float(
-                position.current_value
-                or 0
-            )
-            for position in positions.values()
+            converted_values.values()
         )
 
         position_list = []
 
-        for position in positions.values():
+        for ticker, position in (
+            positions.items()
+        ):
+            asset_currency = (
+                str(
+                    position.currency
+                    or account_currency
+                )
+                .strip()
+                .upper()
+            )
 
-            current_value = float(
+            native_current_value = float(
                 position.current_value
                 or 0
             )
 
+            account_current_value = float(
+                converted_values.get(
+                    ticker,
+                    0.0,
+                )
+            )
+
             if total_current_value > 0:
                 current_weight = (
-                    current_value
+                    account_current_value
                     / total_current_value
                 )
             else:
@@ -1255,12 +1299,22 @@ def get_account_positions_api(
                     "name":
                         position.name,
 
+                    # 종목 자체의 거래/가격 통화
+                    "currency":
+                        asset_currency,
+
+                    # 계좌 합계의 기준통화
+                    "account_currency":
+                        account_currency,
+
                     "quantity":
                         float(
                             position.quantity
                             or 0
                         ),
 
+                    # 아래 가격/금액은 모두
+                    # 종목 원래 통화 기준
                     "average_buy_price":
                         float(
                             position.average_buy_price
@@ -1280,16 +1334,7 @@ def get_account_positions_api(
                         ),
 
                     "current_value":
-                        current_value,
-
-                    "current_weight":
-                        current_weight,
-
-                    "target_weight":
-                        target_weights.get(
-                            position.ticker,
-                            0.0,
-                        ),
+                        native_current_value,
 
                     "unrealized_pnl":
                         float(
@@ -1302,6 +1347,20 @@ def get_account_positions_api(
                             position.unrealized_roi
                             or 0
                         ),
+
+                    # 계좌통화로 환산한 평가금액.
+                    # 계좌 합계/비중 계산용입니다.
+                    "account_current_value":
+                        account_current_value,
+
+                    "current_weight":
+                        current_weight,
+
+                    "target_weight":
+                        target_weights.get(
+                            position.ticker,
+                            0.0,
+                        ),
                 }
             )
 
@@ -1310,13 +1369,22 @@ def get_account_positions_api(
         )
 
         return {
-            "account_id": account.id,
+            "account_id":
+                account.id,
 
             "account_name":
                 account.account_name,
 
             "currency":
-                account.currency or "KRW",
+                account_currency,
+
+            # 계좌 전체 평가금액은
+            # 계좌 기준통화입니다.
+            "total_current_value":
+                round(
+                    total_current_value,
+                    2,
+                ),
 
             "positions":
                 position_list,
@@ -1330,7 +1398,6 @@ def get_account_positions_api(
             status_code=500,
             detail="보유현황을 계산하지 못했습니다.",
         )
-
 
 # =========================================================
 # 모바일 웹 UI
