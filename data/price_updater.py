@@ -18,6 +18,7 @@ data/price_updater.py
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -849,9 +850,32 @@ def main():
         "작업을 시작합니다."
     )
 
+    report_user_id = (
+        os.getenv(
+            "REPORT_USER_ID",
+            ""
+        )
+        .strip()
+    )
+
+    if not report_user_id:
+        logger.error(
+            "REPORT_USER_ID 환경변수가 "
+            "설정되지 않았습니다."
+        )
+
+        sys.exit(1)
+
+    logger.info(
+        "사용자 포트폴리오를 포함하여 "
+        "시장 가격을 업데이트합니다."
+    )
+
     try:
         result = (
-            update_market_prices()
+            update_market_prices(
+                user_id=report_user_id
+            )
         )
 
         print(
@@ -871,7 +895,6 @@ def main():
         )
 
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
