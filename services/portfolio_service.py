@@ -150,7 +150,256 @@ class PortfolioService:
             to_currency=target_currency,
             usd_krw_rate=usd_krw_rate,
         )
-        
+
+
+    # =========================================================
+    # 현금 잔고
+    # =========================================================
+
+    def get_cash_balance(
+        self,
+        account_id: int,
+        include_initial_capital: bool = False,
+    ) -> float:
+        """
+        특정 계좌의 실제 현금 잔고를 계산합니다.
+
+        계산식:
+
+        시작 현금
+        + 입금
+        - 출금
+        - 매수금액
+        - 매수 수수료
+        - 매수 세금
+        + 매도금액
+        - 매도 수수료
+        - 매도 세금
+        + 배당 실수령액
+
+        모든 금액은 계좌 기준통화로 환산합니다.
+
+        include_initial_capital=False가 기본값입니다.
+
+        현재 initial_capital은 계좌에 따라
+        실제 입금액과 투자 설정값의 의미가 섞여 있으므로,
+        명시적으로 요청하지 않는 한 현금으로 간주하지 않습니다.
+        """
+
+        account = (
+            self.repo.get_account(
+                account_id
+            )
+        )
+
+        if account is None:
+            raise ValueError(
+                "계좌를 찾을 수 없습니다."
+            )
+
+        account_currency = (
+            str(
+                account.currency
+                or "KRW"
+            )
+            .strip()
+            .upper()
+        )
+
+        cash_balance = 0.0
+
+        # -----------------------------------------------------
+        # 1. 초기 투자재원
+        # -----------------------------------------------------
+
+        if include_initial_capital:
+            cash_balance += float(
+                account.initial_capital
+                or 0
+            )
+
+        # -----------------------------------------------------
+        # 2. 실제 입금 / 출금
+        # -----------------------------------------------------
+
+        cash_flows = (
+            self.repo.get_cash_flows(
+                account_id
+            )
+        )
+
+        for cash_flow in cash_flows:
+            amount = self.convert_amount(
+                value=float(
+                    cash_flow.amount
+                    or 0
+                ),
+                from_currency=str(
+                    cash_flow.currency
+                    or account_currency
+                ),
+                to_currency=(
+                    account_currency
+                ),
+            )
+
+            flow_type = (
+                str(
+                    cash_flow.flow_type
+                    or ""
+                )
+                .strip()
+                .upper()
+            )
+
+            if flow_type == "DEPOSIT":
+                cash_balance += amount
+
+            elif flow_type == "WITHDRAWAL":
+                cash_balance -= amount
+
+        # -----------------------------------------------------
+        # 3. 매수 / 매도
+        # -----------------------------------------------------
+
+        transactions = (
+            self.repo.get_transactions(
+                account_id=account_id
+            )
+        )
+
+        asset_currency_cache: Dict[
+            str,
+            str,
+        ] = {}
+
+        for transaction in transactions:
+            ticker = str(
+                transaction.ticker
+                or ""
+            ).strip()
+
+            if ticker not in asset_currency_cache:
+                asset = (
+                    self.repo.get_etf_master(
+                        ticker
+                    )
+                )
+
+                asset_currency_cache[
+                    ticker
+                ] = (
+                    str(
+                        getattr(
+                            asset,
+                            "currency",
+                            account_currency,
+                        )
+                        or account_currency
+                    )
+                    .strip()
+                    .upper()
+                )
+
+            transaction_currency = (
+                asset_currency_cache[
+                    ticker
+                ]
+            )
+
+            quantity = float(
+                transaction.quantity
+                or 0
+            )
+
+            price = float(
+                transaction.price
+                or 0
+            )
+
+            fee = float(
+                transaction.fee
+                or 0
+            )
+
+            tax = float(
+                transaction.tax
+                or 0
+            )
+
+            gross_amount = (
+                quantity * price
+            )
+
+            transaction_type = (
+                str(
+                    transaction.transaction_type
+                    or ""
+                )
+                .strip()
+                .upper()
+            )
+
+            if transaction_type == "BUY":
+                native_cash_change = -(
+                    gross_amount
+                    + fee
+                    + tax
+                )
+
+            elif transaction_type == "SELL":
+                native_cash_change = (
+                    gross_amount
+                    - fee
+                    - tax
+                )
+
+            else:
+                continue
+
+            cash_balance += (
+                self.convert_amount(
+                    value=native_cash_change,
+                    from_currency=(
+                        transaction_currency
+                    ),
+                    to_currency=(
+                        account_currency
+                    ),
+                )
+            )
+
+        # -----------------------------------------------------
+        # 4. 배당 실수령액
+        # -----------------------------------------------------
+
+        dividends = (
+            self.repo.get_dividends(
+                account_id=account_id
+            )
+        )
+
+        for dividend in dividends:
+            cash_balance += (
+                self.convert_amount(
+                    value=float(
+                        dividend.net_amount
+                        or 0
+                    ),
+                    from_currency=str(
+                        dividend.currency
+                        or account_currency
+                    ),
+                    to_currency=(
+                        account_currency
+                    ),
+                )
+            )
+
+        return round(
+            cash_balance,
+            2,
+        )    
 
     # =========================================================
     # 목표 종목
