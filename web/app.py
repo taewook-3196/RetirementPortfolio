@@ -1076,12 +1076,52 @@ def get_transactions_api(
             account_id=account_id
         )
 
-        return {
-            "account_id": account.id,
-            "account_name":
-                account.account_name,
+        transaction_items = []
 
-            "transactions": [
+        for transaction in transactions:
+
+            asset = repo.get_etf_master(
+                transaction.ticker
+            )
+
+            if asset is not None:
+                asset_name = (
+                    asset.name
+                    or transaction.ticker
+                )
+
+                asset_currency = (
+                    str(
+                        asset.currency
+                        or account.currency
+                        or "KRW"
+                    )
+                    .strip()
+                    .upper()
+                )
+
+                asset_market = (
+                    asset.market
+                    or ""
+                )
+
+            else:
+                asset_name = (
+                    transaction.ticker
+                )
+
+                asset_currency = (
+                    str(
+                        account.currency
+                        or "KRW"
+                    )
+                    .strip()
+                    .upper()
+                )
+
+                asset_market = ""
+
+            transaction_items.append(
                 {
                     "id":
                         transaction.id,
@@ -1093,6 +1133,15 @@ def get_transactions_api(
 
                     "ticker":
                         transaction.ticker,
+
+                    "name":
+                        asset_name,
+
+                    "currency":
+                        asset_currency,
+
+                    "market":
+                        asset_market,
 
                     "transaction_type":
                         transaction.transaction_type,
@@ -1125,9 +1174,23 @@ def get_transactions_api(
                         transaction.memo
                         or "",
                 }
-                for transaction
-                in transactions
-            ],
+            )
+
+        return {
+            "account_id":
+                account.id,
+
+            "account_name":
+                account.account_name,
+
+            "account_currency":
+                str(
+                    account.currency
+                    or "KRW"
+                ).upper(),
+
+            "transactions":
+                transaction_items,
         }
 
     except HTTPException:
@@ -1138,7 +1201,6 @@ def get_transactions_api(
             status_code=500,
             detail="거래 내역을 불러오지 못했습니다.",
         )
-
 
 @app.post(
     "/api/accounts/{account_id}/transactions",
@@ -2778,12 +2840,30 @@ function renderPositions(
         return;
     }
 
-    const currency =
+    const accountCurrency =
         getAccountCurrency(
             account
         );
 
     for (const position of positions) {
+
+        /*
+        개별 종목의 가격과 평가금액은
+        해당 종목의 원래 통화로 표시합니다.
+
+        예:
+        한국 ETF -> KRW
+        AAPL -> USD
+
+        계좌 합계와 비중 계산만
+        계좌 기준통화를 사용합니다.
+        */
+        const assetCurrency =
+            String(
+                position.currency
+                || accountCurrency
+            ).toUpperCase();
+
 
         const row =
             document.createElement(
@@ -2793,6 +2873,7 @@ function renderPositions(
         row.className =
             "transaction-row";
 
+
         const header =
             document.createElement(
                 "div"
@@ -2800,6 +2881,7 @@ function renderPositions(
 
         header.className =
             "transaction-main";
+
 
         const name =
             document.createElement(
@@ -2810,6 +2892,7 @@ function renderPositions(
             position.name
             || position.ticker;
 
+
         const value =
             document.createElement(
                 "div"
@@ -2818,19 +2901,24 @@ function renderPositions(
         value.textContent =
             formatMoney(
                 position.current_value,
-                currency
+                assetCurrency
             );
+
 
         header.appendChild(name);
         header.appendChild(value);
 
         row.appendChild(header);
 
+
         row.appendChild(
             createDetail(
                 position.ticker
+                + " · "
+                + assetCurrency
             )
         );
+
 
         row.appendChild(
             createDetail(
@@ -2841,25 +2929,50 @@ function renderPositions(
                 + "주 · 평단 "
                 + formatMoney(
                     position.average_buy_price,
-                    currency
+                    assetCurrency
                 )
             )
         );
+
 
         row.appendChild(
             createDetail(
                 "현재가 "
                 + formatMoney(
                     position.current_price,
-                    currency
+                    assetCurrency
                 )
                 + " · 평가금액 "
                 + formatMoney(
                     position.current_value,
-                    currency
+                    assetCurrency
                 )
             )
         );
+
+
+        /*
+        종목 통화와 계좌 기준통화가 다르면
+        계좌 합계 계산에 사용된 환산 평가액도
+        함께 보여줍니다.
+        */
+        if (
+            assetCurrency
+            !== accountCurrency
+        ) {
+
+            row.appendChild(
+                createDetail(
+                    "계좌 환산 평가금액 "
+                    + formatMoney(
+                        position
+                        .account_current_value,
+                        accountCurrency
+                    )
+                )
+            );
+        }
+
 
         row.appendChild(
             createDetail(
@@ -2874,6 +2987,7 @@ function renderPositions(
             )
         );
 
+
         const pnl =
             createDetail(
                 "평가손익 "
@@ -2886,7 +3000,7 @@ function renderPositions(
                 )
                 + formatMoney(
                     position.unrealized_pnl,
-                    currency
+                    assetCurrency
                 )
                 + " ("
                 + (
@@ -2902,6 +3016,7 @@ function renderPositions(
                 + ")"
             );
 
+
         if (
             Number(
                 position.unrealized_pnl
@@ -2911,6 +3026,7 @@ function renderPositions(
                 "sell"
             );
         }
+
 
         if (
             Number(
@@ -2922,12 +3038,12 @@ function renderPositions(
             );
         }
 
+
         row.appendChild(pnl);
 
         container.appendChild(row);
     }
 }
-
 
 function renderTransactions(
     container,
