@@ -5789,6 +5789,832 @@ async function renderAccounts(
 ) {
     accountsList.innerHTML = "";
 
+
+    /*
+    신규 계좌 추가
+    */
+
+    const createSection =
+        document.createElement(
+            "div"
+        );
+
+    createSection.className =
+        "account-card";
+
+
+    const createHeader =
+        document.createElement(
+            "div"
+        );
+
+    createHeader.className =
+        "account-name";
+
+    createHeader.textContent =
+        "+ 새 계좌 추가";
+
+    createSection.appendChild(
+        createHeader
+    );
+
+
+    const createDescription =
+        createDetail(
+            "퇴직연금, ISA, 일반 증권계좌, 미국주식 계좌 등을 추가할 수 있습니다."
+        );
+
+    createSection.appendChild(
+        createDescription
+    );
+
+
+    const openCreateButton =
+        document.createElement(
+            "button"
+        );
+
+    openCreateButton.type =
+        "button";
+
+    openCreateButton.textContent =
+        "새 계좌 입력";
+
+    createSection.appendChild(
+        openCreateButton
+    );
+
+
+    const createForm =
+        document.createElement(
+            "form"
+        );
+
+    createForm.className =
+        "transaction-form";
+
+    createForm.style.display =
+        "none";
+
+
+    function appendCreateField(
+        labelText,
+        element
+    ) {
+        const label =
+            document.createElement(
+                "label"
+            );
+
+        label.textContent =
+            labelText;
+
+        createForm.appendChild(
+            label
+        );
+
+        createForm.appendChild(
+            element
+        );
+    }
+
+
+    /*
+    계좌 이름
+    */
+
+    const accountNameInput =
+        document.createElement(
+            "input"
+        );
+
+    accountNameInput.type =
+        "text";
+
+    accountNameInput.required =
+        true;
+
+    accountNameInput.placeholder =
+        "예: 미국주식";
+
+    appendCreateField(
+        "계좌 이름",
+        accountNameInput
+    );
+
+
+    /*
+    증권사
+    */
+
+    const brokerInput =
+        document.createElement(
+            "input"
+        );
+
+    brokerInput.type =
+        "text";
+
+    brokerInput.placeholder =
+        "예: 토스증권";
+
+    appendCreateField(
+        "증권사",
+        brokerInput
+    );
+
+
+    /*
+    계좌번호
+
+    선택사항입니다.
+    보안상 전체 번호를 입력하지 않아도 됩니다.
+    */
+
+    const accountNumberInput =
+        document.createElement(
+            "input"
+        );
+
+    accountNumberInput.type =
+        "text";
+
+    accountNumberInput.placeholder =
+        "선택사항";
+
+    appendCreateField(
+        "계좌번호 또는 식별명",
+        accountNumberInput
+    );
+
+
+    /*
+    계좌 유형
+    */
+
+    const accountTypeSelect =
+        document.createElement(
+            "select"
+        );
+
+    accountTypeSelect.innerHTML = `
+        <option value="brokerage">일반 증권계좌</option>
+        <option value="isa">ISA</option>
+        <option value="retirement">퇴직연금</option>
+        <option value="pension">연금계좌</option>
+    `;
+
+    appendCreateField(
+        "계좌 유형",
+        accountTypeSelect
+    );
+
+
+    /*
+    기준 통화
+    */
+
+    const currencySelect =
+        document.createElement(
+            "select"
+        );
+
+    currencySelect.innerHTML = `
+        <option value="KRW">KRW · 원화</option>
+        <option value="USD">USD · 미국 달러</option>
+    `;
+
+    appendCreateField(
+        "계좌 기준 통화",
+        currencySelect
+    );
+
+
+    /*
+    투자 시장
+    */
+
+    const marketScopeSelect =
+        document.createElement(
+            "select"
+        );
+
+    marketScopeSelect.innerHTML = `
+        <option value="KR">한국</option>
+        <option value="US">미국</option>
+        <option value="GLOBAL">글로벌 / 혼합</option>
+    `;
+
+    appendCreateField(
+        "주요 투자 시장",
+        marketScopeSelect
+    );
+
+
+    /*
+    운용 방식
+    */
+
+    const strategyTypeSelect =
+        document.createElement(
+            "select"
+        );
+
+    strategyTypeSelect.innerHTML = `
+        <option value="allocation">자산배분</option>
+        <option value="trading">트레이딩</option>
+        <option value="mixed">혼합</option>
+    `;
+
+    appendCreateField(
+        "운용 방식",
+        strategyTypeSelect
+    );
+
+
+    /*
+    초기 투자재원
+    */
+
+    const initialCapitalInput =
+        document.createElement(
+            "input"
+        );
+
+    initialCapitalInput.type =
+        "number";
+
+    initialCapitalInput.min =
+        "0";
+
+    initialCapitalInput.step =
+        "any";
+
+    initialCapitalInput.value =
+        "0";
+
+    appendCreateField(
+        "초기 투자재원",
+        initialCapitalInput
+    );
+
+
+    /*
+    월 기본 매수 한도
+    */
+
+    const baseMonthlyInput =
+        document.createElement(
+            "input"
+        );
+
+    baseMonthlyInput.type =
+        "number";
+
+    baseMonthlyInput.min =
+        "0";
+
+    baseMonthlyInput.step =
+        "any";
+
+    baseMonthlyInput.value =
+        "0";
+
+    appendCreateField(
+        "월 기본 매수 한도",
+        baseMonthlyInput
+    );
+
+
+    /*
+    월 추가 매수 한도
+    */
+
+    const additionalMonthlyInput =
+        document.createElement(
+            "input"
+        );
+
+    additionalMonthlyInput.type =
+        "number";
+
+    additionalMonthlyInput.min =
+        "0";
+
+    additionalMonthlyInput.step =
+        "any";
+
+    additionalMonthlyInput.value =
+        "0";
+
+    appendCreateField(
+        "월 추가 매수 한도",
+        additionalMonthlyInput
+    );
+
+
+    /*
+    외부자금 납입 방식
+    */
+
+    const contributionTypeSelect =
+        document.createElement(
+            "select"
+        );
+
+    contributionTypeSelect.innerHTML = `
+        <option value="none">없음</option>
+        <option value="monthly">매월</option>
+        <option value="yearly">매년</option>
+        <option value="irregular">비정기</option>
+    `;
+
+    appendCreateField(
+        "외부자금 납입 방식",
+        contributionTypeSelect
+    );
+
+
+    /*
+    외부자금 납입 금액
+    */
+
+    const contributionAmountInput =
+        document.createElement(
+            "input"
+        );
+
+    contributionAmountInput.type =
+        "number";
+
+    contributionAmountInput.min =
+        "0";
+
+    contributionAmountInput.step =
+        "any";
+
+    contributionAmountInput.value =
+        "0";
+
+    appendCreateField(
+        "외부자금 납입 금액",
+        contributionAmountInput
+    );
+
+
+    /*
+    연간 납입 월
+    */
+
+    const contributionMonthSelect =
+        document.createElement(
+            "select"
+        );
+
+    contributionMonthSelect.innerHTML =
+        '<option value="">선택 안 함</option>';
+
+    for (
+        let month = 1;
+        month <= 12;
+        month++
+    ) {
+        const option =
+            document.createElement(
+                "option"
+            );
+
+        option.value =
+            String(month);
+
+        option.textContent =
+            month + "월";
+
+        contributionMonthSelect
+            .appendChild(
+                option
+            );
+    }
+
+    contributionMonthSelect.disabled =
+        true;
+
+    appendCreateField(
+        "연간 납입 월",
+        contributionMonthSelect
+    );
+
+
+    contributionTypeSelect
+        .addEventListener(
+            "change",
+            () => {
+
+                const yearly =
+                    contributionTypeSelect
+                    .value
+                    === "yearly";
+
+                contributionMonthSelect
+                    .disabled =
+                    !yearly;
+
+                if (!yearly) {
+                    contributionMonthSelect
+                        .value = "";
+                }
+            }
+        );
+
+
+    /*
+    매수 주기
+    */
+
+    const buyCycleTypeSelect =
+        document.createElement(
+            "select"
+        );
+
+    buyCycleTypeSelect.innerHTML = `
+        <option value="monthly">매월</option>
+        <option value="weekly">매주</option>
+        <option value="manual">수동</option>
+    `;
+
+    appendCreateField(
+        "매수 주기",
+        buyCycleTypeSelect
+    );
+
+
+    /*
+    매수 주기 상세
+    */
+
+    const buyCycleDetailInput =
+        document.createElement(
+            "input"
+        );
+
+    buyCycleDetailInput.type =
+        "text";
+
+    buyCycleDetailInput.value =
+        "25";
+
+    buyCycleDetailInput.placeholder =
+        "매월이면 매수일 입력";
+
+    appendCreateField(
+        "매수 주기 상세",
+        buyCycleDetailInput
+    );
+
+
+    /*
+    기본 계좌
+    */
+
+    const defaultWrapper =
+        document.createElement(
+            "label"
+        );
+
+    const defaultCheckbox =
+        document.createElement(
+            "input"
+        );
+
+    defaultCheckbox.type =
+        "checkbox";
+
+    defaultWrapper.appendChild(
+        defaultCheckbox
+    );
+
+    defaultWrapper.appendChild(
+        document.createTextNode(
+            " 이 계좌를 기본 계좌로 설정"
+        )
+    );
+
+    createForm.appendChild(
+        defaultWrapper
+    );
+
+
+    /*
+    메모
+    */
+
+    const memoInput =
+        document.createElement(
+            "textarea"
+        );
+
+    memoInput.placeholder =
+        "선택사항";
+
+    appendCreateField(
+        "메모",
+        memoInput
+    );
+
+
+    /*
+    생성 / 취소 버튼
+    */
+
+    const createButton =
+        document.createElement(
+            "button"
+        );
+
+    createButton.type =
+        "submit";
+
+    createButton.textContent =
+        "계좌 생성";
+
+
+    const cancelButton =
+        document.createElement(
+            "button"
+        );
+
+    cancelButton.type =
+        "button";
+
+    cancelButton.textContent =
+        "취소";
+
+
+    const createMessage =
+        document.createElement(
+            "div"
+        );
+
+    createMessage.className =
+        "transaction-message";
+
+
+    createForm.appendChild(
+        createButton
+    );
+
+    createForm.appendChild(
+        cancelButton
+    );
+
+    createForm.appendChild(
+        createMessage
+    );
+
+
+    openCreateButton
+        .addEventListener(
+            "click",
+            () => {
+
+                createForm.style.display =
+                    "block";
+
+                openCreateButton.style.display =
+                    "none";
+
+                accountNameInput.focus();
+            }
+        );
+
+
+    cancelButton
+        .addEventListener(
+            "click",
+            () => {
+
+                createForm.style.display =
+                    "none";
+
+                openCreateButton.style.display =
+                    "inline-block";
+
+                createMessage.textContent =
+                    "";
+            }
+        );
+
+
+    /*
+    계좌 생성 API 호출
+    */
+
+    createForm.addEventListener(
+        "submit",
+        async (event) => {
+
+            event.preventDefault();
+
+
+            createButton.disabled =
+                true;
+
+            createButton.textContent =
+                "생성 중...";
+
+            createMessage.textContent =
+                "";
+
+
+            const contributionMonth =
+                contributionMonthSelect.value
+                ? Number(
+                    contributionMonthSelect.value
+                )
+                : null;
+
+
+            const payload = {
+
+                account_name:
+                    accountNameInput
+                    .value
+                    .trim(),
+
+                account_number:
+                    accountNumberInput
+                    .value
+                    .trim(),
+
+                broker:
+                    brokerInput
+                    .value
+                    .trim(),
+
+                initial_capital:
+                    Number(
+                        initialCapitalInput
+                        .value || 0
+                    ),
+
+                base_monthly:
+                    Number(
+                        baseMonthlyInput
+                        .value || 0
+                    ),
+
+                max_additional_monthly:
+                    Number(
+                        additionalMonthlyInput
+                        .value || 0
+                    ),
+
+                buy_cycle_type:
+                    buyCycleTypeSelect.value,
+
+                buy_cycle_detail:
+                    buyCycleDetailInput
+                    .value
+                    .trim(),
+
+                currency:
+                    currencySelect.value,
+
+                account_type:
+                    accountTypeSelect.value,
+
+                market_scope:
+                    marketScopeSelect.value,
+
+                contribution_type:
+                    contributionTypeSelect.value,
+
+                contribution_amount:
+                    Number(
+                        contributionAmountInput
+                        .value || 0
+                    ),
+
+                contribution_month:
+                    contributionMonth,
+
+                strategy_type:
+                    strategyTypeSelect.value,
+
+                is_default:
+                    defaultCheckbox.checked,
+
+                memo:
+                    memoInput
+                    .value
+                    .trim()
+            };
+
+
+            try {
+
+                const response =
+                    await apiRequest(
+                        "/api/accounts",
+                        accessToken,
+                        {
+                            method:
+                                "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body:
+                                JSON.stringify(
+                                    payload
+                                )
+                        }
+                    );
+
+
+                if (
+                    !response.created
+                    || !response.account
+                ) {
+                    throw new Error(
+                        "계좌 생성 결과를 확인할 수 없습니다."
+                    );
+                }
+
+
+                createMessage.textContent =
+                    response.account
+                    .account_name
+                    + " 계좌가 생성되었습니다.";
+
+                createMessage.className =
+                    "transaction-message success";
+
+
+                /*
+                서버에서 계좌 목록을 다시 가져옵니다.
+                */
+
+                const refreshed =
+                    await apiRequest(
+                        "/api/accounts",
+                        accessToken
+                    );
+
+
+                const refreshedAccounts =
+                    Array.isArray(
+                        refreshed
+                    )
+                    ? refreshed
+                    : (
+                        refreshed.accounts
+                        || []
+                    );
+
+
+                await renderAccounts(
+                    refreshedAccounts,
+                    accessToken
+                );
+
+
+            } catch (error) {
+
+                createMessage.textContent =
+                    error.message
+                    || "계좌 생성에 실패했습니다.";
+
+                createMessage.className =
+                    "transaction-message error";
+
+
+                createButton.disabled =
+                    false;
+
+                createButton.textContent =
+                    "계좌 생성";
+            }
+        }
+    );
+
+
+    createSection.appendChild(
+        createForm
+    );
+
+    accountsList.appendChild(
+        createSection
+    );
+
+
+    /*
+    등록된 계좌가 없는 경우에도
+    신규 계좌 추가 UI는 유지합니다.
+    */
+
     if (accounts.length === 0) {
 
         const empty =
@@ -5800,7 +6626,7 @@ async function renderAccounts(
             "empty";
 
         empty.textContent =
-            "아직 등록된 계좌가 없습니다.";
+            "아직 등록된 계좌가 없습니다. 위에서 첫 계좌를 추가해주세요.";
 
         accountsList.appendChild(
             empty
@@ -5809,6 +6635,10 @@ async function renderAccounts(
         return;
     }
 
+
+    /*
+    기존 계좌 표시
+    */
 
     for (const account of accounts) {
 
