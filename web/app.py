@@ -2903,7 +2903,22 @@ async function loadPositions(
             accessToken
         );
 
-    return data.positions || [];
+    return {
+        summary:
+            data.summary || null,
+
+        positions:
+            data.positions || [],
+
+        currency:
+            data.currency || "KRW",
+
+        total_current_value:
+            Number(
+                data.total_current_value
+                || 0
+            )
+    };
 }
 
 async function lookupUsAsset(
@@ -7229,11 +7244,242 @@ async function renderAccounts(
 
             try {
 
-                const positions =
+                const positionData =
                     await loadPositions(
                         accessToken,
                         account.id
                     );
+
+                const positions =
+                    positionData.positions
+                    || [];
+
+                const summary =
+                    positionData.summary;
+
+
+                /*
+                계좌 요약
+                */
+
+                if (summary) {
+
+                    const summaryTitle =
+                        document.createElement(
+                            "div"
+                        );
+
+                    summaryTitle.className =
+                        "section-title";
+
+                    summaryTitle.textContent =
+                        "계좌 요약";
+
+
+                    const summaryBox =
+                        document.createElement(
+                            "div"
+                        );
+
+                    summaryBox.className =
+                        "transaction-row";
+
+
+                    const summaryCurrency =
+                        String(
+                            summary.currency
+                            || getAccountCurrency(
+                                account
+                            )
+                        )
+                        .trim()
+                        .toUpperCase();
+
+
+                    summaryBox.appendChild(
+                        createDetail(
+                            "총 매수원가: "
+                            + formatMoney(
+                                summary.total_invested,
+                                summaryCurrency
+                            )
+                        )
+                    );
+
+
+                    summaryBox.appendChild(
+                        createDetail(
+                            "주식 평가액: "
+                            + formatMoney(
+                                summary.total_current_value,
+                                summaryCurrency
+                            )
+                        )
+                    );
+
+
+                    const unrealizedPnl =
+                        Number(
+                            summary.total_unrealized_pnl
+                            || 0
+                        );
+
+
+                    const unrealizedDetail =
+                        createDetail(
+                            "평가손익: "
+                            + (
+                                unrealizedPnl > 0
+                                ? "+"
+                                : ""
+                            )
+                            + formatMoney(
+                                unrealizedPnl,
+                                summaryCurrency
+                            )
+                        );
+
+
+                    if (unrealizedPnl > 0) {
+                        unrealizedDetail.classList.add(
+                            "sell"
+                        );
+                    }
+
+
+                    if (unrealizedPnl < 0) {
+                        unrealizedDetail.classList.add(
+                            "buy"
+                        );
+                    }
+
+
+                    summaryBox.appendChild(
+                        unrealizedDetail
+                    );
+
+
+                    summaryBox.appendChild(
+                        createDetail(
+                            "실현손익: "
+                            + (
+                                Number(
+                                    summary.total_realized_pnl
+                                    || 0
+                                ) > 0
+                                ? "+"
+                                : ""
+                            )
+                            + formatMoney(
+                                summary.total_realized_pnl,
+                                summaryCurrency
+                            )
+                        )
+                    );
+
+
+                    summaryBox.appendChild(
+                        createDetail(
+                            "배당금: "
+                            + formatMoney(
+                                summary.total_dividends,
+                                summaryCurrency
+                            )
+                        )
+                    );
+
+
+                    const totalPnl =
+                        Number(
+                            summary.total_pnl
+                            || 0
+                        );
+
+
+                    const totalPnlDetail =
+                        createDetail(
+                            "총손익: "
+                            + (
+                                totalPnl > 0
+                                ? "+"
+                                : ""
+                            )
+                            + formatMoney(
+                                totalPnl,
+                                summaryCurrency
+                            )
+                            + " ("
+                            + (
+                                Number(
+                                    summary.total_roi
+                                    || 0
+                                ) > 0
+                                ? "+"
+                                : ""
+                            )
+                            + formatPercent(
+                                summary.total_roi
+                            )
+                            + ")"
+                        );
+
+
+                    if (totalPnl > 0) {
+                        totalPnlDetail.classList.add(
+                            "sell"
+                        );
+                    }
+
+
+                    if (totalPnl < 0) {
+                        totalPnlDetail.classList.add(
+                            "buy"
+                        );
+                    }
+
+
+                    summaryBox.appendChild(
+                        totalPnlDetail
+                    );
+
+
+                    summaryBox.appendChild(
+                        createDetail(
+                            "보유종목: "
+                            + Number(
+                                summary.position_count
+                                || 0
+                            )
+                            + "개"
+                        )
+                    );
+
+
+                    /*
+                    USD 계좌는 현재 주식 평가액의
+                    KRW 환산값도 함께 표시합니다.
+
+                    기존 PortfolioService의 환율 계산을
+                    다시 서버에 요청하지 않고,
+                    각 포지션에 이미 포함된
+                    account_current_value를 사용합니다.
+
+                    USD 계좌의 account_current_value 역시
+                    USD이므로 여기서는 아직 KRW 환산을
+                    임의 계산하지 않습니다.
+                    */
+
+                    card.insertBefore(
+                        summaryTitle,
+                        positionsTitle
+                    );
+
+                    card.insertBefore(
+                        summaryBox,
+                        positionsTitle
+                    );
+                }
+
 
                 renderPositions(
                     positionsList,
@@ -7250,7 +7496,6 @@ async function renderAccounts(
                     error.message
                     || "보유현황을 불러오지 못했습니다.";
             }
-
 
             /*
             거래 입력
