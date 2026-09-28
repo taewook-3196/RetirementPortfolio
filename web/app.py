@@ -17,7 +17,7 @@ from services.portfolio_service import PortfolioService
 
 from database.repository import Repository
 from portfolio.holdings import calculate_etf_positions
-
+from data.yfinance_client import YFinanceClient
 
 app = FastAPI(
     title="RetirementPortfolio",
@@ -750,6 +750,96 @@ def update_investment_profile_api(
             detail="투자 성향을 저장하지 못했습니다.",
         )
 
+
+# =========================================================
+# 미국 종목 검색 API
+# =========================================================
+
+@app.get("/api/assets/us/{ticker}")
+def lookup_us_asset_api(
+    ticker: str,
+    authorization: str | None = Header(default=None),
+):
+    """
+    미국 주식/ETF ticker를 Yahoo Finance에서 조회합니다.
+
+    이 API는 조회만 수행하며
+    asset_master나 거래내역에는 저장하지 않습니다.
+    """
+
+    # 로그인 사용자만 종목 검색 API를 사용할 수 있습니다.
+    get_verified_user_id(
+        authorization
+    )
+
+    clean_ticker = (
+        str(ticker or "")
+        .strip()
+        .upper()
+    )
+
+    if not clean_ticker:
+        raise HTTPException(
+            status_code=400,
+            detail="미국 종목 ticker를 입력해주세요.",
+        )
+
+    if len(clean_ticker) > 30:
+        raise HTTPException(
+            status_code=400,
+            detail="ticker가 너무 깁니다.",
+        )
+
+    try:
+        client = YFinanceClient()
+
+        asset = client.fetch_asset_info(
+            clean_ticker
+        )
+
+        return {
+            "found": True,
+            "asset": {
+                "ticker":
+                    asset["ticker"],
+
+                "name":
+                    asset["name"],
+
+                "market":
+                    asset["market"],
+
+                "exchange":
+                    asset["exchange"],
+
+                "asset_type":
+                    asset["asset_type"],
+
+                "currency":
+                    asset["currency"],
+            },
+        }
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "미국 종목 정보를 "
+                "조회하지 못했습니다."
+            ),
+        )
 
 # =========================================================
 # 거래 API
