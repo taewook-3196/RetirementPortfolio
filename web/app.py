@@ -2670,6 +2670,25 @@ async function lookupUsAsset(
     );
 }
 
+async function searchRegisteredAssets(
+    accessToken,
+    keyword = ""
+) {
+    const data =
+        await apiRequest(
+            "/api/assets?q="
+            + encodeURIComponent(
+                String(
+                    keyword || ""
+                ).trim()
+            )
+            + "&limit=100",
+            accessToken
+        );
+
+    return data.assets || [];
+}
+
 
 async function loadInvestmentProfile(
     accessToken
@@ -3055,19 +3074,6 @@ function renderTransactions(
 ) {
     container.innerHTML = "";
 
-    const currency =
-        getAccountCurrency(
-            account
-        );
-
-    const targetNameMap = {};
-
-    for (const target of targets) {
-        targetNameMap[
-            target.ticker
-        ] = target.name;
-    }
-
     if (transactions.length === 0) {
 
         const empty =
@@ -3096,6 +3102,17 @@ function renderTransactions(
         of newestFirst
     ) {
 
+        const assetCurrency =
+            String(
+                transaction.currency
+                || getAccountCurrency(account)
+            ).toUpperCase();
+
+        const assetName =
+            transaction.name
+            || transaction.ticker;
+
+
         const row =
             document.createElement(
                 "div"
@@ -3104,6 +3121,7 @@ function renderTransactions(
         row.className =
             "transaction-row";
 
+
         const main =
             document.createElement(
                 "div"
@@ -3111,6 +3129,7 @@ function renderTransactions(
 
         main.className =
             "transaction-main";
+
 
         const left =
             document.createElement(
@@ -3122,12 +3141,6 @@ function renderTransactions(
             === "BUY"
             ? "매수"
             : "매도";
-
-        const assetName =
-            targetNameMap[
-                transaction.ticker
-            ]
-            || transaction.ticker;
 
         left.textContent =
             transaction.transaction_date
@@ -3144,6 +3157,7 @@ function renderTransactions(
             ? "buy"
             : "sell";
 
+
         const amount =
             document.createElement(
                 "div"
@@ -3157,13 +3171,15 @@ function renderTransactions(
                 * Number(
                     transaction.price
                 ),
-                currency
+                assetCurrency
             );
+
 
         main.appendChild(left);
         main.appendChild(amount);
 
         row.appendChild(main);
+
 
         row.appendChild(
             createDetail(
@@ -3174,20 +3190,29 @@ function renderTransactions(
                 + " · 체결가 "
                 + formatMoney(
                     transaction.price,
-                    currency
+                    assetCurrency
                 )
                 + " · 수수료 "
                 + formatMoney(
                     transaction.fee,
-                    currency
+                    assetCurrency
                 )
                 + " · 세금 "
                 + formatMoney(
                     transaction.tax,
-                    currency
+                    assetCurrency
                 )
             )
         );
+
+
+        row.appendChild(
+            createDetail(
+                "거래 통화: "
+                + assetCurrency
+            )
+        );
+
 
         if (transaction.memo) {
 
@@ -3199,6 +3224,7 @@ function renderTransactions(
             );
         }
 
+
         const actions =
             document.createElement(
                 "div"
@@ -3206,6 +3232,7 @@ function renderTransactions(
 
         actions.className =
             "transaction-actions";
+
 
         const editButton =
             document.createElement(
@@ -3221,6 +3248,7 @@ function renderTransactions(
         editButton.textContent =
             "수정";
 
+
         const deleteButton =
             document.createElement(
                 "button"
@@ -3235,6 +3263,7 @@ function renderTransactions(
         deleteButton.textContent =
             "삭제";
 
+
         actions.appendChild(
             editButton
         );
@@ -3244,6 +3273,7 @@ function renderTransactions(
         );
 
         row.appendChild(actions);
+
 
         editButton.addEventListener(
             "click",
@@ -3259,6 +3289,7 @@ function renderTransactions(
                 );
             }
         );
+
 
         deleteButton.addEventListener(
             "click",
@@ -3312,10 +3343,10 @@ function renderTransactions(
             }
         );
 
+
         container.appendChild(row);
     }
 }
-
 
 async function refreshPortfolioData(
     account,
@@ -3356,7 +3387,7 @@ async function refreshPortfolioData(
 }
 
 
-function showTransactionEditor(
+async function showTransactionEditor(
     row,
     transaction,
     targets,
@@ -3375,53 +3406,20 @@ function showTransactionEditor(
     form.className =
         "transaction-form";
 
-    const typeLabel =
-        document.createElement(
-            "label"
-        );
-
-    typeLabel.textContent =
-        "거래 유형";
 
     const typeSelect =
         document.createElement(
             "select"
         );
 
-    for (
-        const [value, text]
-        of [
-            ["BUY", "매수"],
-            ["SELL", "매도"],
-        ]
-    ) {
-        const option =
-            document.createElement(
-                "option"
-            );
+    typeSelect.innerHTML = `
+        <option value="BUY">매수</option>
+        <option value="SELL">매도</option>
+    `;
 
-        option.value = value;
-        option.textContent = text;
+    typeSelect.value =
+        transaction.transaction_type;
 
-        if (
-            transaction.transaction_type
-            === value
-        ) {
-            option.selected = true;
-        }
-
-        typeSelect.appendChild(
-            option
-        );
-    }
-
-    const dateLabel =
-        document.createElement(
-            "label"
-        );
-
-    dateLabel.textContent =
-        "거래일";
 
     const dateInput =
         document.createElement(
@@ -3433,74 +3431,213 @@ function showTransactionEditor(
     dateInput.value =
         transaction.transaction_date;
 
-    const tickerLabel =
+
+    const assetSearchInput =
         document.createElement(
-            "label"
+            "input"
         );
 
-    tickerLabel.textContent =
-        "종목";
+    assetSearchInput.type =
+        "text";
+
+    assetSearchInput.placeholder =
+        "종목코드 또는 종목명 검색";
+
+    assetSearchInput.value =
+        transaction.ticker;
+
 
     const tickerSelect =
         document.createElement(
             "select"
         );
 
-    for (const target of targets) {
+    tickerSelect.required = true;
 
-        const option =
-            document.createElement(
-                "option"
+
+    const assetInfo =
+        document.createElement(
+            "div"
+        );
+
+    assetInfo.className =
+        "transaction-message";
+
+
+    async function loadAssetOptions(
+        keyword = ""
+    ) {
+        tickerSelect.innerHTML = "";
+
+        const assets =
+            await searchRegisteredAssets(
+                accessToken,
+                keyword
             );
 
-        option.value =
-            target.ticker;
+        const assetMap =
+            new Map();
 
-        option.textContent =
-            target.ticker
-            + " · "
-            + target.name;
+        for (const target of targets) {
 
-        if (
-            target.ticker
-            === transaction.ticker
-        ) {
-            option.selected = true;
+            assetMap.set(
+                target.ticker,
+                {
+                    ticker:
+                        target.ticker,
+
+                    name:
+                        target.name,
+
+                    currency:
+                        "KRW",
+                }
+            );
         }
 
-        tickerSelect.appendChild(
-            option
-        );
+        for (const asset of assets) {
+            assetMap.set(
+                asset.ticker,
+                asset
+            );
+        }
+
+
+        if (
+            !assetMap.has(
+                transaction.ticker
+            )
+        ) {
+            assetMap.set(
+                transaction.ticker,
+                {
+                    ticker:
+                        transaction.ticker,
+
+                    name:
+                        transaction.name
+                        || transaction.ticker,
+
+                    currency:
+                        transaction.currency
+                        || getAccountCurrency(
+                            account
+                        ),
+                }
+            );
+        }
+
+
+        for (
+            const asset
+            of assetMap.values()
+        ) {
+
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+            option.value =
+                asset.ticker;
+
+            option.textContent =
+                asset.ticker
+                + " · "
+                + (
+                    asset.name
+                    || asset.ticker
+                )
+                + " · "
+                + (
+                    asset.currency
+                    || "-"
+                );
+
+            option.dataset.currency =
+                asset.currency || "";
+
+            tickerSelect.appendChild(
+                option
+            );
+        }
+
+
+        tickerSelect.value =
+            transaction.ticker;
+
+        updateAssetInfo();
     }
 
-    /*
-    목표 포트폴리오에 없는 기존 거래종목도
-    수정 가능하도록 보존합니다.
-    */
-    if (
-        !targets.some(
-            target =>
-                target.ticker
-                === transaction.ticker
-        )
-    ) {
+
+    function updateAssetInfo() {
+
         const option =
-            document.createElement(
-                "option"
+            tickerSelect
+            .selectedOptions[0];
+
+        if (!option) {
+
+            assetInfo.textContent =
+                "선택 가능한 종목이 없습니다.";
+
+            return;
+        }
+
+        assetInfo.textContent =
+            "선택 종목: "
+            + option.value
+            + " · "
+            + (
+                option.dataset.currency
+                || "-"
+            );
+    }
+
+
+    tickerSelect.addEventListener(
+        "change",
+        updateAssetInfo
+    );
+
+
+    let searchTimer = null;
+
+    assetSearchInput.addEventListener(
+        "input",
+        () => {
+
+            clearTimeout(
+                searchTimer
             );
 
-        option.value =
-            transaction.ticker;
+            searchTimer =
+                setTimeout(
+                    async () => {
 
-        option.textContent =
-            transaction.ticker;
+                        try {
 
-        option.selected = true;
+                            await loadAssetOptions(
+                                assetSearchInput
+                                .value
+                                .trim()
+                            );
 
-        tickerSelect.appendChild(
-            option
-        );
-    }
+                        } catch (error) {
+
+                            assetInfo.textContent =
+                                error.message
+                                || "종목 검색에 실패했습니다.";
+
+                            assetInfo.className =
+                                "transaction-message error";
+                        }
+                    },
+                    350
+                );
+        }
+    );
+
 
     const quantityInput =
         document.createElement(
@@ -3514,6 +3651,7 @@ function showTransactionEditor(
     quantityInput.value =
         transaction.quantity;
 
+
     const priceInput =
         document.createElement(
             "input"
@@ -3526,6 +3664,7 @@ function showTransactionEditor(
     priceInput.value =
         transaction.price;
 
+
     const feeInput =
         document.createElement(
             "input"
@@ -3536,6 +3675,7 @@ function showTransactionEditor(
     feeInput.step = "any";
     feeInput.value =
         transaction.fee || 0;
+
 
     const taxInput =
         document.createElement(
@@ -3548,6 +3688,7 @@ function showTransactionEditor(
     taxInput.value =
         transaction.tax || 0;
 
+
     const memoInput =
         document.createElement(
             "textarea"
@@ -3555,6 +3696,7 @@ function showTransactionEditor(
 
     memoInput.value =
         transaction.memo || "";
+
 
     function appendField(
         labelText,
@@ -3572,6 +3714,7 @@ function showTransactionEditor(
         form.appendChild(element);
     }
 
+
     appendField(
         "거래 유형",
         typeSelect
@@ -3583,8 +3726,17 @@ function showTransactionEditor(
     );
 
     appendField(
-        "종목",
+        "종목 검색",
+        assetSearchInput
+    );
+
+    appendField(
+        "종목 선택",
         tickerSelect
+    );
+
+    form.appendChild(
+        assetInfo
     );
 
     appendField(
@@ -3612,6 +3764,7 @@ function showTransactionEditor(
         memoInput
     );
 
+
     const saveButton =
         document.createElement(
             "button"
@@ -3622,6 +3775,7 @@ function showTransactionEditor(
 
     saveButton.textContent =
         "수정 저장";
+
 
     const cancelButton =
         document.createElement(
@@ -3637,6 +3791,7 @@ function showTransactionEditor(
     cancelButton.textContent =
         "취소";
 
+
     const result =
         document.createElement(
             "div"
@@ -3644,6 +3799,7 @@ function showTransactionEditor(
 
     result.className =
         "transaction-message";
+
 
     form.appendChild(
         saveButton
@@ -3659,6 +3815,22 @@ function showTransactionEditor(
 
     row.appendChild(form);
 
+
+    try {
+
+        await loadAssetOptions("");
+
+    } catch (error) {
+
+        result.textContent =
+            error.message
+            || "종목 목록을 불러오지 못했습니다.";
+
+        result.className =
+            "transaction-message error";
+    }
+
+
     cancelButton.addEventListener(
         "click",
         async () => {
@@ -3673,17 +3845,31 @@ function showTransactionEditor(
         }
     );
 
+
     form.addEventListener(
         "submit",
         async (event) => {
 
             event.preventDefault();
 
+            if (!tickerSelect.value) {
+
+                result.textContent =
+                    "거래 종목을 선택해주세요.";
+
+                result.className =
+                    "transaction-message error";
+
+                return;
+            }
+
+
             saveButton.disabled =
                 true;
 
             saveButton.textContent =
                 "수정 중...";
+
 
             const payload = {
 
@@ -3719,6 +3905,7 @@ function showTransactionEditor(
                 memo:
                     memoInput.value.trim(),
             };
+
 
             try {
 
@@ -3744,6 +3931,7 @@ function showTransactionEditor(
                     }
                 );
 
+
                 await refreshPortfolioData(
                     account,
                     targets,
@@ -3751,6 +3939,7 @@ function showTransactionEditor(
                     transactionsList,
                     positionsList
                 );
+
 
             } catch (error) {
 
@@ -3771,7 +3960,6 @@ function showTransactionEditor(
     );
 }
 
-
 function createTransactionForm(
     account,
     targets,
@@ -3787,6 +3975,7 @@ function createTransactionForm(
     form.className =
         "transaction-form";
 
+
     const typeSelect =
         document.createElement(
             "select"
@@ -3796,6 +3985,7 @@ function createTransactionForm(
         <option value="BUY">매수</option>
         <option value="SELL">매도</option>
     `;
+
 
     const dateInput =
         document.createElement(
@@ -3807,6 +3997,26 @@ function createTransactionForm(
     dateInput.value =
         todayString();
 
+
+    /*
+    등록 자산 검색
+    */
+
+    const assetSearchInput =
+        document.createElement(
+            "input"
+        );
+
+    assetSearchInput.type =
+        "text";
+
+    assetSearchInput.placeholder =
+        "종목코드 또는 종목명 검색";
+
+    assetSearchInput.autocomplete =
+        "off";
+
+
     const tickerSelect =
         document.createElement(
             "select"
@@ -3814,25 +4024,209 @@ function createTransactionForm(
 
     tickerSelect.required = true;
 
-    for (const target of targets) {
 
-        const option =
-            document.createElement(
-                "option"
+    const assetInfo =
+        document.createElement(
+            "div"
+        );
+
+    assetInfo.className =
+        "transaction-message";
+
+
+    const button =
+        document.createElement(
+            "button"
+        );
+
+    button.type =
+        "submit";
+
+    button.textContent =
+        "거래 저장";
+
+
+    async function loadAssetOptions(
+        keyword = ""
+    ) {
+        tickerSelect.innerHTML = "";
+
+        const assets =
+            await searchRegisteredAssets(
+                accessToken,
+                keyword
             );
 
-        option.value =
-            target.ticker;
 
-        option.textContent =
-            target.ticker
-            + " · "
-            + target.name;
+        /*
+        목표 종목과 asset_master 검색 결과를 합칩니다.
 
-        tickerSelect.appendChild(
-            option
-        );
+        기존 퇴직연금 목표 ETF는 그대로 유지하고,
+        등록된 미국 주식/ETF도 선택할 수 있습니다.
+        */
+        const assetMap =
+            new Map();
+
+
+        for (const target of targets) {
+
+            assetMap.set(
+                target.ticker,
+                {
+                    ticker:
+                        target.ticker,
+
+                    name:
+                        target.name,
+
+                    currency:
+                        "KRW",
+
+                    market:
+                        "KR",
+                }
+            );
+        }
+
+
+        for (const asset of assets) {
+
+            assetMap.set(
+                asset.ticker,
+                asset
+            );
+        }
+
+
+        for (
+            const asset
+            of assetMap.values()
+        ) {
+
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+            option.value =
+                asset.ticker;
+
+            option.textContent =
+                asset.ticker
+                + " · "
+                + (
+                    asset.name
+                    || asset.ticker
+                )
+                + " · "
+                + (
+                    asset.currency
+                    || "-"
+                );
+
+            option.dataset.currency =
+                asset.currency || "";
+
+            option.dataset.market =
+                asset.market || "";
+
+            tickerSelect.appendChild(
+                option
+            );
+        }
+
+
+        button.disabled =
+            tickerSelect.options.length
+            === 0;
+
+        updateAssetInfo();
     }
+
+
+    function updateAssetInfo() {
+
+        const option =
+            tickerSelect
+            .selectedOptions[0];
+
+        if (!option) {
+
+            assetInfo.textContent =
+                "선택 가능한 종목이 없습니다.";
+
+            return;
+        }
+
+
+        assetInfo.textContent =
+            "선택 종목: "
+            + option.value
+            + " · "
+            + (
+                option.dataset.market
+                || "-"
+            )
+            + " · "
+            + (
+                option.dataset.currency
+                || "-"
+            );
+    }
+
+
+    tickerSelect.addEventListener(
+        "change",
+        updateAssetInfo
+    );
+
+
+    let searchTimer = null;
+
+    assetSearchInput.addEventListener(
+        "input",
+        () => {
+
+            clearTimeout(
+                searchTimer
+            );
+
+            searchTimer =
+                setTimeout(
+                    async () => {
+
+                        assetInfo.textContent =
+                            "등록 종목을 검색하는 중...";
+
+                        try {
+
+                            await loadAssetOptions(
+                                assetSearchInput
+                                .value
+                                .trim()
+                            );
+
+                        } catch (error) {
+
+                            tickerSelect.innerHTML =
+                                "";
+
+                            button.disabled =
+                                true;
+
+                            assetInfo.textContent =
+                                error.message
+                                || "종목 검색에 실패했습니다.";
+
+                            assetInfo.className =
+                                "transaction-message error";
+                        }
+                    },
+                    350
+                );
+        }
+    );
+
 
     const quantityInput =
         document.createElement(
@@ -3844,6 +4238,7 @@ function createTransactionForm(
     quantityInput.step = "any";
     quantityInput.required = true;
 
+
     const priceInput =
         document.createElement(
             "input"
@@ -3853,6 +4248,7 @@ function createTransactionForm(
     priceInput.min = "0";
     priceInput.step = "any";
     priceInput.required = true;
+
 
     const feeInput =
         document.createElement(
@@ -3864,6 +4260,7 @@ function createTransactionForm(
     feeInput.step = "any";
     feeInput.value = "0";
 
+
     const taxInput =
         document.createElement(
             "input"
@@ -3874,6 +4271,7 @@ function createTransactionForm(
     taxInput.step = "any";
     taxInput.value = "0";
 
+
     const memoInput =
         document.createElement(
             "textarea"
@@ -3882,10 +4280,12 @@ function createTransactionForm(
     memoInput.placeholder =
         "선택사항";
 
+
     function appendField(
         labelText,
         element
     ) {
+
         const label =
             document.createElement(
                 "label"
@@ -3898,6 +4298,7 @@ function createTransactionForm(
         form.appendChild(element);
     }
 
+
     appendField(
         "거래 유형",
         typeSelect
@@ -3909,8 +4310,17 @@ function createTransactionForm(
     );
 
     appendField(
-        "종목",
+        "종목 검색",
+        assetSearchInput
+    );
+
+    appendField(
+        "종목 선택",
         tickerSelect
+    );
+
+    form.appendChild(
+        assetInfo
     );
 
     appendField(
@@ -3938,20 +4348,6 @@ function createTransactionForm(
         memoInput
     );
 
-    const button =
-        document.createElement(
-            "button"
-        );
-
-    button.type =
-        "submit";
-
-    button.textContent =
-        "거래 저장";
-
-    if (targets.length === 0) {
-        button.disabled = true;
-    }
 
     const result =
         document.createElement(
@@ -3961,8 +4357,31 @@ function createTransactionForm(
     result.className =
         "transaction-message";
 
+
     form.appendChild(button);
     form.appendChild(result);
+
+
+    /*
+    처음 화면을 열었을 때
+    등록된 자산 전체를 불러옵니다.
+    */
+    loadAssetOptions("")
+        .catch(
+            (error) => {
+
+                button.disabled =
+                    true;
+
+                assetInfo.textContent =
+                    error.message
+                    || "종목 목록을 불러오지 못했습니다.";
+
+                assetInfo.className =
+                    "transaction-message error";
+            }
+        );
+
 
     form.addEventListener(
         "submit",
@@ -3970,11 +4389,25 @@ function createTransactionForm(
 
             event.preventDefault();
 
+
+            if (!tickerSelect.value) {
+
+                result.textContent =
+                    "거래 종목을 선택해주세요.";
+
+                result.className =
+                    "transaction-message error";
+
+                return;
+            }
+
+
             button.disabled =
                 true;
 
             button.textContent =
                 "저장 중...";
+
 
             const payload = {
 
@@ -4011,6 +4444,7 @@ function createTransactionForm(
                     memoInput.value.trim(),
             };
 
+
             try {
 
                 await apiRequest(
@@ -4034,17 +4468,20 @@ function createTransactionForm(
                     }
                 );
 
+
                 result.textContent =
                     "거래가 저장되었습니다.";
 
                 result.className =
                     "transaction-message success";
 
+
                 quantityInput.value = "";
                 priceInput.value = "";
                 feeInput.value = "0";
                 taxInput.value = "0";
                 memoInput.value = "";
+
 
                 await refreshPortfolioData(
                     account,
@@ -4053,6 +4490,7 @@ function createTransactionForm(
                     transactionsList,
                     positionsList
                 );
+
 
             } catch (error) {
 
@@ -4063,10 +4501,12 @@ function createTransactionForm(
                 result.className =
                     "transaction-message error";
 
+
             } finally {
 
                 button.disabled =
-                    targets.length === 0;
+                    tickerSelect.options.length
+                    === 0;
 
                 button.textContent =
                     "거래 저장";
@@ -4074,9 +4514,9 @@ function createTransactionForm(
         }
     );
 
+
     return form;
 }
-
 
 /*
 계좌 설정 편집기
