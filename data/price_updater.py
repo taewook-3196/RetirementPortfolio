@@ -1,12 +1,17 @@
 """
 data/price_updater.py
 
-ETF 시장 가격 데이터를 수집하고 PostgreSQL/Supabase DB에 저장/갱신하는 모듈.
+시장 가격 데이터를 수집하고 PostgreSQL/Supabase DB에 저장/갱신하는 모듈.
 
-- KRX 공식 Open API 우선 사용
-- KRX 누락 또는 실패 시 네이버 금융 데이터 사용
-- 가격 저장 전에 asset_master 종목 정보를 보장
-- 사용자별 계좌 목표 종목 및 거래 종목을 수집 대상에 포함
+지원 시장:
+- 한국(KR): KRX 공식 Open API 우선, 누락/실패 시 네이버 금융
+- 미국(US): Yahoo Finance(yfinance)
+
+주요 기능:
+- asset_master의 market/currency 정보를 기준으로 데이터 공급자 선택
+- 사용자별 계좌 목표 종목 및 실제 거래 종목을 수집 대상에 포함
+- 가격 저장 전에 asset_master 종목 정보 보장
+- 국내/미국 가격을 공통 prices 테이블 형식으로 저장
 - CLI 및 GitHub Actions 실행 지원
 """
 
@@ -21,9 +26,12 @@ from core.logging_config import setup_logging
 from core.paths import ensure_directories
 from database.repository import Repository
 from data.krx_client import KRXClient
+from data.yfinance_client import YFinanceClient
 
 
-logger = logging.getLogger("RetirementPortfolio.PriceUpdater")
+logger = logging.getLogger(
+    "RetirementPortfolio.PriceUpdater"
+)
 
 
 def update_market_prices(
@@ -38,17 +46,27 @@ def update_market_prices(
     설정 및 사용자 포트폴리오에 포함된 종목의 가격 데이터를 수집하여
     PostgreSQL/Supabase DB에 저장합니다.
 
+    시장 구분:
+    - KR: KRX -> Naver fallback
+    - US: Yahoo Finance
+
     user_id가 있으면 해당 사용자의 계좌 목표 종목과 실제 거래 종목도
     가격 수집 대상에 포함합니다.
     """
     ensure_directories()
 
     cfg = config or load_config()
-    repository = repo or Repository(user_id=user_id)
+    repository = repo or Repository(
+        user_id=user_id
+    )
 
     seen_tickers = set()
     target_tickers: List[str] = []
-    asset_info: Dict[str, Dict[str, str]] = {}
+
+    asset_info: Dict[
+        str,
+        Dict[str, str],
+    ] = {}
 
     def add_target(
         ticker: str,
@@ -59,31 +77,81 @@ def update_market_prices(
         currency: str = "KRW",
     ) -> None:
         """
-        가격 수집 대상 종목을 중복 없이 추가하고,
-        asset_master 저장에 필요한 정보도 함께 준비합니다.
+        가격 수집 대상 종목을 중복 없이 추가하고
+        asset_master 저장에 필요한 정보도 준비합니다.
+
+        시장 판별은 ticker 모양이 아니라
+        asset_master의 market/currency 정보를 우선합니다.
         """
-        clean_ticker = str(ticker).strip()
+        clean_market = (
+            str(market or "KR")
+            .strip()
+            .upper()
+        )
+
+        clean_currency = (
+            str(currency or "KRW")
+            .strip()
+            .upper()
+        )
+
+        clean_exchange = (
+            str(exchange or "")
+            .strip()
+            .upper()
+        )
+
+        clean_asset_type = (
+            str(asset_type or "STOCK")
+            .strip()
+            .upper()
+        )
+
+        clean_ticker = (
+            str(ticker or "")
+            .strip()
+            .upper()
+        )
 
         if not clean_ticker:
             return
 
-        # 현재 국내 종목코드는 6자리 형식으로 정규화
-        if market.upper() == "KR" and clean_ticker.isdigit():
-            clean_ticker = clean_ticker.zfill(6)
+        # 국내 숫자 종목코드만 6자리로 정규화합니다.
+        # AAPL, MSFT 같은 미국 ticker에는 적용하지 않습니다.
+        if (
+            clean_market == "KR"
+            and clean_ticker.isdigit()
+        ):
+            clean_ticker = (
+                clean_ticker.zfill(6)
+            )
 
-        clean_name = str(name or clean_ticker).strip()
+        clean_name = (
+            str(name or clean_ticker)
+            .strip()
+        )
+
+        if not clean_exchange:
+            if clean_market == "KR":
+                clean_exchange = "KRX"
+            elif clean_market == "US":
+                clean_exchange = "US"
 
         if clean_ticker not in seen_tickers:
-            seen_tickers.add(clean_ticker)
-            target_tickers.append(clean_ticker)
+            seen_tickers.add(
+                clean_ticker
+            )
+            target_tickers.append(
+                clean_ticker
+            )
 
         asset_info[clean_ticker] = {
             "ticker": clean_ticker,
             "name": clean_name,
-            "market": str(market or "KR").upper(),
-            "exchange": str(exchange or "KRX").upper(),
-            "asset_type": str(asset_type or "ETF").upper(),
-            "currency": str(currency or "KRW").upper(),
+            "market": clean_market,
+            "exchange": clean_exchange,
+            "asset_type": clean_asset_type,
+            "currency": clean_currency,
         }
 
     # -------------------------------------------------------------
@@ -102,7 +170,11 @@ def update_market_prices(
     # -------------------------------------------------------------
     # 2. 기본 관심종목
     # -------------------------------------------------------------
-    for watch in getattr(cfg, "watchlist", []):
+    for watch in getattr(
+        cfg,
+        "watchlist",
+        [],
+    ):
         add_target(
             ticker=watch.ticker,
             name=watch.name,
@@ -116,40 +188,95 @@ def update_market_prices(
     # 3. 현재 사용자의 계좌 목표 종목 및 실제 거래 종목
     # -------------------------------------------------------------
     if repository.user_id:
-        for target in repository.get_account_targets(account_id=None):
-            master = repository.get_etf_master(target.ticker)
+        for target in (
+            repository.get_account_targets(
+                account_id=None
+            )
+        ):
+            master = (
+                repository.get_etf_master(
+                    target.ticker
+                )
+            )
 
             if master:
                 add_target(
                     ticker=master.ticker,
                     name=master.name,
                     market=master.market,
-                    exchange=master.exchange or "KRX",
-                    asset_type=master.asset_type,
-                    currency=master.currency,
+                    exchange=(
+                        master.exchange
+                        or (
+                            "KRX"
+                            if str(
+                                master.market
+                                or ""
+                            ).upper() == "KR"
+                            else "US"
+                        )
+                    ),
+                    asset_type=(
+                        master.asset_type
+                    ),
+                    currency=(
+                        master.currency
+                    ),
                 )
             else:
+                # 자산 마스터가 없는 기존 종목은
+                # 현재 시스템의 기존 동작과 호환되도록
+                # 국내 종목으로 처리합니다.
                 add_target(
                     ticker=target.ticker,
                     name=target.name,
+                    market="KR",
+                    exchange="KRX",
+                    asset_type="ETF",
+                    currency="KRW",
                 )
 
-        for tx in repository.get_transactions():
-            master = repository.get_etf_master(tx.ticker)
+        for tx in (
+            repository.get_transactions()
+        ):
+            master = (
+                repository.get_etf_master(
+                    tx.ticker
+                )
+            )
 
             if master:
                 add_target(
                     ticker=master.ticker,
                     name=master.name,
                     market=master.market,
-                    exchange=master.exchange or "KRX",
-                    asset_type=master.asset_type,
-                    currency=master.currency,
+                    exchange=(
+                        master.exchange
+                        or (
+                            "KRX"
+                            if str(
+                                master.market
+                                or ""
+                            ).upper() == "KR"
+                            else "US"
+                        )
+                    ),
+                    asset_type=(
+                        master.asset_type
+                    ),
+                    currency=(
+                        master.currency
+                    ),
                 )
             else:
+                # ticker 문자열만 보고 미국 종목이라고
+                # 추측하지 않습니다.
                 add_target(
                     ticker=tx.ticker,
                     name=tx.ticker,
+                    market="KR",
+                    exchange="KRX",
+                    asset_type="ETF",
+                    currency="KRW",
                 )
 
     # -------------------------------------------------------------
@@ -164,24 +291,101 @@ def update_market_prices(
         currency="KRW",
     )
 
-    # 가격을 저장하기 전에 기본 자산 마스터를 먼저 보장한다.
-    repository.save_etf_master(list(asset_info.values()))
-
-    data_source_used = str(cfg.data_source).lower()
-    records: List[Dict[str, Any]] = []
+    # 가격 저장 전에 자산 마스터를 보장합니다.
+    repository.save_etf_master(
+        list(asset_info.values())
+    )
 
     # -------------------------------------------------------------
-    # 5. Mock 데이터
+    # 5. 시장별 수집 대상 분리
     # -------------------------------------------------------------
-    if data_source_used == "mock":
-        from data.mock_provider import MockDataProvider
+    kr_tickers: List[str] = []
+    us_tickers: List[str] = []
 
-        mock_provider = MockDataProvider(scenario=scenario)
-
-        records = mock_provider.get_historical_prices(
-            list(asset_info.values()),
-            days=days,
+    for ticker in target_tickers:
+        info = asset_info.get(
+            ticker,
+            {},
         )
+
+        market = (
+            str(
+                info.get(
+                    "market",
+                    "KR",
+                )
+            )
+            .strip()
+            .upper()
+        )
+
+        currency = (
+            str(
+                info.get(
+                    "currency",
+                    "KRW",
+                )
+            )
+            .strip()
+            .upper()
+        )
+
+        if (
+            market == "US"
+            or currency == "USD"
+        ):
+            us_tickers.append(
+                ticker
+            )
+        else:
+            kr_tickers.append(
+                ticker
+            )
+
+    logger.info(
+        "가격 수집 대상 분리 완료: "
+        "KR %d종목, US %d종목",
+        len(kr_tickers),
+        len(us_tickers),
+    )
+
+    configured_source = (
+        str(cfg.data_source)
+        .strip()
+        .lower()
+    )
+
+    records: List[
+        Dict[str, Any]
+    ] = []
+
+    sources_used: List[str] = []
+
+    # -------------------------------------------------------------
+    # 6. Mock 데이터
+    # -------------------------------------------------------------
+    if configured_source == "mock":
+        from data.mock_provider import (
+            MockDataProvider,
+        )
+
+        mock_provider = (
+            MockDataProvider(
+                scenario=scenario
+            )
+        )
+
+        records = (
+            mock_provider
+            .get_historical_prices(
+                list(
+                    asset_info.values()
+                ),
+                days=days,
+            )
+        )
+
+        sources_used.append("mock")
 
         logger.info(
             "MockDataProvider 데이터 생성 완료 "
@@ -190,155 +394,290 @@ def update_market_prices(
             target_tickers,
         )
 
-    # -------------------------------------------------------------
-    # 6. KRX 공식 Open API
-    # -------------------------------------------------------------
-    elif data_source_used == "krx":
-        try:
-            client = KRXClient()
+    else:
+        # ---------------------------------------------------------
+        # 7. 국내 가격 수집
+        # ---------------------------------------------------------
+        if kr_tickers:
+            kr_records: List[
+                Dict[str, Any]
+            ] = []
 
-            if client.is_configured():
-                logger.info(
-                    "KRX 공식 Open API 가격 데이터 수집 시작 "
-                    "(종목: %s)",
-                    target_tickers,
-                )
+            kr_source = (
+                configured_source
+            )
 
-                records = client.fetch_historical_prices(
-                    target_tickers,
-                    days=days,
-                )
+            # 기존 real 설정은 네이버 금융을 사용합니다.
+            if kr_source == "real":
+                kr_source = "naver"
 
-                logger.info(
-                    "KRX로부터 %d개 가격 레코드 수신 완료",
-                    len(records),
-                )
+            # 알 수 없는 설정값은 기존 서비스의
+            # 기본 방향에 맞춰 KRX를 우선 사용합니다.
+            if kr_source not in {
+                "krx",
+                "naver",
+            }:
+                kr_source = "krx"
 
-                # KRX가 제공한 실제 종목 마스터 정보가 있으면
-                # 기존 기본 정보를 더 정확한 정보로 갱신
-                if getattr(client, "last_etf_master", None):
-                    target_ticker_set = set(
-                        target_tickers
-                    )
-                
-                    selected_master = [
-                        item
-                        for item in client.last_etf_master
-                        if str(
-                            item.get("ticker", "")
-                        ).strip().zfill(6)
-                        in target_ticker_set
-                    ]
-                
-                    if selected_master:
-                        master_saved = (
-                            repository.save_etf_master(
-                                selected_master
+            # -----------------------------------------------------
+            # 7-1. KRX 공식 Open API
+            # -----------------------------------------------------
+            if kr_source == "krx":
+                try:
+                    client = KRXClient()
+
+                    if client.is_configured():
+                        logger.info(
+                            "KRX 공식 Open API 가격 데이터 "
+                            "수집 시작 (종목: %s)",
+                            kr_tickers,
+                        )
+
+                        kr_records = (
+                            client
+                            .fetch_historical_prices(
+                                kr_tickers,
+                                days=days,
                             )
                         )
-                
+
                         logger.info(
-                            "가격 수집 대상 ETF 마스터 "
-                            "동기화 완료: %d건 반영",
-                            master_saved,
+                            "KRX로부터 %d개 가격 "
+                            "레코드 수신 완료",
+                            len(kr_records),
                         )
 
-                    logger.info(
-                        "KRX ETF 마스터 동기화 완료: %d건 반영",
-                        master_saved,
+                        if kr_records:
+                            sources_used.append(
+                                "krx"
+                            )
+
+                        # KRX가 제공한 실제 종목 마스터가 있으면
+                        # 현재 수집 대상만 선별하여 반영합니다.
+                        if getattr(
+                            client,
+                            "last_etf_master",
+                            None,
+                        ):
+                            target_ticker_set = set(
+                                kr_tickers
+                            )
+
+                            selected_master = [
+                                item
+                                for item
+                                in client.last_etf_master
+                                if (
+                                    str(
+                                        item.get(
+                                            "ticker",
+                                            "",
+                                        )
+                                    )
+                                    .strip()
+                                    .zfill(6)
+                                    in target_ticker_set
+                                )
+                            ]
+
+                            if selected_master:
+                                master_saved = (
+                                    repository
+                                    .save_etf_master(
+                                        selected_master
+                                    )
+                                )
+
+                                logger.info(
+                                    "가격 수집 대상 ETF "
+                                    "마스터 동기화 완료: "
+                                    "%d건 반영",
+                                    master_saved,
+                                )
+
+                        # KRX에서 가격을 받지 못한 국내 종목만
+                        # 네이버 금융으로 보완합니다.
+                        fetched_tickers = {
+                            str(
+                                record.get(
+                                    "ticker",
+                                    "",
+                                )
+                            )
+                            .strip()
+                            .zfill(6)
+                            for record in kr_records
+                            if record.get(
+                                "ticker"
+                            )
+                        }
+
+                        missing_kr = [
+                            ticker
+                            for ticker in kr_tickers
+                            if ticker
+                            not in fetched_tickers
+                        ]
+
+                        if missing_kr:
+                            logger.info(
+                                "KRX 누락 국내 종목 "
+                                "%d개를 네이버 금융에서 "
+                                "추가 수집합니다: %s",
+                                len(missing_kr),
+                                missing_kr,
+                            )
+
+                            from data.naver_client import (
+                                NaverFinanceClient,
+                            )
+
+                            naver_client = (
+                                NaverFinanceClient()
+                            )
+
+                            extra_records = (
+                                naver_client
+                                .fetch_historical_prices(
+                                    missing_kr,
+                                    days=days,
+                                )
+                            )
+
+                            if extra_records:
+                                sources_used.append(
+                                    "naver"
+                                )
+
+                            kr_records.extend(
+                                extra_records
+                            )
+
+                    else:
+                        logger.warning(
+                            "KRX_API_KEY가 설정되지 않아 "
+                            "국내 종목을 네이버 금융에서 "
+                            "수집합니다."
+                        )
+
+                        kr_source = "naver"
+
+                except Exception as exc:
+                    logger.error(
+                        "KRX API 수집 실패: %s. "
+                        "국내 종목을 네이버 금융에서 "
+                        "수집합니다.",
+                        exc,
                     )
 
-                # KRX에서 가격을 받지 못한 종목은 네이버 금융으로 보완
-                fetched_tickers = {
-                    str(record.get("ticker", "")).strip()
-                    for record in records
-                    if record.get("ticker")
-                }
+                    kr_source = "naver"
 
-                missing = [
-                    ticker
-                    for ticker in target_tickers
-                    if ticker not in fetched_tickers
-                ]
-
-                if missing:
+            # -----------------------------------------------------
+            # 7-2. 네이버 금융
+            # -----------------------------------------------------
+            if kr_source == "naver":
+                try:
                     logger.info(
-                        "KRX 누락 종목 %d개를 네이버 금융에서 "
-                        "추가 수집합니다: %s",
-                        len(missing),
-                        missing,
+                        "네이버 금융 가격 데이터 "
+                        "수집 시작 (종목: %s)",
+                        kr_tickers,
                     )
 
-                    from data.naver_client import NaverFinanceClient
+                    from data.naver_client import (
+                        NaverFinanceClient,
+                    )
 
-                    naver_client = NaverFinanceClient()
+                    naver_client = (
+                        NaverFinanceClient()
+                    )
 
-                    extra_records = (
-                        naver_client.fetch_historical_prices(
-                            missing,
+                    kr_records = (
+                        naver_client
+                        .fetch_historical_prices(
+                            kr_tickers,
                             days=days,
                         )
                     )
 
-                    records.extend(extra_records)
+                    if kr_records:
+                        sources_used.append(
+                            "naver"
+                        )
 
-            else:
-                logger.warning(
-                    "KRX_API_KEY가 설정되지 않아 "
-                    "네이버 금융으로 전환합니다."
+                    logger.info(
+                        "네이버 금융으로부터 "
+                        "%d개 가격 레코드 수신 완료",
+                        len(kr_records),
+                    )
+
+                except Exception as exc:
+                    logger.error(
+                        "네이버 금융 시세 수집 실패: %s",
+                        exc,
+                    )
+
+            records.extend(
+                kr_records
+            )
+
+        # ---------------------------------------------------------
+        # 8. 미국 가격 수집
+        # ---------------------------------------------------------
+        if us_tickers:
+            try:
+                logger.info(
+                    "Yahoo Finance 미국 가격 데이터 "
+                    "수집 시작 (종목: %s)",
+                    us_tickers,
                 )
 
-                data_source_used = "naver"
+                yfinance_client = (
+                    YFinanceClient()
+                )
 
-        except Exception as exc:
-            logger.error(
-                "KRX API 수집 실패: %s. "
-                "네이버 금융으로 전환합니다.",
-                exc,
-            )
+                us_records = (
+                    yfinance_client
+                    .fetch_historical_prices(
+                        us_tickers,
+                        days=days,
+                    )
+                )
 
-            data_source_used = "naver-fallback"
+                if us_records:
+                    sources_used.append(
+                        "yfinance"
+                    )
 
-    # -------------------------------------------------------------
-    # 7. 네이버 금융
-    # -------------------------------------------------------------
-    if (
-        data_source_used.startswith("naver")
-        or data_source_used == "real"
-    ):
-        try:
-            logger.info(
-                "네이버 금융 가격 데이터 수집 시작 "
-                "(종목: %s)",
-                target_tickers,
-            )
+                records.extend(
+                    us_records
+                )
 
-            from data.naver_client import NaverFinanceClient
+                logger.info(
+                    "Yahoo Finance로부터 "
+                    "%d개 미국 가격 레코드 "
+                    "수신 완료",
+                    len(us_records),
+                )
 
-            naver_client = NaverFinanceClient()
-
-            records = naver_client.fetch_historical_prices(
-                target_tickers,
-                days=days,
-            )
-
-            data_source_used = "naver"
-
-            logger.info(
-                "네이버 금융으로부터 %d개 가격 레코드 수신 완료",
-                len(records),
-            )
-
-        except Exception as exc:
-            logger.error(
-                "네이버 금융 시세 수집 실패: %s",
-                exc,
-            )
+            except Exception as exc:
+                # 미국 가격 수집 실패가 국내 가격까지
+                # 폐기하지 않도록 독립적으로 처리합니다.
+                logger.error(
+                    "Yahoo Finance 미국 시세 "
+                    "수집 실패: %s",
+                    exc,
+                )
 
     # -------------------------------------------------------------
-    # 8. 수집 결과 확인
+    # 9. 수집 결과 확인
     # -------------------------------------------------------------
     if not records:
+        data_source_used = (
+            ",".join(sources_used)
+            if sources_used
+            else configured_source
+        )
+
         logger.warning(
             "시장 가격 데이터 수집 실패 (%s). "
             "기존 DB 가격 데이터는 유지합니다.",
@@ -347,64 +686,157 @@ def update_market_prices(
 
         return {
             "status": "warning",
-            "data_source": data_source_used,
+            "data_source":
+                data_source_used,
             "records_count": 0,
             "saved_count": 0,
+            "kr_tickers":
+                len(kr_tickers),
+            "us_tickers":
+                len(us_tickers),
             "message": (
                 "실제 시세 수집에 실패하여 "
                 "기존 DB 데이터를 유지합니다."
             ),
         }
 
-    # 가격 저장 전에 records에 포함된 모든 ticker가
-    # asset_master에 존재하는지 마지막으로 확인
+    # -------------------------------------------------------------
+    # 10. 가격 레코드 정규화 및 asset_master 최종 확인
+    # -------------------------------------------------------------
+    normalized_records: List[
+        Dict[str, Any]
+    ] = []
+
     for record in records:
-        ticker = str(record.get("ticker", "")).strip()
+        ticker = (
+            str(
+                record.get(
+                    "ticker",
+                    "",
+                )
+            )
+            .strip()
+            .upper()
+        )
 
         if not ticker:
             continue
 
-        if ticker.isdigit():
-            ticker = ticker.zfill(6)
+        info = asset_info.get(
+            ticker
+        )
+
+        # 공급자가 국내 종목코드를 숫자로 반환한 경우만
+        # 6자리 정규화를 시도합니다.
+        if info is None and ticker.isdigit():
+            padded_ticker = (
+                ticker.zfill(6)
+            )
+
+            if padded_ticker in asset_info:
+                ticker = padded_ticker
+                info = asset_info.get(
+                    ticker
+                )
 
         record["ticker"] = ticker
 
-        if not repository.get_etf_master(ticker):
-            info = asset_info.get(ticker)
-
+        if not repository.get_etf_master(
+            ticker
+        ):
             if info:
-                repository.save_etf_master([info])
-            else:
-                # 공급자가 예상하지 못한 종목을 반환한 경우
-                # FK 오류를 피하기 위해 최소 자산 정보 등록
                 repository.save_etf_master(
-                    [
-                        {
-                            "ticker": ticker,
-                            "name": ticker,
-                            "market": "KR",
-                            "exchange": "KRX",
-                            "asset_type": "ETF",
-                            "currency": "KRW",
-                        }
-                    ]
+                    [info]
                 )
 
+            else:
+                # 예상하지 못한 공급자 ticker를 ticker 모양만
+                # 보고 특정 국가로 추측하지 않습니다.
+                #
+                # 현재 수집 대상 목록에 없는 ticker는 저장하지
+                # 않는 것이 잘못된 자산 마스터 생성보다 안전합니다.
+                logger.warning(
+                    "asset_master 정보가 없는 "
+                    "예상 외 ticker를 건너뜁니다: %s",
+                    ticker,
+                )
+                continue
+
+        normalized_records.append(
+            record
+        )
+
+    if not normalized_records:
+        logger.warning(
+            "저장 가능한 가격 레코드가 없습니다. "
+            "기존 DB 가격 데이터는 유지합니다."
+        )
+
+        return {
+            "status": "warning",
+            "data_source": (
+                ",".join(
+                    dict.fromkeys(
+                        sources_used
+                    )
+                )
+                if sources_used
+                else configured_source
+            ),
+            "records_count": 0,
+            "saved_count": 0,
+            "kr_tickers":
+                len(kr_tickers),
+            "us_tickers":
+                len(us_tickers),
+            "message": (
+                "정규화 후 저장 가능한 "
+                "가격 데이터가 없습니다."
+            ),
+        }
+
     # -------------------------------------------------------------
-    # 9. PostgreSQL/Supabase 가격 저장
+    # 11. PostgreSQL/Supabase 가격 저장
     # -------------------------------------------------------------
-    saved_count = repository.upsert_prices(records)
+    saved_count = (
+        repository.upsert_prices(
+            normalized_records
+        )
+    )
+
+    unique_sources = list(
+        dict.fromkeys(
+            sources_used
+        )
+    )
+
+    data_source_used = (
+        ",".join(unique_sources)
+        if unique_sources
+        else configured_source
+    )
 
     logger.info(
-        "DB 가격 저장 완료: %d건 반영",
+        "DB 가격 저장 완료: %d건 반영 "
+        "(KR %d종목, US %d종목, source=%s)",
         saved_count,
+        len(kr_tickers),
+        len(us_tickers),
+        data_source_used,
     )
 
     return {
         "status": "success",
-        "data_source": data_source_used,
-        "records_count": len(records),
-        "saved_count": saved_count,
+        "data_source":
+            data_source_used,
+        "records_count":
+            len(normalized_records),
+        "saved_count":
+            saved_count,
+        "kr_tickers":
+            len(kr_tickers),
+        "us_tickers":
+            len(us_tickers),
     }
 
 
@@ -413,13 +845,18 @@ def main():
     setup_logging()
 
     logger.info(
-        "CLI 기반 시장 데이터 업데이트 작업을 시작합니다."
+        "CLI 기반 시장 데이터 업데이트 "
+        "작업을 시작합니다."
     )
 
     try:
-        result = update_market_prices()
+        result = (
+            update_market_prices()
+        )
 
-        print(f"업데이트 완료: {result}")
+        print(
+            f"업데이트 완료: {result}"
+        )
 
         logger.info(
             "작업 정상 종료: %s",
@@ -428,7 +865,8 @@ def main():
 
     except Exception as exc:
         logger.exception(
-            "데이터 업데이트 중 치명적 오류 발생: %s",
+            "데이터 업데이트 중 "
+            "치명적 오류 발생: %s",
             exc,
         )
 
