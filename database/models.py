@@ -218,6 +218,67 @@ class AccountTarget(Base):
         UniqueConstraint("account_id", "ticker"),
     )
 
+class CashFlow(Base):
+    __tablename__ = "cash_flows"
+
+    id = Column(
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    account_id = Column(
+        BigInteger,
+        ForeignKey(
+            "accounts.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    # 실제 입금 또는 출금이 발생한 날짜
+    flow_date = Column(
+        Date,
+        nullable=False,
+        index=True,
+    )
+
+    # DEPOSIT / WITHDRAWAL
+    flow_type = Column(
+        Text,
+        nullable=False,
+    )
+
+    # 항상 양수로 저장합니다.
+    # 입금/출금 방향은 flow_type으로 구분합니다.
+    amount = Column(
+        Numeric,
+        nullable=False,
+    )
+
+    # 현금 흐름이 발생한 통화
+    # KRW / USD
+    currency = Column(
+        Text,
+        nullable=False,
+    )
+
+    memo = Column(
+        Text,
+        nullable=True,
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        default=datetime.now,
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=datetime.now,
+    )
+
 
 class Transaction(Base):
     __tablename__ = "transactions"
