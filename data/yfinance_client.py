@@ -28,6 +28,194 @@ logger = logging.getLogger(
 class YFinanceClient:
     """Yahoo Finance 기반 미국 주식/ETF 가격 클라이언트."""
 
+    def fetch_asset_info(
+        self,
+        ticker: str,
+    ) -> Dict[str, Any]:
+        """
+        미국 주식/ETF의 기본 자산 정보를 조회합니다.
+
+        반환 예:
+        {
+            "ticker": "AAPL",
+            "name": "Apple Inc.",
+            "market": "US",
+            "exchange": "NASDAQ",
+            "asset_type": "STOCK",
+            "currency": "USD",
+        }
+
+        존재하지 않거나 정상적인 미국 종목으로
+        확인할 수 없으면 ValueError를 발생시킵니다.
+        """
+        clean_ticker = (
+            str(ticker or "")
+            .strip()
+            .upper()
+        )
+
+        if not clean_ticker:
+            raise ValueError(
+                "ticker가 비어 있습니다."
+            )
+
+        try:
+            import yfinance as yf
+
+        except ImportError as exc:
+            raise RuntimeError(
+                "yfinance가 설치되어 있지 않습니다."
+            ) from exc
+
+        try:
+            yf_ticker = yf.Ticker(
+                clean_ticker
+            )
+
+            info = yf_ticker.info or {}
+
+        except Exception as exc:
+            raise RuntimeError(
+                f"{clean_ticker} 종목 정보를 "
+                "조회하지 못했습니다."
+            ) from exc
+
+        if not info:
+            raise ValueError(
+                f"{clean_ticker} 종목 정보를 "
+                "찾을 수 없습니다."
+            )
+
+        quote_type = (
+            str(
+                info.get(
+                    "quoteType",
+                    "",
+                )
+                or ""
+            )
+            .strip()
+            .upper()
+        )
+
+        currency = (
+            str(
+                info.get(
+                    "currency",
+                    "",
+                )
+                or ""
+            )
+            .strip()
+            .upper()
+        )
+
+        exchange_raw = (
+            str(
+                info.get(
+                    "exchange",
+                    "",
+                )
+                or ""
+            )
+            .strip()
+            .upper()
+        )
+
+        name = (
+            str(
+                info.get(
+                    "longName",
+                    "",
+                )
+                or info.get(
+                    "shortName",
+                    "",
+                )
+                or clean_ticker
+            )
+            .strip()
+        )
+
+        # 현재 단계에서는 미국 USD 거래 자산만
+        # 등록 대상으로 허용합니다.
+        if currency != "USD":
+            raise ValueError(
+                f"{clean_ticker}은 USD 거래 종목으로 "
+                "확인되지 않았습니다."
+            )
+
+        # Yahoo Finance의 exchange 코드를
+        # 시스템에서 사용할 명칭으로 정규화합니다.
+        exchange_map = {
+            "NMS": "NASDAQ",
+            "NGM": "NASDAQ",
+            "NCM": "NASDAQ",
+            "NAS": "NASDAQ",
+            "NASDAQ": "NASDAQ",
+
+            "NYQ": "NYSE",
+            "NYSE": "NYSE",
+
+            "ASE": "AMEX",
+            "PCX": "NYSEARCA",
+            "BTS": "BATS",
+        }
+
+        exchange = exchange_map.get(
+            exchange_raw,
+            exchange_raw or "US",
+        )
+
+        if quote_type in {
+            "ETF",
+        }:
+            asset_type = "ETF"
+
+        elif quote_type in {
+            "EQUITY",
+        }:
+            asset_type = "STOCK"
+
+        else:
+            raise ValueError(
+                f"{clean_ticker}의 자산 유형 "
+                f"({quote_type or 'UNKNOWN'})은 "
+                "현재 지원하지 않습니다."
+            )
+
+        result = {
+            "ticker":
+                clean_ticker,
+
+            "name":
+                name,
+
+            "market":
+                "US",
+
+            "exchange":
+                exchange,
+
+            "asset_type":
+                asset_type,
+
+            "currency":
+                "USD",
+        }
+
+        logger.info(
+            "Yahoo Finance 종목 정보 조회 완료: "
+            "%s / %s / %s / %s",
+            result["ticker"],
+            result["name"],
+            result["exchange"],
+            result["asset_type"],
+        )
+
+        return result
+        
+
     def fetch_historical_prices(
         self,
         target_tickers: List[str],
