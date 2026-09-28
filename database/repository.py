@@ -1052,31 +1052,41 @@ class Repository:
     ) -> List[ETFConfig]:
         """
         현재 사용자의 계좌별 목표 비중을 반환합니다.
-
-        account_id가 지정되면 해당 계좌만 반환하고,
-        None이면 모든 계좌 목표 비중을 초기 자본금 비율로 통합합니다.
+    
+        account_id가 지정되면 해당 계좌에 실제로
+        저장된 목표 비중만 반환합니다.
+    
+        목표 비중이 등록되지 않은 계좌는
+        빈 목록을 반환합니다.
+    
+        account_id가 None이면 현재 사용자의
+        여러 계좌에 실제로 등록된 목표 비중만
+        초기 자본금 비율로 통합합니다.
         """
+    
         if not self.user_id:
             return []
-
+    
         with get_db_session() as session:
+    
             # -----------------------------------------------------
-            # 특정 계좌
+            # 특정 계좌의 목표 포트폴리오
             # -----------------------------------------------------
+    
             if account_id is not None:
+    
                 account = (
                     session.query(Account)
                     .filter(
                         Account.id == account_id,
-                        Account.user_id
-                        == self.user_id,
+                        Account.user_id == self.user_id,
                     )
                     .first()
                 )
-
+    
                 if not account:
                     return []
-
+    
                 rows = (
                     session.query(
                         AccountTarget,
@@ -1096,31 +1106,28 @@ class Repository:
                     )
                     .all()
                 )
-
-                if rows:
-                    return [
-                        ETFConfig(
-                            ticker=target.ticker,
-                            name=asset.name,
-                            target_weight=float(
-                                target.target_weight
-                                or 0
-                            ),
-                            dividend_yield=float(
-                                target.dividend_yield
-                                or 0
-                            ),
-                        )
-                        for target, asset in rows
-                    ]
-
-                return list(
-                    load_config().etfs
-                )
-
+    
+                return [
+                    ETFConfig(
+                        ticker=target.ticker,
+                        name=asset.name,
+                        target_weight=float(
+                            target.target_weight
+                            or 0
+                        ),
+                        dividend_yield=float(
+                            target.dividend_yield
+                            or 0
+                        ),
+                    )
+                    for target, asset in rows
+                ]
+    
+    
             # -----------------------------------------------------
-            # 현재 사용자의 모든 계좌
+            # 현재 사용자의 모든 계좌 조회
             # -----------------------------------------------------
+    
             accounts = (
                 session.query(Account)
                 .filter(
@@ -1132,96 +1139,19 @@ class Repository:
                 )
                 .all()
             )
-
+    
             if not accounts:
-                return list(
-                    load_config().etfs
-                )
-
+                return []
+    
+    
             # -----------------------------------------------------
             # 계좌가 하나뿐인 경우
             # -----------------------------------------------------
+    
             if len(accounts) == 1:
-                rows = (
-                    session.query(
-                        AccountTarget,
-                        AssetMaster,
-                    )
-                    .join(
-                        AssetMaster,
-                        AssetMaster.ticker
-                        == AccountTarget.ticker,
-                    )
-                    .filter(
-                        AccountTarget.account_id
-                        == accounts[0].id
-                    )
-                    .order_by(
-                        AccountTarget.id.asc()
-                    )
-                    .all()
-                )
-
-                if rows:
-                    return [
-                        ETFConfig(
-                            ticker=target.ticker,
-                            name=asset.name,
-                            target_weight=float(
-                                target.target_weight
-                                or 0
-                            ),
-                            dividend_yield=float(
-                                target.dividend_yield
-                                or 0
-                            ),
-                        )
-                        for target, asset in rows
-                    ]
-
-                return list(
-                    load_config().etfs
-                )
-
-            # -----------------------------------------------------
-            # 여러 계좌의 목표 비중 통합
-            # -----------------------------------------------------
-            total_capital = sum(
-                max(
-                    0.0,
-                    float(
-                        account.initial_capital
-                        or 0
-                    ),
-                )
-                for account in accounts
-            )
-
-            combined: Dict[
-                str,
-                Dict[str, Any],
-            ] = {}
-
-            for account in accounts:
-                capital = max(
-                    0.0,
-                    float(
-                        account.initial_capital
-                        or 0
-                    ),
-                )
-
-                if total_capital > 0:
-                    weight_factor = (
-                        capital
-                        / total_capital
-                    )
-                else:
-                    weight_factor = (
-                        1.0
-                        / len(accounts)
-                    )
-
+    
+                account = accounts[0]
+    
                 rows = (
                     session.query(
                         AccountTarget,
@@ -1241,86 +1171,211 @@ class Repository:
                     )
                     .all()
                 )
-
-                if rows:
-                    targets = [
-                        (
-                            target.ticker,
-                            asset.name,
-                            float(
-                                target.target_weight
-                                or 0
-                            ),
-                            float(
-                                target.dividend_yield
-                                or 0
-                            ),
-                        )
-                        for target, asset in rows
-                    ]
-
+    
+                return [
+                    ETFConfig(
+                        ticker=target.ticker,
+                        name=asset.name,
+                        target_weight=float(
+                            target.target_weight
+                            or 0
+                        ),
+                        dividend_yield=float(
+                            target.dividend_yield
+                            or 0
+                        ),
+                    )
+                    for target, asset in rows
+                ]
+    
+    
+            # -----------------------------------------------------
+            # 여러 계좌의 목표 포트폴리오 수집
+            #
+            # 목표 포트폴리오가 없는 계좌는
+            # 통합 대상에서 제외합니다.
+            # -----------------------------------------------------
+    
+            account_targets = []
+    
+            for account in accounts:
+    
+                rows = (
+                    session.query(
+                        AccountTarget,
+                        AssetMaster,
+                    )
+                    .join(
+                        AssetMaster,
+                        AssetMaster.ticker
+                        == AccountTarget.ticker,
+                    )
+                    .filter(
+                        AccountTarget.account_id
+                        == account.id
+                    )
+                    .order_by(
+                        AccountTarget.id.asc()
+                    )
+                    .all()
+                )
+    
+                if not rows:
+                    continue
+    
+                account_targets.append(
+                    (
+                        account,
+                        rows,
+                    )
+                )
+    
+    
+            # 모든 계좌에 목표 포트폴리오가 없다면
+            # 빈 목록을 반환합니다.
+    
+            if not account_targets:
+                return []
+    
+    
+            # -----------------------------------------------------
+            # 목표 포트폴리오가 있는 계좌들의
+            # 초기 투자재원 합계
+            # -----------------------------------------------------
+    
+            total_capital = sum(
+                max(
+                    0.0,
+                    float(
+                        account.initial_capital
+                        or 0
+                    ),
+                )
+                for account, _rows
+                in account_targets
+            )
+    
+    
+            combined: Dict[
+                str,
+                Dict[str, Any],
+            ] = {}
+    
+    
+            # -----------------------------------------------------
+            # 여러 계좌의 목표 비중 통합
+            # -----------------------------------------------------
+    
+            for account, rows in account_targets:
+    
+                capital = max(
+                    0.0,
+                    float(
+                        account.initial_capital
+                        or 0
+                    ),
+                )
+    
+    
+                if total_capital > 0:
+    
+                    weight_factor = (
+                        capital
+                        / total_capital
+                    )
+    
                 else:
-                    targets = [
-                        (
-                            etf.ticker,
-                            etf.name,
-                            float(
-                                etf.target_weight
-                                or 0
-                            ),
-                            float(
-                                etf.dividend_yield
-                                or 0
-                            ),
-                        )
-                        for etf
-                        in load_config().etfs
-                    ]
-
-                for (
-                    ticker,
-                    name,
-                    target_weight,
-                    dividend_yield,
-                ) in targets:
+    
+                    # 초기 투자재원이 모두 0인 경우에는
+                    # 목표가 있는 계좌끼리 동일 비중으로
+                    # 통합합니다.
+    
+                    weight_factor = (
+                        1.0
+                        / len(account_targets)
+                    )
+    
+    
+                for target, asset in rows:
+    
+                    ticker = target.ticker
+    
+                    target_weight = float(
+                        target.target_weight
+                        or 0
+                    )
+    
+                    dividend_yield = float(
+                        target.dividend_yield
+                        or 0
+                    )
+    
+    
                     if ticker not in combined:
+    
                         combined[ticker] = {
-                            "ticker": ticker,
-                            "name": name,
-                            "target_weight": 0.0,
-                            "dividend_yield": 0.0,
+                            "ticker":
+                                ticker,
+    
+                            "name":
+                                asset.name,
+    
+                            "target_weight":
+                                0.0,
+    
+                            "dividend_yield":
+                                0.0,
                         }
-
+    
+    
                     combined[ticker][
                         "target_weight"
                     ] += (
                         target_weight
                         * weight_factor
                     )
-
+    
+    
                     combined[ticker][
                         "dividend_yield"
                     ] += (
                         dividend_yield
                         * weight_factor
                     )
-
+    
+    
+            # -----------------------------------------------------
+            # ETFConfig 형식으로 반환
+            # -----------------------------------------------------
+    
             return [
                 ETFConfig(
-                    ticker=info["ticker"],
-                    name=info["name"],
+                    ticker=info[
+                        "ticker"
+                    ],
+    
+                    name=info[
+                        "name"
+                    ],
+    
                     target_weight=round(
-                        info["target_weight"],
+                        info[
+                            "target_weight"
+                        ],
                         6,
                     ),
+    
                     dividend_yield=round(
-                        info["dividend_yield"],
+                        info[
+                            "dividend_yield"
+                        ],
                         6,
                     ),
                 )
-                for info in combined.values()
+                for info
+                in combined.values()
             ]
-
+        
     def save_account_targets(
         self,
         account_id: int,
