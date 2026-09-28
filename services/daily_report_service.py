@@ -763,12 +763,6 @@ class DailyReportService:
             # 위에서 이미 계산한 account_recommendations를 사용합니다.
             # ---------------------------------------------------------
 
-            positions_raw = (
-                self.portfolio_service
-                .get_positions(
-                    account_id=None
-                )
-            )
 
             summary_raw = (
                 self.portfolio_service
