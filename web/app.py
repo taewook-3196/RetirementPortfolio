@@ -1704,15 +1704,45 @@ def get_account_positions_api(
             repo=repo
         )
 
-        # PortfolioService를 사용하여
-        # 각 종목의 원래 통화 정보를 유지한
-        # 포지션을 계산합니다.
+        # -----------------------------------------------------
+        # 1. 계좌 보유 포지션 계산
+        # -----------------------------------------------------
+
         positions = (
             portfolio_service
             .get_positions(
                 account_id=account_id
             )
         )
+
+        # -----------------------------------------------------
+        # 2. 기존 PortfolioService를 이용해
+        #    계좌 전체 요약 계산
+        #
+        # 이 계산에는 다음 항목이 포함됩니다.
+        #
+        # - 초기 투자재원
+        # - 현재 보유분 총 매수원가
+        # - 현재 총 평가금액
+        # - 평가손익
+        # - 실현손익
+        # - 배당금
+        # - 총손익
+        # - 수익률
+        # - 계산상 잔여현금
+        # -----------------------------------------------------
+
+        summary = (
+            portfolio_service
+            .get_summary(
+                positions=positions,
+                account_id=account_id,
+            )
+        )
+
+        # -----------------------------------------------------
+        # 3. 목표 비중
+        # -----------------------------------------------------
 
         targets = repo.get_account_targets(
             account_id=account_id
@@ -1728,19 +1758,8 @@ def get_account_positions_api(
         }
 
         # -----------------------------------------------------
-        # 계좌 내 종목별 평가금액을
-        # 계좌 기준통화로 환산합니다.
-        #
-        # 예:
-        # KRW 계좌
-        # - 삼성전자 5,000,000 KRW
-        # - AAPL 4,000 USD
-        #
-        # AAPL 평가액을 KRW로 환산한 뒤
-        # 계좌 전체 평가금액과 비중을 계산합니다.
-        #
-        # 개별 종목의 가격/평가액 자체는
-        # 원래 종목 통화를 그대로 유지합니다.
+        # 4. 종목별 평가금액을
+        #    계좌 기준통화로 환산
         # -----------------------------------------------------
 
         converted_values = {}
@@ -1773,9 +1792,17 @@ def get_account_positions_api(
                 )
             )
 
-        total_current_value = sum(
-            converted_values.values()
+        # 비중 계산은 PortfolioService가 계산한
+        # 계좌 총 평가금액을 기준으로 합니다.
+
+        total_current_value = float(
+            summary.total_current_value
+            or 0
         )
+
+        # -----------------------------------------------------
+        # 5. 종목별 응답 생성
+        # -----------------------------------------------------
 
         position_list = []
 
@@ -1819,11 +1846,11 @@ def get_account_positions_api(
                     "name":
                         position.name,
 
-                    # 종목 자체의 거래/가격 통화
+                    # 종목 자체 통화
                     "currency":
                         asset_currency,
 
-                    # 계좌 합계의 기준통화
+                    # 계좌 기준통화
                     "account_currency":
                         account_currency,
 
@@ -1833,7 +1860,7 @@ def get_account_positions_api(
                             or 0
                         ),
 
-                    # 아래 가격/금액은 모두
+                    # 아래 가격과 금액은
                     # 종목 원래 통화 기준
                     "average_buy_price":
                         float(
@@ -1868,8 +1895,7 @@ def get_account_positions_api(
                             or 0
                         ),
 
-                    # 계좌통화로 환산한 평가금액.
-                    # 계좌 합계/비중 계산용입니다.
+                    # 계좌 기준통화로 환산한 평가금액
                     "account_current_value":
                         account_current_value,
 
@@ -1888,6 +1914,10 @@ def get_account_positions_api(
             key=lambda item: item["ticker"]
         )
 
+        # -----------------------------------------------------
+        # 6. 웹에 전달
+        # -----------------------------------------------------
+
         return {
             "account_id":
                 account.id,
@@ -1898,12 +1928,77 @@ def get_account_positions_api(
             "currency":
                 account_currency,
 
-            # 계좌 전체 평가금액은
-            # 계좌 기준통화입니다.
+            "summary": {
+                "currency":
+                    summary.currency,
+
+                "initial_capital":
+                    float(
+                        summary.initial_capital
+                        or 0
+                    ),
+
+                "total_invested":
+                    float(
+                        summary.total_invested
+                        or 0
+                    ),
+
+                "total_current_value":
+                    float(
+                        summary.total_current_value
+                        or 0
+                    ),
+
+                "total_unrealized_pnl":
+                    float(
+                        summary.total_unrealized_pnl
+                        or 0
+                    ),
+
+                "total_realized_pnl":
+                    float(
+                        summary.total_realized_pnl
+                        or 0
+                    ),
+
+                "total_dividends":
+                    float(
+                        summary.total_dividends
+                        or 0
+                    ),
+
+                "total_pnl":
+                    float(
+                        summary.total_pnl
+                        or 0
+                    ),
+
+                "total_roi":
+                    float(
+                        summary.total_roi
+                        or 0
+                    ),
+
+                "remaining_cash":
+                    float(
+                        summary.remaining_cash
+                        or 0
+                    ),
+
+                "position_count":
+                    int(
+                        summary.position_count
+                        or 0
+                    ),
+            },
+
+            # 기존 프런트엔드와의 호환성을 위해
+            # 최상위 total_current_value도 유지합니다.
             "total_current_value":
-                round(
-                    total_current_value,
-                    2,
+                float(
+                    summary.total_current_value
+                    or 0
                 ),
 
             "positions":
@@ -1918,7 +2013,7 @@ def get_account_positions_api(
             status_code=500,
             detail="보유현황을 계산하지 못했습니다.",
         )
-
+        
 # =========================================================
 # 모바일 웹 UI
 # =========================================================
