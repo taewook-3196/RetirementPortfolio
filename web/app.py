@@ -4102,15 +4102,15 @@ function createTransactionForm(
             const asset
             of assetMap.values()
         ) {
-
+        
             const option =
                 document.createElement(
                     "option"
                 );
-
+        
             option.value =
                 asset.ticker;
-
+        
             option.textContent =
                 asset.ticker
                 + " · "
@@ -4123,23 +4123,70 @@ function createTransactionForm(
                     asset.currency
                     || "-"
                 );
-
+        
             option.dataset.currency =
                 asset.currency || "";
-
+        
             option.dataset.market =
                 asset.market || "";
-
+        
             tickerSelect.appendChild(
                 option
             );
         }
-
-
+        
+        
+        /*
+        검색 결과가 정확히 하나라면
+        그 종목을 자동으로 선택합니다.
+        
+        예:
+        AAPL 검색
+        → AAPL · Apple Inc. · USD 자동 선택
+        */
+        const cleanKeyword =
+            String(
+                keyword || ""
+            )
+            .trim()
+            .toUpperCase();
+        
+        
+        if (cleanKeyword) {
+        
+            const exactOption =
+                Array.from(
+                    tickerSelect.options
+                ).find(
+                    option =>
+                        option.value
+                        .toUpperCase()
+                        === cleanKeyword
+                );
+        
+        
+            if (exactOption) {
+        
+                tickerSelect.value =
+                    exactOption.value;
+        
+            } else if (
+                assets.length === 1
+            ) {
+        
+                tickerSelect.value =
+                    assets[0].ticker;
+            }
+        }
+        
+        
         button.disabled =
             tickerSelect.options.length
             === 0;
-
+        
+        assetInfo.className =
+            "transaction-message";
+        
         updateAssetInfo();
     }
 
