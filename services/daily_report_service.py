@@ -752,121 +752,212 @@ class DailyReportService:
                 except Exception as e:
                     logger.debug(f"계좌 [{acc.account_name}] 개별 요약, 종목 및 추천 집계 생략: {e}")
 
-            # 전체 계좌 통합 포지션, 요약 및 매수 추천 집계 (account_id=None)
-            positions_raw = self.portfolio_service.get_positions(account_id=None)
-            summary_raw = self.portfolio_service.get_summary(positions_raw, account_id=None)
-            rec_res_u = self.recommendation_service.calculate_recommendations(
-                account_id=None, auto_save=False
-            )
-            rec_sum_u = rec_res_u.get("summary", {})
-            recs_raw_u = rec_res_u.get("recommendations", [])
-            already_inv_u = rec_sum_u.get("already_invested_in_cycle", False)
+            # ---------------------------------------------------------
+            # 전체 포트폴리오 포지션 및 요약
+            #
+            # 전체 자산 요약은 PortfolioService가 계좌별로 계산한 뒤
+            # KRW 기준으로 통합합니다.
+            #
+            # 매수 추천은 계좌별 기준통화가 다를 수 있으므로
+            # account_id=None으로 다시 계산하지 않습니다.
+            # 위에서 이미 계산한 account_recommendations를 사용합니다.
+            # ---------------------------------------------------------
 
-            def_acc = self.repo.get_default_account()
-            if def_acc:
-                next_dt_u, d_day_u, desc_u = calculate_next_investment_date(
-                    getattr(def_acc, "buy_cycle_type", "monthly"),
-                    getattr(def_acc, "buy_cycle_detail", "25"),
+            positions_raw = (
+                self.portfolio_service
+                .get_positions(
+                    account_id=None
                 )
+            )
+
+            summary_raw = (
+                self.portfolio_service
+                .get_summary(
+                    account_id=None
+                )
+            )
+
+            # ---------------------------------------------------------
+            # 대표 추천 데이터
+            #
+            # 계좌가 1개:
+            #   해당 계좌의 추천을 기존 recommendations 형식으로
+            #   그대로 전달하여 기존 HTML/Kakao/Gemini와 호환합니다.
+            #
+            # 계좌가 여러 개:
+            #   서로 다른 기준통화의 예산을 절대 합산하지 않습니다.
+            #   실제 추천 데이터는 account_recommendations에
+            #   계좌별로 독립 저장되어 있습니다.
+            # ---------------------------------------------------------
+
+            if len(account_recommendations) == 1:
+
+                single_rec = (
+                    account_recommendations[0]
+                )
+
+                recommendations = {
+                    "account_id":
+                        single_rec.get(
+                            "account_id"
+                        ),
+
+                    "account_name":
+                        single_rec.get(
+                            "account_name",
+                            "",
+                        ),
+
+                    "currency":
+                        single_rec.get(
+                            "currency",
+                            "KRW",
+                        ),
+
+                    "d_day":
+                        single_rec.get(
+                            "d_day"
+                        ),
+
+                    "next_buy_date":
+                        single_rec.get(
+                            "next_buy_date",
+                            "",
+                        ),
+
+                    "cycle_desc":
+                        single_rec.get(
+                            "cycle_desc",
+                            "",
+                        ),
+
+                    "already_invested_this_month":
+                        single_rec.get(
+                            "already_invested_this_month",
+                            False,
+                        ),
+
+                    "total_available_buy_budget":
+                        float(
+                            single_rec.get(
+                                "total_available_buy_budget",
+                                0,
+                            )
+                            or 0
+                        ),
+
+                    # 기존 HTML 코드와의 호환성 유지
+                    "total_recommended_amount":
+                        float(
+                            single_rec.get(
+                                "total_available_buy_budget",
+                                0,
+                            )
+                            or 0
+                        ),
+
+                    "budget_is_not_buy_order":
+                        True,
+
+                    "items":
+                        single_rec.get(
+                            "items",
+                            [],
+                        ),
+                }
+
+            elif len(account_recommendations) > 1:
+
+                # -----------------------------------------------------
+                # 다중 계좌에서는 KRW와 USD 등의 매수예산을
+                # 하나의 숫자로 합산하지 않습니다.
+                #
+                # Gemini/HTML/Kakao는 account_recommendations의
+                # 계좌별 예산과 통화를 사용해야 합니다.
+                # -----------------------------------------------------
+
+                recommendations = {
+                    "account_id":
+                        None,
+
+                    "account_name":
+                        "전체 계좌",
+
+                    "currency":
+                        None,
+
+                    "d_day":
+                        None,
+
+                    "next_buy_date":
+                        "",
+
+                    "cycle_desc":
+                        "계좌별 독립 매수",
+
+                    "already_invested_this_month":
+                        False,
+
+                    # 중요:
+                    # 서로 다른 통화의 예산을 합산하지 않습니다.
+                    "total_available_buy_budget":
+                        0.0,
+
+                    "total_recommended_amount":
+                        0.0,
+
+                    "budget_is_not_buy_order":
+                        True,
+
+                    "multi_account":
+                        True,
+
+                    "budgets_are_account_specific":
+                        True,
+
+                    "items":
+                        [],
+                }
+
             else:
-                next_dt_u, d_day_u, desc_u = None, None, "수시 매수"
 
-            unified_rec_items = []
+                # 계좌가 아직 없는 초기 상태
+                recommendations = {
+                    "account_id":
+                        None,
 
-            for r in recs_raw_u:
-                available_amount = (
-                    float(r.recommended_buy or 0)
-                    if not already_inv_u
-                    else 0.0
-                )
+                    "account_name":
+                        "",
 
-                available_shares = (
-                    int(
-                        available_amount
-                        // float(r.current_price)
-                    )
-                    if (
-                        float(r.current_price or 0) > 0
-                        and available_amount > 0
-                    )
-                    else 0
-                )
+                    "currency":
+                        "KRW",
 
-                executable_amount = (
-                    available_shares
-                    * float(r.current_price or 0)
-                )
+                    "d_day":
+                        None,
 
-                unified_rec_items.append({
-                    "ticker": r.ticker,
-                    "name": r.name,
+                    "next_buy_date":
+                        "",
 
-                    "available_buy_budget":
-                        available_amount,
+                    "cycle_desc":
+                        "수시 매수",
 
-                    "available_buy_shares":
-                        available_shares,
+                    "already_invested_this_month":
+                        False,
 
-                    "executable_buy_amount":
-                        executable_amount,
+                    "total_available_buy_budget":
+                        0.0,
 
-                    # 기존 HTML/코드와의 호환성을 위해
-                    # 필드명은 유지하되 실제 주문 가능한 값으로 전달합니다.
-                    "recommended_shares":
-                        available_shares,
-                    
-                    "recommended_amount":
-                        executable_amount,
+                    "total_recommended_amount":
+                        0.0,
 
-                    "reason": r.reason,
-                    "target_weight":
-                        r.target_weight,
-                    "current_weight":
-                        r.current_weight,
-                })
+                    "budget_is_not_buy_order":
+                        True,
 
-            total_available_buy_budget = (
-                float(
-                    rec_sum_u.get(
-                        "total_recommended_buy",
-                        0,
-                    )
-                    or 0
-                )
-                if not already_inv_u
-                else 0.0
-            )
+                    "items":
+                        [],
+                }
+                
 
-            recommendations = {
-                "d_day": d_day_u,
-
-                "next_buy_date": (
-                    next_dt_u.strftime("%Y-%m-%d")
-                    if next_dt_u
-                    else ""
-                ),
-
-                "cycle_desc":
-                    rec_sum_u.get(
-                        "cycle_desc",
-                        desc_u,
-                    ),
-
-                "already_invested_this_month":
-                    already_inv_u,
-
-                # 새 의미
-                "total_available_buy_budget":
-                    total_available_buy_budget,
-
-                # 기존 HTML 호환용
-                "total_recommended_amount":
-                    total_available_buy_budget,
-
-                "budget_is_not_buy_order": True,
-
-                "items": unified_rec_items,
-            }
             # 포트폴리오 요약 데이터 딕셔너리화
             summary = {
                 "total_eval": getattr(summary_raw, "total_current_value", 0),
