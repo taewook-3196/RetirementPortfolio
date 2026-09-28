@@ -5040,7 +5040,7 @@ async function renderAccounts(
 }
 
 /*
-미국 종목 검색
+미국 종목 검색 / 등록
 */
 
 const usAssetSearchForm =
@@ -5062,6 +5062,227 @@ const usAssetSearchResult =
     document.getElementById(
         "us-asset-search-result"
     );
+
+
+async function registerUsAsset(
+    accessToken,
+    ticker
+) {
+    const cleanTicker =
+        String(
+            ticker || ""
+        )
+        .trim()
+        .toUpperCase();
+
+    if (!cleanTicker) {
+        throw new Error(
+            "등록할 미국 종목이 없습니다."
+        );
+    }
+
+    return await apiRequest(
+        "/api/assets/us/"
+        + encodeURIComponent(
+            cleanTicker
+        )
+        + "/register",
+        accessToken,
+        {
+            method: "POST",
+        }
+    );
+}
+
+
+function renderUsAssetSearchResult(
+    asset,
+    accessToken
+) {
+    usAssetSearchResult.innerHTML = "";
+
+    const resultBox =
+        document.createElement(
+            "div"
+        );
+
+    resultBox.className =
+        "settings-summary";
+
+
+    const title =
+        document.createElement(
+            "div"
+        );
+
+    title.style.fontWeight =
+        "700";
+
+    title.style.fontSize =
+        "16px";
+
+    title.textContent =
+        asset.name
+        + " ("
+        + asset.ticker
+        + ")";
+
+    resultBox.appendChild(
+        title
+    );
+
+
+    resultBox.appendChild(
+        createDetail(
+            "시장: "
+            + asset.market
+        )
+    );
+
+    resultBox.appendChild(
+        createDetail(
+            "거래소: "
+            + asset.exchange
+        )
+    );
+
+    resultBox.appendChild(
+        createDetail(
+            "자산 유형: "
+            + asset.asset_type
+        )
+    );
+
+    resultBox.appendChild(
+        createDetail(
+            "통화: "
+            + asset.currency
+        )
+    );
+
+
+    const registerButton =
+        document.createElement(
+            "button"
+        );
+
+    registerButton.type =
+        "button";
+
+    registerButton.textContent =
+        "이 종목 등록";
+
+
+    const registerMessage =
+        document.createElement(
+            "div"
+        );
+
+    registerMessage.className =
+        "transaction-message";
+
+
+    registerButton.addEventListener(
+        "click",
+        async () => {
+
+            registerButton.disabled =
+                true;
+
+            registerButton.textContent =
+                "등록 중...";
+
+            registerMessage.textContent =
+                "";
+
+            registerMessage.className =
+                "transaction-message";
+
+
+            try {
+
+                const response =
+                    await registerUsAsset(
+                        accessToken,
+                        asset.ticker
+                    );
+
+
+                if (
+                    !response.registered
+                    || !response.asset
+                ) {
+                    throw new Error(
+                        "종목 등록에 실패했습니다."
+                    );
+                }
+
+
+                const savedAsset =
+                    response.asset;
+
+
+                registerMessage.textContent =
+                    savedAsset.name
+                    + " ("
+                    + savedAsset.ticker
+                    + ") 등록이 완료되었습니다.";
+
+                registerMessage.className =
+                    "transaction-message success";
+
+
+                registerButton.textContent =
+                    "등록 완료";
+
+                /*
+                이미 등록된 자산을 다시 눌러
+                불필요하게 반복 요청하지 않도록
+                현재 화면에서는 버튼을 비활성화합니다.
+
+                서버의 save_etf_master()도
+                같은 ticker가 있으면 INSERT가 아니라
+                UPDATE하므로 중복 행은 생성되지 않습니다.
+                */
+                registerButton.disabled =
+                    true;
+
+
+            } catch (error) {
+
+                registerMessage.textContent =
+                    error.message
+                    || "종목 등록에 실패했습니다.";
+
+                registerMessage.className =
+                    "transaction-message error";
+
+                registerButton.disabled =
+                    false;
+
+                registerButton.textContent =
+                    "이 종목 등록";
+            }
+        }
+    );
+
+
+    resultBox.appendChild(
+        registerButton
+    );
+
+    resultBox.appendChild(
+        registerMessage
+    );
+
+
+    usAssetSearchResult.appendChild(
+        resultBox
+    );
+
+    usAssetSearchResult.className =
+        "transaction-message";
+}
 
 
 usAssetSearchForm.addEventListener(
@@ -5141,72 +5362,10 @@ usAssetSearchForm.addEventListener(
             }
 
 
-            const asset =
-                response.asset;
-
-
-            usAssetSearchResult.innerHTML =
-                "";
-
-
-            const resultBox =
-                document.createElement(
-                    "div"
-                );
-
-            resultBox.className =
-                "settings-summary";
-
-
-            resultBox.appendChild(
-                createDetail(
-                    asset.name
-                    + " ("
-                    + asset.ticker
-                    + ")"
-                )
+            renderUsAssetSearchResult(
+                response.asset,
+                accessToken
             );
-
-
-            resultBox.appendChild(
-                createDetail(
-                    "시장: "
-                    + asset.market
-                )
-            );
-
-
-            resultBox.appendChild(
-                createDetail(
-                    "거래소: "
-                    + asset.exchange
-                )
-            );
-
-
-            resultBox.appendChild(
-                createDetail(
-                    "자산 유형: "
-                    + asset.asset_type
-                )
-            );
-
-
-            resultBox.appendChild(
-                createDetail(
-                    "통화: "
-                    + asset.currency
-                )
-            );
-
-
-            usAssetSearchResult.appendChild(
-                resultBox
-            );
-
-
-            usAssetSearchResult.className =
-                "transaction-message success";
 
 
         } catch (error) {
@@ -5229,7 +5388,6 @@ usAssetSearchForm.addEventListener(
         }
     }
 );
-
 
 /*
 투자성향 저장
