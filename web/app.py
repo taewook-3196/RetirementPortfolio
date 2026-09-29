@@ -4926,18 +4926,10 @@ function renderCashFlows(
                             );
 
 
-                            const refreshed =
-                                await loadCashFlows(
-                                    accessToken,
-                                    account.id
-                                );
-
-
-                            renderCashFlows(
-                                container,
-                                refreshed,
+                            await refreshCashFlowData(
                                 account,
-                                accessToken
+                                accessToken,
+                                container
                             );
 
 
@@ -5013,18 +5005,10 @@ function renderCashFlows(
                     );
 
 
-                    const refreshed =
-                        await loadCashFlows(
-                            accessToken,
-                            account.id
-                        );
-
-
-                    renderCashFlows(
-                        container,
-                        refreshed,
+                    await refreshCashFlowData(
                         account,
-                        accessToken
+                        accessToken,
+                        container
                     );
 
 
@@ -6730,6 +6714,65 @@ function createTransactionForm(
     return form;
 }
 
+async function refreshCashFlowData(
+    account,
+    accessToken,
+    cashFlowsList
+) {
+    const [
+        cashFlows,
+        positionData
+    ] = await Promise.all([
+        loadCashFlows(
+            accessToken,
+            account.id
+        ),
+
+        loadPositions(
+            accessToken,
+            account.id
+        ),
+    ]);
+
+
+    renderCashFlows(
+        cashFlowsList,
+        cashFlows,
+        account,
+        accessToken
+    );
+
+
+    const card =
+        cashFlowsList.closest(
+            ".account-card"
+        );
+
+
+    if (!card) {
+        return;
+    }
+
+
+    const summaryBox =
+        card.querySelector(
+            '[data-role="account-summary"]'
+        );
+
+
+    if (!summaryBox) {
+        return;
+    }
+
+
+    renderAccountSummary(
+        summaryBox,
+        positionData.summary,
+        account
+    );
+}
+
+
 function createCashFlowForm(
     account,
     accessToken,
@@ -7026,21 +7069,14 @@ function createCashFlowForm(
 
 
                 /*
-                저장 후 입출금 내역 새로고침
+                저장 후 입출금 내역과
+                계좌 요약을 함께 새로고침
                 */
 
-                const refreshed =
-                    await loadCashFlows(
-                        accessToken,
-                        account.id
-                    );
-
-
-                renderCashFlows(
-                    cashFlowsList,
-                    refreshed,
+                await refreshCashFlowData(
                     account,
-                    accessToken
+                    accessToken,
+                    cashFlowsList
                 );
 
 
