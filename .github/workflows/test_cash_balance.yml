@@ -1,0 +1,172 @@
+name: Test Cash Balance
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 3.12 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: 의존성 패키지 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 현금잔고 계산 테스트
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TEST_USER_ID: ${{ secrets.TEST_USER_ID }}
+        run: |
+          python - <<'PY'
+          import os
+
+          from database.repository import Repository
+          from services.portfolio_service import PortfolioService
+
+
+          user_id = os.environ.get(
+              "TEST_USER_ID",
+              "",
+          ).strip()
+
+          if not user_id:
+              raise RuntimeError(
+                  "TEST_USER_ID가 설정되지 않았습니다."
+              )
+
+
+          repo = Repository(
+              user_id=user_id
+          )
+
+          service = PortfolioService(
+              repo=repo
+          )
+
+
+          accounts = repo.get_accounts()
+
+          if not accounts:
+              raise RuntimeError(
+                  "테스트할 계좌가 없습니다."
+              )
+
+
+          print()
+          print(
+              "========================================"
+          )
+          print(
+              "현금잔고 계산 테스트"
+          )
+          print(
+              "========================================"
+          )
+
+
+          for account in accounts:
+              account_currency = (
+                  str(
+                      account.currency
+                      or "KRW"
+                  )
+                  .strip()
+                  .upper()
+              )
+
+              cash_balance = (
+                  service.get_cash_balance(
+                      account_id=account.id,
+                      include_initial_capital=False,
+                  )
+              )
+
+              cash_balance_with_initial = (
+                  service.get_cash_balance(
+                      account_id=account.id,
+                      include_initial_capital=True,
+                  )
+              )
+
+              cash_flows = (
+                  repo.get_cash_flows(
+                      account.id
+                  )
+              )
+
+              transactions = (
+                  repo.get_transactions(
+                      account_id=account.id
+                  )
+              )
+
+              dividends = (
+                  repo.get_dividends(
+                      account_id=account.id
+                  )
+              )
+
+              print()
+              print(
+                  f"계좌: {account.account_name}"
+              )
+
+              print(
+                  f"계좌 ID: {account.id}"
+              )
+
+              print(
+                  f"기준통화: {account_currency}"
+              )
+
+              print(
+                  "초기 투자재원: "
+                  f"{float(account.initial_capital or 0):,.2f}"
+              )
+
+              print(
+                  f"입출금 기록: {len(cash_flows)}건"
+              )
+
+              print(
+                  f"거래 기록: {len(transactions)}건"
+              )
+
+              print(
+                  f"배당 기록: {len(dividends)}건"
+              )
+
+              print(
+                  "초기 투자재원 제외 현금잔고: "
+                  f"{cash_balance:,.2f} "
+                  f"{account_currency}"
+              )
+
+              print(
+                  "초기 투자재원 포함 현금잔고: "
+                  f"{cash_balance_with_initial:,.2f} "
+                  f"{account_currency}"
+              )
+
+
+          print()
+          print(
+              "========================================"
+          )
+          print(
+              "현금잔고 계산 완료"
+          )
+          print(
+              "========================================"
+          )
+          PY
