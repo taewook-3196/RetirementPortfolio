@@ -5061,7 +5061,7 @@ async function refreshPortfolioData(
 ) {
     const [
         transactions,
-        positions
+        positionData
     ] = await Promise.all([
         loadTransactions(
             accessToken,
@@ -5074,6 +5074,17 @@ async function refreshPortfolioData(
         ),
     ]);
 
+
+    const positions =
+        positionData.positions
+        || [];
+
+
+    const summary =
+        positionData.summary
+        || null;
+
+
     renderTransactions(
         transactionsList,
         transactions,
@@ -5083,11 +5094,37 @@ async function refreshPortfolioData(
         positionsList
     );
 
+
     renderPositions(
         positionsList,
         positions,
         account
     );
+
+
+    const card =
+        positionsList.closest(
+            ".account-card"
+        );
+
+
+    if (card) {
+
+        const summaryBox =
+            card.querySelector(
+                '[data-role="account-summary"]'
+            );
+
+
+        if (summaryBox) {
+
+            renderAccountSummary(
+                summaryBox,
+                summary,
+                account
+            );
+        }
+    }
 }
 
 
@@ -8595,8 +8632,7 @@ async function renderAccounts(
 
         card.className =
             "account-card";
-
-
+            
         const name =
             document.createElement(
                 "div"
@@ -9045,6 +9081,9 @@ async function renderAccounts(
                     document.createElement(
                         "div"
                     );
+
+                summaryBox.dataset.role =
+                    "account-summary";                
 
 
                 renderAccountSummary(
