@@ -3130,24 +3130,103 @@ async function apiRequest(
             "Bearer " + accessToken,
     };
 
-    const response =
-        await fetch(
+
+    let response;
+
+    try {
+
+        response =
+            await fetch(
+                url,
+                {
+                    ...options,
+                    headers: headers,
+                }
+            );
+
+    } catch (error) {
+
+        console.error(
+            "API fetch 오류:",
             url,
-            {
-                ...options,
-                headers: headers,
-            }
+            error
         );
 
-    const data =
-        await response.json();
-
-    if (!response.ok) {
         throw new Error(
-            data.detail
-            || "요청을 처리하지 못했습니다."
+            "API 요청 실패: "
+            + (
+                error.message
+                || "네트워크 오류"
+            )
         );
     }
+
+
+    const responseText =
+        await response.text();
+
+
+    let data = null;
+
+    if (responseText) {
+
+        try {
+
+            data =
+                JSON.parse(
+                    responseText
+                );
+
+        } catch (error) {
+
+            console.error(
+                "API JSON 해석 오류:",
+                {
+                    url: url,
+                    status:
+                        response.status,
+                    contentType:
+                        response.headers.get(
+                            "content-type"
+                        ),
+                    responseText:
+                        responseText,
+                    error:
+                        error,
+                }
+            );
+
+            throw new Error(
+                "서버 응답 형식 오류"
+                + " · HTTP "
+                + response.status
+                + " · "
+                + responseText.slice(
+                    0,
+                    120
+                )
+            );
+        }
+    }
+
+
+    if (!response.ok) {
+
+        const detail =
+            data
+            && data.detail
+            ? data.detail
+            : (
+                "HTTP "
+                + response.status
+                + " 요청 오류"
+            );
+
+        throw new Error(
+            detail
+        );
+    }
+
 
     return data;
 }
