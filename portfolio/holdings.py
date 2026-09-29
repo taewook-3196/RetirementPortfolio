@@ -19,6 +19,8 @@ from typing import Dict, List, Optional
 
 from database.models import Dividend, Price, Transaction
 
+import math
+
 
 @dataclass
 class ETFPosition:
@@ -65,16 +67,23 @@ class ETFPosition:
 
 def _to_float(value) -> float:
     """
-    PostgreSQL Numeric에서 반환되는 Decimal 값을 포함하여
-    숫자 값을 안전하게 float로 변환합니다.
+    PostgreSQL Numeric, Decimal, 문자열 등의 값을
+    안전한 유한 실수(float)로 변환합니다.
+
+    None, NaN, Infinity 등은 0.0으로 처리합니다.
     """
     if value is None:
         return 0.0
 
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
         return 0.0
+
+    if not math.isfinite(number):
+        return 0.0
+
+    return number
 
 
 def calculate_etf_positions(
@@ -295,6 +304,18 @@ def calculate_etf_positions(
             current_price = _to_float(
                 price_object.close_price
             )
+
+            # 가격 데이터가 NaN, Infinity, 0 이하 등
+            # 정상적인 시장 가격이 아니라면
+            # 평가금액이 0으로 급락하지 않도록
+            # 현재 보유분의 평단가를 임시 사용합니다.
+            if current_price <= 0:
+                current_price = (
+                    average_price
+                    if average_price > 0
+                    else 0.0
+                )
+
         else:
             # 아직 시장 가격이 없다면 평단가를 임시 사용하여
             # 평가금액이 갑자기 0원이 되는 것을 방지
@@ -303,7 +324,7 @@ def calculate_etf_positions(
                 if average_price > 0
                 else 0.0
             )
-
+            
         # -----------------------------------------------------
         # 평가금액 및 손익
         # -----------------------------------------------------
