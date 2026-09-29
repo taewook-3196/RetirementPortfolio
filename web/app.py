@@ -3966,6 +3966,269 @@ function renderTransactions(
     }
 }
 
+async function loadCashFlows(
+    accessToken,
+    accountId
+) {
+    const data =
+        await apiRequest(
+            "/api/accounts/"
+            + accountId
+            + "/cash-flows",
+            accessToken
+        );
+
+    return data.cash_flows || [];
+}
+
+
+function renderCashFlows(
+    container,
+    cashFlows,
+    account,
+    accessToken
+) {
+    container.innerHTML = "";
+
+    if (cashFlows.length === 0) {
+
+        const empty =
+            document.createElement(
+                "div"
+            );
+
+        empty.className =
+            "empty";
+
+        empty.textContent =
+            "아직 등록된 입출금 내역이 없습니다.";
+
+        container.appendChild(
+            empty
+        );
+
+        return;
+    }
+
+
+    for (const cashFlow of cashFlows) {
+
+        const row =
+            document.createElement(
+                "div"
+            );
+
+        row.className =
+            "transaction-row";
+
+
+        const main =
+            document.createElement(
+                "div"
+            );
+
+        main.className =
+            "transaction-main";
+
+
+        const left =
+            document.createElement(
+                "div"
+            );
+
+        const flowType =
+            String(
+                cashFlow.flow_type
+                || ""
+            )
+            .trim()
+            .toUpperCase();
+
+
+        const typeText =
+            flowType === "DEPOSIT"
+            ? "입금"
+            : "출금";
+
+
+        left.textContent =
+            cashFlow.flow_date
+            + " · "
+            + typeText;
+
+
+        left.className =
+            flowType === "DEPOSIT"
+            ? "sell"
+            : "buy";
+
+
+        const amount =
+            document.createElement(
+                "div"
+            );
+
+
+        const currency =
+            String(
+                cashFlow.currency
+                || getAccountCurrency(
+                    account
+                )
+            )
+            .trim()
+            .toUpperCase();
+
+
+        amount.textContent =
+            (
+                flowType === "DEPOSIT"
+                ? "+"
+                : "-"
+            )
+            + formatMoney(
+                cashFlow.amount,
+                currency
+            );
+
+
+        main.appendChild(
+            left
+        );
+
+        main.appendChild(
+            amount
+        );
+
+        row.appendChild(
+            main
+        );
+
+
+        row.appendChild(
+            createDetail(
+                "통화: "
+                + currency
+            )
+        );
+
+
+        if (cashFlow.memo) {
+
+            row.appendChild(
+                createDetail(
+                    "메모: "
+                    + cashFlow.memo
+                )
+            );
+        }
+
+
+        const actions =
+            document.createElement(
+                "div"
+            );
+
+        actions.className =
+            "transaction-actions";
+
+
+        const deleteButton =
+            document.createElement(
+                "button"
+            );
+
+        deleteButton.type =
+            "button";
+
+        deleteButton.className =
+            "small-button delete-button";
+
+        deleteButton.textContent =
+            "삭제";
+
+
+        actions.appendChild(
+            deleteButton
+        );
+
+        row.appendChild(
+            actions
+        );
+
+
+        deleteButton.addEventListener(
+            "click",
+            async () => {
+
+                const confirmed =
+                    window.confirm(
+                        cashFlow.flow_date
+                        + " "
+                        + typeText
+                        + " 내역을 삭제할까요?"
+                    );
+
+                if (!confirmed) {
+                    return;
+                }
+
+
+                deleteButton.disabled =
+                    true;
+
+
+                try {
+
+                    await apiRequest(
+                        "/api/accounts/"
+                        + account.id
+                        + "/cash-flows/"
+                        + cashFlow.id,
+                        accessToken,
+                        {
+                            method:
+                                "DELETE"
+                        }
+                    );
+
+
+                    const refreshed =
+                        await loadCashFlows(
+                            accessToken,
+                            account.id
+                        );
+
+
+                    renderCashFlows(
+                        container,
+                        refreshed,
+                        account,
+                        accessToken
+                    );
+
+
+                } catch (error) {
+
+                    window.alert(
+                        error.message
+                        || "입출금 내역 삭제에 실패했습니다."
+                    );
+
+                    deleteButton.disabled =
+                        false;
+                }
+            }
+        );
+
+
+        container.appendChild(
+            row
+        );
+    }
+}
+
+
 async function refreshPortfolioData(
     account,
     targets,
@@ -7929,6 +8192,69 @@ async function renderAccounts(
                     error.message
                     || "거래 내역을 불러오지 못했습니다.";
             }
+
+            /*
+            현금 입출금 내역
+            */
+
+            const cashFlowsTitle =
+                document.createElement(
+                    "div"
+                );
+
+            cashFlowsTitle.className =
+                "section-title";
+
+            cashFlowsTitle.textContent =
+                "입금 / 출금 내역";
+
+            card.appendChild(
+                cashFlowsTitle
+            );
+
+
+            const cashFlowsList =
+                document.createElement(
+                    "div"
+                );
+
+            cashFlowsList.className =
+                "loading";
+
+            cashFlowsList.textContent =
+                "입출금 내역을 불러오는 중...";
+
+            card.appendChild(
+                cashFlowsList
+            );
+
+
+            try {
+
+                const cashFlows =
+                    await loadCashFlows(
+                        accessToken,
+                        account.id
+                    );
+
+
+                renderCashFlows(
+                    cashFlowsList,
+                    cashFlows,
+                    account,
+                    accessToken
+                );
+
+
+            } catch (error) {
+
+                cashFlowsList.className =
+                    "error";
+
+                cashFlowsList.textContent =
+                    error.message
+                    || "입출금 내역을 불러오지 못했습니다.";
+            }            
 
         } catch (error) {
 
