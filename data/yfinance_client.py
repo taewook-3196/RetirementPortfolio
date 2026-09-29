@@ -16,6 +16,7 @@ Yahoo Finance 데이터를 이용한 미국 주식/ETF 가격 수집기.
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -23,6 +24,61 @@ from typing import Any, Dict, List
 logger = logging.getLogger(
     "RetirementPortfolio.YFinanceClient"
 )
+
+
+def _safe_float(
+    value: Any,
+    default: float = 0.0,
+) -> float:
+    """
+    외부 데이터 값을 안전한 유한 실수로 변환합니다.
+
+    None, NaN, Infinity, 변환 불가능한 값은
+    default 값으로 처리합니다.
+    """
+    if value is None:
+        return default
+
+    try:
+        number = float(value)
+
+    except (
+        TypeError,
+        ValueError,
+        OverflowError,
+    ):
+        return default
+
+    if not math.isfinite(number):
+        return default
+
+    return number
+
+
+def _safe_int(
+    value: Any,
+    default: int = 0,
+) -> int:
+    """
+    외부 데이터 값을 안전한 정수로 변환합니다.
+
+    None, NaN, Infinity, 변환 불가능한 값은
+    default 값으로 처리합니다.
+    """
+    number = _safe_float(
+        value,
+        float(default),
+    )
+
+    try:
+        return int(number)
+
+    except (
+        TypeError,
+        ValueError,
+        OverflowError,
+    ):
+        return default
 
 
 class YFinanceClient:
@@ -167,14 +223,10 @@ class YFinanceClient:
             exchange_raw or "US",
         )
 
-        if quote_type in {
-            "ETF",
-        }:
+        if quote_type == "ETF":
             asset_type = "ETF"
 
-        elif quote_type in {
-            "EQUITY",
-        }:
+        elif quote_type == "EQUITY":
             asset_type = "STOCK"
 
         else:
@@ -214,7 +266,6 @@ class YFinanceClient:
         )
 
         return result
-        
 
     def fetch_historical_prices(
         self,
@@ -240,7 +291,6 @@ class YFinanceClient:
             }
         ]
         """
-
         try:
             import yfinance as yf
 
@@ -254,7 +304,7 @@ class YFinanceClient:
             Dict[str, Any]
         ] = []
 
-        clean_tickers = []
+        clean_tickers: List[str] = []
 
         for ticker in target_tickers:
             clean_ticker = (
@@ -301,8 +351,8 @@ class YFinanceClient:
                     ticker
                 )
 
-                # 종목명은 실패해도 가격 수집에
-                # 영향을 주지 않도록 ticker를 fallback으로 사용합니다.
+                # 종목명 조회 실패가 가격 수집에
+                # 영향을 주지 않도록 ticker를 사용합니다.
                 name = ticker
 
                 try:
@@ -310,8 +360,6 @@ class YFinanceClient:
                         yf_ticker.fast_info
                     )
 
-                    # fast_info에는 종목명이 없는 경우가 많으므로
-                    # 가격 수집 자체에는 의존하지 않습니다.
                     if info is None:
                         logger.debug(
                             "Yahoo Finance fast_info 없음: %s",
@@ -360,74 +408,114 @@ class YFinanceClient:
                     history.iterrows()
                 ):
                     try:
-                        open_price = float(
-                            row.get(
-                                "Open",
-                                0,
+                        open_price = (
+                            _safe_float(
+                                row.get(
+                                    "Open",
+                                    0,
+                                )
                             )
-                            or 0
                         )
 
-                        high_price = float(
-                            row.get(
-                                "High",
-                                0,
+                        high_price = (
+                            _safe_float(
+                                row.get(
+                                    "High",
+                                    0,
+                                )
                             )
-                            or 0
                         )
 
-                        low_price = float(
-                            row.get(
-                                "Low",
-                                0,
+                        low_price = (
+                            _safe_float(
+                                row.get(
+                                    "Low",
+                                    0,
+                                )
                             )
-                            or 0
                         )
 
-                        close_price = float(
-                            row.get(
-                                "Close",
-                                0,
+                        close_price = (
+                            _safe_float(
+                                row.get(
+                                    "Close",
+                                    0,
+                                )
                             )
-                            or 0
                         )
 
-                        volume_value = row.get(
-                            "Volume",
-                            0,
-                        )
-
+                        # 종가는 해당 거래일 가격의 핵심 값입니다.
+                        # 정상적인 양수가 아니면 해당 행은
+                        # DB 저장 대상으로 넘기지 않습니다.
                         if close_price <= 0:
+                            logger.debug(
+                                "Yahoo Finance 비정상 종가 제외: "
+                                "%s / %s / %s",
+                                ticker,
+                                index,
+                                row.get(
+                                    "Close",
+                                    None,
+                                ),
+                            )
                             continue
 
+                        # 시가가 비정상이면 정상 종가를 사용합니다.
                         if open_price <= 0:
                             open_price = (
                                 close_price
                             )
 
+                        # 고가가 비정상이면 시가와 종가 중
+                        # 큰 값을 사용합니다.
                         if high_price <= 0:
                             high_price = max(
                                 open_price,
                                 close_price,
                             )
 
+                        # 저가가 비정상이면 시가와 종가 중
+                        # 작은 값을 사용합니다.
                         if low_price <= 0:
                             low_price = min(
                                 open_price,
                                 close_price,
                             )
 
-                        try:
-                            volume = int(
-                                float(
-                                    volume_value
-                                    or 0
-                                )
+                        # 모든 가격이 유한한 양수인지
+                        # 최종적으로 한 번 더 검사합니다.
+                        price_values = (
+                            open_price,
+                            high_price,
+                            low_price,
+                            close_price,
+                        )
+
+                        if not all(
+                            math.isfinite(
+                                value
                             )
-                        except (
-                            TypeError,
-                            ValueError,
+                            and value > 0
+                            for value in price_values
                         ):
+                            logger.debug(
+                                "Yahoo Finance 비정상 가격행 제외: "
+                                "%s / %s",
+                                ticker,
+                                index,
+                            )
+                            continue
+
+                        # Yahoo Finance에서 거래량이
+                        # NaN 등으로 넘어오는 경우 0으로 처리합니다.
+                        volume = _safe_int(
+                            row.get(
+                                "Volume",
+                                0,
+                            )
+                        )
+
+                        if volume < 0:
                             volume = 0
 
                         date_str = (
@@ -459,9 +547,9 @@ class YFinanceClient:
                                 "close_price":
                                     close_price,
 
-                                # 일반 주식에는 ETF NAV와 같은
-                                # 별도 값이 없으므로 기존 스키마
-                                # 호환을 위해 종가를 사용합니다.
+                                # 일반 주식에는 별도의 NAV가
+                                # 없으므로 기존 스키마 호환을 위해
+                                # 종가를 사용합니다.
                                 "nav":
                                     close_price,
 
