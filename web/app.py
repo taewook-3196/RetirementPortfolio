@@ -4171,6 +4171,7 @@ function renderCashFlows(
                 "div"
             );
 
+
         const flowType =
             String(
                 cashFlow.flow_type
@@ -4259,6 +4260,10 @@ function renderCashFlows(
         }
 
 
+        /*
+        수정 / 삭제 버튼
+        */
+
         const actions =
             document.createElement(
                 "div"
@@ -4266,6 +4271,21 @@ function renderCashFlows(
 
         actions.className =
             "transaction-actions";
+
+
+        const editButton =
+            document.createElement(
+                "button"
+            );
+
+        editButton.type =
+            "button";
+
+        editButton.className =
+            "small-button";
+
+        editButton.textContent =
+            "수정";
 
 
         const deleteButton =
@@ -4284,6 +4304,10 @@ function renderCashFlows(
 
 
         actions.appendChild(
+            editButton
+        );
+
+        actions.appendChild(
             deleteButton
         );
 
@@ -4291,6 +4315,441 @@ function renderCashFlows(
             actions
         );
 
+
+        /*
+        수정 폼
+        */
+
+        editButton.addEventListener(
+            "click",
+            () => {
+
+                /*
+                이미 수정 폼이 열려 있으면
+                중복 생성하지 않습니다.
+                */
+
+                if (
+                    row.querySelector(
+                        ".cash-flow-edit-form"
+                    )
+                ) {
+                    return;
+                }
+
+
+                editButton.disabled =
+                    true;
+
+                deleteButton.disabled =
+                    true;
+
+
+                const editForm =
+                    document.createElement(
+                        "form"
+                    );
+
+                editForm.className =
+                    "transaction-form cash-flow-edit-form";
+
+
+                /*
+                구분
+                */
+
+                const typeSelect =
+                    document.createElement(
+                        "select"
+                    );
+
+                typeSelect.innerHTML = `
+                    <option value="DEPOSIT">입금</option>
+                    <option value="WITHDRAWAL">출금</option>
+                `;
+
+                typeSelect.value =
+                    flowType;
+
+
+                /*
+                날짜
+                */
+
+                const dateInput =
+                    document.createElement(
+                        "input"
+                    );
+
+                dateInput.type =
+                    "date";
+
+                dateInput.required =
+                    true;
+
+                dateInput.value =
+                    cashFlow.flow_date;
+
+
+                /*
+                금액
+                */
+
+                const amountInput =
+                    document.createElement(
+                        "input"
+                    );
+
+                amountInput.type =
+                    "number";
+
+                amountInput.min =
+                    "0.000001";
+
+                amountInput.step =
+                    "any";
+
+                amountInput.required =
+                    true;
+
+                amountInput.value =
+                    String(
+                        cashFlow.amount
+                        || ""
+                    );
+
+
+                /*
+                통화
+                */
+
+                const currencySelect =
+                    document.createElement(
+                        "select"
+                    );
+
+                currencySelect.innerHTML = `
+                    <option value="KRW">KRW · 원화</option>
+                    <option value="USD">USD · 미국 달러</option>
+                `;
+
+                currencySelect.value =
+                    currency;
+
+
+                /*
+                메모
+                */
+
+                const memoInput =
+                    document.createElement(
+                        "textarea"
+                    );
+
+                memoInput.placeholder =
+                    "선택사항";
+
+                memoInput.value =
+                    cashFlow.memo
+                    || "";
+
+
+                /*
+                필드 추가
+                */
+
+                function appendField(
+                    labelText,
+                    element
+                ) {
+                    const label =
+                        document.createElement(
+                            "label"
+                        );
+
+                    label.textContent =
+                        labelText;
+
+                    editForm.appendChild(
+                        label
+                    );
+
+                    editForm.appendChild(
+                        element
+                    );
+                }
+
+
+                appendField(
+                    "구분",
+                    typeSelect
+                );
+
+                appendField(
+                    "입출금일",
+                    dateInput
+                );
+
+                appendField(
+                    "금액",
+                    amountInput
+                );
+
+                appendField(
+                    "통화",
+                    currencySelect
+                );
+
+                appendField(
+                    "메모",
+                    memoInput
+                );
+
+
+                /*
+                수정 버튼 영역
+                */
+
+                const editActions =
+                    document.createElement(
+                        "div"
+                    );
+
+                editActions.className =
+                    "transaction-actions";
+
+
+                const saveButton =
+                    document.createElement(
+                        "button"
+                    );
+
+                saveButton.type =
+                    "submit";
+
+                saveButton.className =
+                    "small-button";
+
+                saveButton.textContent =
+                    "수정 저장";
+
+
+                const cancelButton =
+                    document.createElement(
+                        "button"
+                    );
+
+                cancelButton.type =
+                    "button";
+
+                cancelButton.className =
+                    "small-button";
+
+                cancelButton.textContent =
+                    "취소";
+
+
+                editActions.appendChild(
+                    saveButton
+                );
+
+                editActions.appendChild(
+                    cancelButton
+                );
+
+                editForm.appendChild(
+                    editActions
+                );
+
+
+                /*
+                결과 메시지
+                */
+
+                const result =
+                    document.createElement(
+                        "div"
+                    );
+
+                result.className =
+                    "transaction-message";
+
+                editForm.appendChild(
+                    result
+                );
+
+
+                /*
+                취소
+                */
+
+                cancelButton.addEventListener(
+                    "click",
+                    () => {
+
+                        editForm.remove();
+
+                        editButton.disabled =
+                            false;
+
+                        deleteButton.disabled =
+                            false;
+                    }
+                );
+
+
+                /*
+                수정 저장
+                */
+
+                editForm.addEventListener(
+                    "submit",
+                    async (event) => {
+
+                        event.preventDefault();
+
+
+                        const editedAmount =
+                            Number(
+                                amountInput.value
+                            );
+
+
+                        if (
+                            !Number.isFinite(
+                                editedAmount
+                            )
+                            || editedAmount <= 0
+                        ) {
+
+                            result.textContent =
+                                "0보다 큰 금액을 입력해주세요.";
+
+                            result.className =
+                                "transaction-message error";
+
+                            return;
+                        }
+
+
+                        if (!dateInput.value) {
+
+                            result.textContent =
+                                "입출금일을 입력해주세요.";
+
+                            result.className =
+                                "transaction-message error";
+
+                            return;
+                        }
+
+
+                        const payload = {
+
+                            flow_date:
+                                dateInput.value,
+
+                            flow_type:
+                                typeSelect.value,
+
+                            amount:
+                                editedAmount,
+
+                            currency:
+                                currencySelect.value,
+
+                            memo:
+                                memoInput
+                                .value
+                                .trim()
+                        };
+
+
+                        saveButton.disabled =
+                            true;
+
+                        cancelButton.disabled =
+                            true;
+
+                        saveButton.textContent =
+                            "저장 중...";
+
+                        result.textContent =
+                            "";
+
+
+                        try {
+
+                            await apiRequest(
+                                "/api/accounts/"
+                                + account.id
+                                + "/cash-flows/"
+                                + cashFlow.id,
+                                accessToken,
+                                {
+                                    method:
+                                        "PUT",
+
+                                    headers: {
+                                        "Content-Type":
+                                            "application/json"
+                                    },
+
+                                    body:
+                                        JSON.stringify(
+                                            payload
+                                        )
+                                }
+                            );
+
+
+                            const refreshed =
+                                await loadCashFlows(
+                                    accessToken,
+                                    account.id
+                                );
+
+
+                            renderCashFlows(
+                                container,
+                                refreshed,
+                                account,
+                                accessToken
+                            );
+
+
+                        } catch (error) {
+
+                            result.textContent =
+                                error.message
+                                || "입출금 내역 수정에 실패했습니다.";
+
+                            result.className =
+                                "transaction-message error";
+
+                            saveButton.disabled =
+                                false;
+
+                            cancelButton.disabled =
+                                false;
+
+                            saveButton.textContent =
+                                "수정 저장";
+                        }
+                    }
+                );
+
+
+                row.appendChild(
+                    editForm
+                );
+            }
+        );
+
+
+        /*
+        삭제
+        */
 
         deleteButton.addEventListener(
             "click",
@@ -4308,6 +4767,9 @@ function renderCashFlows(
                     return;
                 }
 
+
+                editButton.disabled =
+                    true;
 
                 deleteButton.disabled =
                     true;
@@ -4349,6 +4811,9 @@ function renderCashFlows(
                         error.message
                         || "입출금 내역 삭제에 실패했습니다."
                     );
+
+                    editButton.disabled =
+                        false;
 
                     deleteButton.disabled =
                         false;
