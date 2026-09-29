@@ -18,8 +18,10 @@ data/price_updater.py
 from __future__ import annotations
 
 import logging
+import math
 import os
 import sys
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from core.config import AppConfig, load_config
@@ -702,16 +704,139 @@ def update_market_prices(
         }
 
     # -------------------------------------------------------------
-    # 10. 가격 레코드 정규화 및 asset_master 최종 확인
+    # 10. 가격 레코드 정규화, 검증 및
+    #     asset_master 최종 확인
     # -------------------------------------------------------------
     normalized_records: List[
         Dict[str, Any]
     ] = []
 
-    for record in records:
+    invalid_record_count = 0
+
+
+    def safe_float(
+        value: Any,
+        default: float = 0.0,
+    ) -> float:
+        """
+        외부 가격 데이터를 안전한 유한 실수로 변환합니다.
+
+        None, NaN, Infinity, 변환 불가능한 값은
+        default 값으로 처리합니다.
+        """
+        if value is None:
+            return default
+
+        try:
+            number = float(
+                value
+            )
+
+        except (
+            TypeError,
+            ValueError,
+            OverflowError,
+        ):
+            return default
+
+        if not math.isfinite(
+            number
+        ):
+            return default
+
+        return number
+
+
+    def safe_int(
+        value: Any,
+        default: int = 0,
+    ) -> int:
+        """
+        거래량을 안전한 정수로 변환합니다.
+        """
+        number = safe_float(
+            value,
+            float(default),
+        )
+
+        try:
+            return int(
+                number
+            )
+
+        except (
+            TypeError,
+            ValueError,
+            OverflowError,
+        ):
+            return default
+
+
+    def normalize_price_date(
+        value: Any,
+    ) -> Optional[str]:
+        """
+        가격 날짜를 YYYYMMDD 형식으로 정규화합니다.
+
+        지원 형식:
+        - YYYYMMDD
+        - YYYY-MM-DD
+        """
+        clean_value = (
+            str(
+                value
+                or ""
+            )
+            .strip()
+        )
+
+        if not clean_value:
+            return None
+
+        for date_format in (
+            "%Y%m%d",
+            "%Y-%m-%d",
+        ):
+            try:
+                parsed_date = (
+                    datetime.strptime(
+                        clean_value,
+                        date_format,
+                    )
+                )
+
+                return (
+                    parsed_date.strftime(
+                        "%Y%m%d"
+                    )
+                )
+
+            except ValueError:
+                continue
+
+        return None
+
+
+    for source_record in records:
+
+        if not isinstance(
+            source_record,
+            dict,
+        ):
+            invalid_record_count += 1
+
+            logger.warning(
+                "가격 레코드 형식이 올바르지 않아 "
+                "건너뜁니다: %r",
+                source_record,
+            )
+
+            continue
+
+
         ticker = (
             str(
-                record.get(
+                source_record.get(
                     "ticker",
                     "",
                 )
@@ -721,26 +846,227 @@ def update_market_prices(
         )
 
         if not ticker:
+            invalid_record_count += 1
+
+            logger.warning(
+                "ticker가 없는 가격 레코드를 "
+                "건너뜁니다."
+            )
+
             continue
+
 
         info = asset_info.get(
             ticker
         )
 
+
         # 공급자가 국내 종목코드를 숫자로 반환한 경우만
-        # 6자리 정규화를 시도합니다.
-        if info is None and ticker.isdigit():
+        # 6자리 종목코드로 정규화합니다.
+        if (
+            info is None
+            and ticker.isdigit()
+        ):
             padded_ticker = (
                 ticker.zfill(6)
             )
 
             if padded_ticker in asset_info:
-                ticker = padded_ticker
-                info = asset_info.get(
-                    ticker
+                ticker = (
+                    padded_ticker
                 )
 
-        record["ticker"] = ticker
+                info = (
+                    asset_info.get(
+                        ticker
+                    )
+                )
+
+
+        price_date = (
+            normalize_price_date(
+                source_record.get(
+                    "date"
+                )
+            )
+        )
+
+        if price_date is None:
+            invalid_record_count += 1
+
+            logger.warning(
+                "가격 날짜가 올바르지 않아 "
+                "건너뜁니다: %s / %r",
+                ticker,
+                source_record.get(
+                    "date"
+                ),
+            )
+
+            continue
+
+
+        close_price = (
+            safe_float(
+                source_record.get(
+                    "close_price"
+                )
+            )
+        )
+
+
+        # 종가는 차트와 현재가 계산의 핵심 값이므로
+        # 정상적인 양수가 아니면 해당 가격행 전체를
+        # 저장하지 않습니다.
+        if close_price <= 0:
+            invalid_record_count += 1
+
+            logger.warning(
+                "비정상 종가 가격 레코드를 "
+                "건너뜁니다: %s / %s / %r",
+                ticker,
+                price_date,
+                source_record.get(
+                    "close_price"
+                ),
+            )
+
+            continue
+
+
+        open_price = (
+            safe_float(
+                source_record.get(
+                    "open_price"
+                )
+            )
+        )
+
+        high_price = (
+            safe_float(
+                source_record.get(
+                    "high_price"
+                )
+            )
+        )
+
+        low_price = (
+            safe_float(
+                source_record.get(
+                    "low_price"
+                )
+            )
+        )
+
+
+        # 시가가 없거나 비정상이면 종가를 사용합니다.
+        if open_price <= 0:
+            open_price = (
+                close_price
+            )
+
+
+        # 고가가 없거나 비정상이면
+        # 시가와 종가 중 큰 값을 사용합니다.
+        if high_price <= 0:
+            high_price = max(
+                open_price,
+                close_price,
+            )
+
+
+        # 저가가 없거나 비정상이면
+        # 시가와 종가 중 작은 값을 사용합니다.
+        if low_price <= 0:
+            low_price = min(
+                open_price,
+                close_price,
+            )
+
+
+        # 공급자가 비정상적인 OHLC 관계를 보내는 경우
+        # 차트 왜곡을 막기 위해 고가와 저가의 범위를
+        # 시가/종가까지 포함하도록 보정합니다.
+        high_price = max(
+            high_price,
+            open_price,
+            close_price,
+        )
+
+        low_price = min(
+            low_price,
+            open_price,
+            close_price,
+        )
+
+
+        price_values = (
+            open_price,
+            high_price,
+            low_price,
+            close_price,
+        )
+
+
+        if not all(
+            math.isfinite(
+                value
+            )
+            and value > 0
+            for value in price_values
+        ):
+            invalid_record_count += 1
+
+            logger.warning(
+                "유효하지 않은 OHLC 가격을 "
+                "건너뜁니다: %s / %s",
+                ticker,
+                price_date,
+            )
+
+            continue
+
+
+        volume = (
+            safe_int(
+                source_record.get(
+                    "volume",
+                    0,
+                )
+            )
+        )
+
+        if volume < 0:
+            volume = 0
+
+
+        nav = (
+            safe_float(
+                source_record.get(
+                    "nav",
+                    close_price,
+                )
+            )
+        )
+
+        if nav <= 0:
+            nav = (
+                close_price
+            )
+
+
+        trading_value = (
+            safe_float(
+                source_record.get(
+                    "trading_value",
+                    0,
+                )
+            )
+        )
+
+        if trading_value < 0:
+            trading_value = 0.0
+
 
         if not repository.get_etf_master(
             ticker
@@ -751,21 +1077,70 @@ def update_market_prices(
                 )
 
             else:
-                # 예상하지 못한 공급자 ticker를 ticker 모양만
-                # 보고 특정 국가로 추측하지 않습니다.
-                #
-                # 현재 수집 대상 목록에 없는 ticker는 저장하지
-                # 않는 것이 잘못된 자산 마스터 생성보다 안전합니다.
+                # 현재 수집 대상에 없는 예상 외 ticker는
+                # 임의로 국가나 시장을 추측하지 않고
+                # 저장하지 않습니다.
                 logger.warning(
                     "asset_master 정보가 없는 "
                     "예상 외 ticker를 건너뜁니다: %s",
                     ticker,
                 )
+
+                invalid_record_count += 1
+
                 continue
 
-        normalized_records.append(
-            record
+
+        # 원본 공급자 딕셔너리를 직접 수정하지 않고
+        # DB 저장용 레코드를 별도로 생성합니다.
+        normalized_record = dict(
+            source_record
         )
+
+        normalized_record.update(
+            {
+                "date":
+                    price_date,
+
+                "ticker":
+                    ticker,
+
+                "open_price":
+                    open_price,
+
+                "high_price":
+                    high_price,
+
+                "low_price":
+                    low_price,
+
+                "close_price":
+                    close_price,
+
+                "nav":
+                    nav,
+
+                "volume":
+                    volume,
+
+                "trading_value":
+                    trading_value,
+            }
+        )
+
+
+        normalized_records.append(
+            normalized_record
+        )
+
+
+    if invalid_record_count > 0:
+        logger.warning(
+            "가격 데이터 최종 검증에서 "
+            "%d건을 제외했습니다.",
+            invalid_record_count,
+        )
+        
 
     if not normalized_records:
         logger.warning(
