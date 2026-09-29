@@ -8093,12 +8093,25 @@ async function renderAccounts(
 
             } catch (error) {
 
+                console.error(
+                    "보유현황 오류:",
+                    error
+                );
+
                 positionsList.className =
                     "error";
 
                 positionsList.textContent =
-                    error.message
-                    || "보유현황을 불러오지 못했습니다.";
+                    "보유현황 오류: "
+                    + (
+                        error.name
+                        || "Error"
+                    )
+                    + " / "
+                    + (
+                        error.message
+                        || "알 수 없는 오류"
+                    );
             }
 
             /*
