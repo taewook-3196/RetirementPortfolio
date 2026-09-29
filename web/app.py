@@ -8396,6 +8396,27 @@ async function renderAccounts(
                         )
                     );
 
+                    summaryBox.appendChild(
+                        createDetail(
+                            "현금잔고: "
+                            + formatMoney(
+                                summary.cash_balance,
+                                summaryCurrency
+                            )
+                        )
+                    );
+
+
+                    summaryBox.appendChild(
+                        createDetail(
+                            "총자산: "
+                            + formatMoney(
+                                summary.total_assets,
+                                summaryCurrency
+                            )
+                        )
+                    );                    
+
 
                     const unrealizedPnl =
                         Number(
