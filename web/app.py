@@ -2057,20 +2057,10 @@ def get_account_positions_api(
         )
 
         # -----------------------------------------------------
-        # 2. 기존 PortfolioService를 이용해
-        #    계좌 전체 요약 계산
+        # 2. 주식 포트폴리오 요약 계산
         #
-        # 이 계산에는 다음 항목이 포함됩니다.
-        #
-        # - 초기 투자재원
-        # - 현재 보유분 총 매수원가
-        # - 현재 총 평가금액
-        # - 평가손익
-        # - 실현손익
-        # - 배당금
-        # - 총손익
-        # - 수익률
-        # - 계산상 잔여현금
+        # 여기의 total_current_value는
+        # 현금을 제외한 보유 종목의 평가금액입니다.
         # -----------------------------------------------------
 
         summary = (
@@ -2082,7 +2072,48 @@ def get_account_positions_api(
         )
 
         # -----------------------------------------------------
-        # 3. 목표 비중
+        # 3. 실제 현금잔고 계산
+        #
+        # initial_capital은 실제 현금으로 자동 포함하지 않습니다.
+        #
+        # 현금잔고 =
+        # 입금
+        # - 출금
+        # - 매수
+        # + 매도
+        # + 배당 실수령액
+        # -----------------------------------------------------
+
+        cash_balance = (
+            portfolio_service
+            .get_cash_balance(
+                account_id=account_id,
+                include_initial_capital=False,
+            )
+        )
+
+        # -----------------------------------------------------
+        # 4. 실제 총자산 계산
+        #
+        # 총자산 =
+        # 주식 평가금액 + 현금잔고
+        # -----------------------------------------------------
+
+        securities_value = float(
+            summary.total_current_value
+            or 0
+        )
+
+        total_assets = (
+            securities_value
+            + float(
+                cash_balance
+                or 0
+            )
+        )
+
+        # -----------------------------------------------------
+        # 5. 목표 비중
         # -----------------------------------------------------
 
         targets = repo.get_account_targets(
@@ -2099,7 +2130,7 @@ def get_account_positions_api(
         }
 
         # -----------------------------------------------------
-        # 4. 종목별 평가금액을
+        # 6. 종목별 평가금액을
         #    계좌 기준통화로 환산
         # -----------------------------------------------------
 
@@ -2133,16 +2164,17 @@ def get_account_positions_api(
                 )
             )
 
-        # 비중 계산은 PortfolioService가 계산한
-        # 계좌 총 평가금액을 기준으로 합니다.
+        # 종목 비중은 현금을 제외한
+        # 주식 평가금액을 기준으로 유지합니다.
+        #
+        # 따라서 종목 비중의 합은 100%가 됩니다.
 
-        total_current_value = float(
-            summary.total_current_value
-            or 0
+        total_current_value = (
+            securities_value
         )
 
         # -----------------------------------------------------
-        # 5. 종목별 응답 생성
+        # 7. 종목별 응답 생성
         # -----------------------------------------------------
 
         position_list = []
@@ -2256,7 +2288,7 @@ def get_account_positions_api(
         )
 
         # -----------------------------------------------------
-        # 6. 웹에 전달
+        # 8. 웹에 전달
         # -----------------------------------------------------
 
         return {
@@ -2285,9 +2317,21 @@ def get_account_positions_api(
                         or 0
                     ),
 
+                # 현금을 제외한 주식 평가금액
                 "total_current_value":
+                    securities_value,
+
+                # 실제 현금잔고
+                "cash_balance":
                     float(
-                        summary.total_current_value
+                        cash_balance
+                        or 0
+                    ),
+
+                # 주식 평가금액 + 실제 현금잔고
+                "total_assets":
+                    float(
+                        total_assets
                         or 0
                     ),
 
@@ -2321,9 +2365,11 @@ def get_account_positions_api(
                         or 0
                     ),
 
+                # 기존 필드는 프런트엔드 호환성을 위해
+                # 남겨두되 실제 현금잔고로 변경합니다.
                 "remaining_cash":
                     float(
-                        summary.remaining_cash
+                        cash_balance
                         or 0
                     ),
 
@@ -2335,10 +2381,20 @@ def get_account_positions_api(
             },
 
             # 기존 프런트엔드와의 호환성을 위해
-            # 최상위 total_current_value도 유지합니다.
+            # 현금을 제외한 주식 평가금액을 유지합니다.
             "total_current_value":
+                securities_value,
+
+            # 앞으로 사용할 명확한 최상위 값도 제공합니다.
+            "cash_balance":
                 float(
-                    summary.total_current_value
+                    cash_balance
+                    or 0
+                ),
+
+            "total_assets":
+                float(
+                    total_assets
                     or 0
                 ),
 
