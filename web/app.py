@@ -5949,6 +5949,346 @@ function createTransactionForm(
     return form;
 }
 
+function createCashFlowForm(
+    account,
+    accessToken,
+    cashFlowsList
+) {
+    const form =
+        document.createElement(
+            "form"
+        );
+
+    form.className =
+        "transaction-form";
+
+
+    /*
+    입금 / 출금
+    */
+
+    const typeSelect =
+        document.createElement(
+            "select"
+        );
+
+    typeSelect.innerHTML = `
+        <option value="DEPOSIT">입금</option>
+        <option value="WITHDRAWAL">출금</option>
+    `;
+
+
+    /*
+    날짜
+    */
+
+    const dateInput =
+        document.createElement(
+            "input"
+        );
+
+    dateInput.type =
+        "date";
+
+    dateInput.required =
+        true;
+
+    dateInput.value =
+        todayString();
+
+
+    /*
+    금액
+    */
+
+    const amountInput =
+        document.createElement(
+            "input"
+        );
+
+    amountInput.type =
+        "number";
+
+    amountInput.min =
+        "0.000001";
+
+    amountInput.step =
+        "any";
+
+    amountInput.required =
+        true;
+
+
+    /*
+    통화
+    */
+
+    const currencySelect =
+        document.createElement(
+            "select"
+        );
+
+    currencySelect.innerHTML = `
+        <option value="KRW">KRW · 원화</option>
+        <option value="USD">USD · 미국 달러</option>
+    `;
+
+    currencySelect.value =
+        getAccountCurrency(
+            account
+        );
+
+
+    /*
+    메모
+    */
+
+    const memoInput =
+        document.createElement(
+            "textarea"
+        );
+
+    memoInput.placeholder =
+        "예: 계좌 시작자금, 추가 입금";
+
+
+    /*
+    입력 필드 추가 함수
+    */
+
+    function appendField(
+        labelText,
+        element
+    ) {
+        const label =
+            document.createElement(
+                "label"
+            );
+
+        label.textContent =
+            labelText;
+
+        form.appendChild(
+            label
+        );
+
+        form.appendChild(
+            element
+        );
+    }
+
+
+    appendField(
+        "구분",
+        typeSelect
+    );
+
+    appendField(
+        "입출금일",
+        dateInput
+    );
+
+    appendField(
+        "금액",
+        amountInput
+    );
+
+    appendField(
+        "통화",
+        currencySelect
+    );
+
+    appendField(
+        "메모",
+        memoInput
+    );
+
+
+    /*
+    저장 버튼
+    */
+
+    const button =
+        document.createElement(
+            "button"
+        );
+
+    button.type =
+        "submit";
+
+    button.textContent =
+        "입출금 저장";
+
+
+    const result =
+        document.createElement(
+            "div"
+        );
+
+    result.className =
+        "transaction-message";
+
+
+    form.appendChild(
+        button
+    );
+
+    form.appendChild(
+        result
+    );
+
+
+    /*
+    저장
+    */
+
+    form.addEventListener(
+        "submit",
+        async (event) => {
+
+            event.preventDefault();
+
+
+            const amount =
+                Number(
+                    amountInput.value
+                );
+
+
+            if (
+                !Number.isFinite(
+                    amount
+                )
+                || amount <= 0
+            ) {
+
+                result.textContent =
+                    "0보다 큰 금액을 입력해주세요.";
+
+                result.className =
+                    "transaction-message error";
+
+                return;
+            }
+
+
+            button.disabled =
+                true;
+
+            button.textContent =
+                "저장 중...";
+
+            result.textContent =
+                "";
+
+
+            const payload = {
+
+                flow_date:
+                    dateInput.value,
+
+                flow_type:
+                    typeSelect.value,
+
+                amount:
+                    amount,
+
+                currency:
+                    currencySelect.value,
+
+                memo:
+                    memoInput
+                    .value
+                    .trim()
+            };
+
+
+            try {
+
+                await apiRequest(
+                    "/api/accounts/"
+                    + account.id
+                    + "/cash-flows",
+                    accessToken,
+                    {
+                        method:
+                            "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body:
+                            JSON.stringify(
+                                payload
+                            )
+                    }
+                );
+
+
+                result.textContent =
+                    typeSelect.value
+                    === "DEPOSIT"
+                    ? "입금 내역이 저장되었습니다."
+                    : "출금 내역이 저장되었습니다.";
+
+                result.className =
+                    "transaction-message success";
+
+
+                amountInput.value =
+                    "";
+
+                memoInput.value =
+                    "";
+
+
+                /*
+                저장 후 입출금 내역 새로고침
+                */
+
+                const refreshed =
+                    await loadCashFlows(
+                        accessToken,
+                        account.id
+                    );
+
+
+                renderCashFlows(
+                    cashFlowsList,
+                    refreshed,
+                    account,
+                    accessToken
+                );
+
+
+            } catch (error) {
+
+                result.textContent =
+                    error.message
+                    || "입출금 저장에 실패했습니다.";
+
+                result.className =
+                    "transaction-message error";
+
+
+            } finally {
+
+                button.disabled =
+                    false;
+
+                button.textContent =
+                    "입출금 저장";
+            }
+        }
+    );
+
+
+    return form;
+}
+
+
 /*
 계좌 설정 편집기
 */
@@ -8286,6 +8626,26 @@ async function renderAccounts(
             }
 
             /*
+            현금 입출금 입력
+            */
+
+            const cashFlowFormTitle =
+                document.createElement(
+                    "div"
+                );
+
+            cashFlowFormTitle.className =
+                "section-title";
+
+            cashFlowFormTitle.textContent =
+                "입금 / 출금 입력";
+
+            card.appendChild(
+                cashFlowFormTitle
+            );
+
+
+            /*
             현금 입출금 내역
             */
 
@@ -8300,10 +8660,6 @@ async function renderAccounts(
             cashFlowsTitle.textContent =
                 "입금 / 출금 내역";
 
-            card.appendChild(
-                cashFlowsTitle
-            );
-
 
             const cashFlowsList =
                 document.createElement(
@@ -8315,6 +8671,30 @@ async function renderAccounts(
 
             cashFlowsList.textContent =
                 "입출금 내역을 불러오는 중...";
+
+
+            /*
+            입력 폼
+
+            cashFlowsList를 전달하여
+            저장 직후 내역을 바로 갱신합니다.
+            */
+
+            const cashFlowForm =
+                createCashFlowForm(
+                    account,
+                    accessToken,
+                    cashFlowsList
+                );
+
+
+            card.appendChild(
+                cashFlowForm
+            );
+
+            card.appendChild(
+                cashFlowsTitle
+            );
 
             card.appendChild(
                 cashFlowsList
@@ -8346,8 +8726,8 @@ async function renderAccounts(
                 cashFlowsList.textContent =
                     error.message
                     || "입출금 내역을 불러오지 못했습니다.";
-            }            
-
+            }
+            
         } catch (error) {
 
             targetsList.className =
