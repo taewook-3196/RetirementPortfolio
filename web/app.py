@@ -290,7 +290,13 @@ class TransactionCreateRequest(BaseModel):
         max_length=1000,
     )
 
-
+class CashFlowRequest(BaseModel):
+    flow_date: str
+    flow_type: str
+    amount: float = Field(gt=0)
+    currency: str
+    memo: str = ""
+    
 # =========================================================
 # 계좌 API
 # =========================================================
@@ -1659,6 +1665,341 @@ def delete_transaction_api(
             status_code=500,
             detail="거래 내역을 삭제하지 못했습니다.",
         )
+
+# =========================================================
+# 현금 입출금 API
+# =========================================================
+
+@app.get(
+    "/api/accounts/{account_id}/cash-flows"
+)
+def get_cash_flows_api(
+    account_id: int,
+    authorization: str | None = Header(default=None),
+):
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        cash_flows = repo.get_cash_flows(
+            account_id
+        )
+
+        cash_flow_items = []
+
+        for cash_flow in cash_flows:
+            cash_flow_items.append(
+                {
+                    "id":
+                        cash_flow.id,
+
+                    "account_id":
+                        cash_flow.account_id,
+
+                    "flow_date":
+                        cash_flow
+                        .flow_date
+                        .isoformat(),
+
+                    "flow_type":
+                        cash_flow.flow_type,
+
+                    "amount":
+                        float(
+                            cash_flow.amount
+                            or 0
+                        ),
+
+                    "currency":
+                        str(
+                            cash_flow.currency
+                            or account.currency
+                            or "KRW"
+                        )
+                        .strip()
+                        .upper(),
+
+                    "memo":
+                        cash_flow.memo
+                        or "",
+                }
+            )
+
+        return {
+            "account_id":
+                account.id,
+
+            "account_name":
+                account.account_name,
+
+            "account_currency":
+                str(
+                    account.currency
+                    or "KRW"
+                )
+                .strip()
+                .upper(),
+
+            "cash_flows":
+                cash_flow_items,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="입출금 내역을 불러오지 못했습니다.",
+        )
+
+
+@app.post(
+    "/api/accounts/{account_id}/cash-flows",
+    status_code=201,
+)
+def create_cash_flow_api(
+    account_id: int,
+    request: CashFlowRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        cash_flow = repo.create_cash_flow(
+            account_id=account_id,
+            flow_date=request.flow_date,
+            flow_type=request.flow_type,
+            amount=request.amount,
+            currency=request.currency,
+            memo=request.memo,
+        )
+
+        return {
+            "created": True,
+
+            "cash_flow": {
+                "id":
+                    cash_flow.id,
+
+                "account_id":
+                    cash_flow.account_id,
+
+                "flow_date":
+                    cash_flow
+                    .flow_date
+                    .isoformat(),
+
+                "flow_type":
+                    cash_flow.flow_type,
+
+                "amount":
+                    float(
+                        cash_flow.amount
+                        or 0
+                    ),
+
+                "currency":
+                    cash_flow.currency,
+
+                "memo":
+                    cash_flow.memo
+                    or "",
+            },
+        }
+
+    except HTTPException:
+        raise
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="입출금 내역을 저장하지 못했습니다.",
+        )
+
+
+@app.put(
+    "/api/accounts/{account_id}/cash-flows/{cash_flow_id}"
+)
+def update_cash_flow_api(
+    account_id: int,
+    cash_flow_id: int,
+    request: CashFlowRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        cash_flows = repo.get_cash_flows(
+            account_id
+        )
+
+        cash_flow_exists = any(
+            cash_flow.id == cash_flow_id
+            for cash_flow in cash_flows
+        )
+
+        if not cash_flow_exists:
+            raise HTTPException(
+                status_code=404,
+                detail="입출금 내역을 찾을 수 없습니다.",
+            )
+
+        updated = repo.update_cash_flow(
+            cash_flow_id=cash_flow_id,
+            flow_date=request.flow_date,
+            flow_type=request.flow_type,
+            amount=request.amount,
+            currency=request.currency,
+            memo=request.memo,
+        )
+
+        if not updated:
+            raise HTTPException(
+                status_code=404,
+                detail="입출금 내역을 찾을 수 없습니다.",
+            )
+
+        return {
+            "updated": True,
+            "cash_flow_id": cash_flow_id,
+        }
+
+    except HTTPException:
+        raise
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="입출금 내역을 수정하지 못했습니다.",
+        )
+
+
+@app.delete(
+    "/api/accounts/{account_id}/cash-flows/{cash_flow_id}"
+)
+def delete_cash_flow_api(
+    account_id: int,
+    cash_flow_id: int,
+    authorization: str | None = Header(default=None),
+):
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+        cash_flows = repo.get_cash_flows(
+            account_id
+        )
+
+        cash_flow_exists = any(
+            cash_flow.id == cash_flow_id
+            for cash_flow in cash_flows
+        )
+
+        if not cash_flow_exists:
+            raise HTTPException(
+                status_code=404,
+                detail="입출금 내역을 찾을 수 없습니다.",
+            )
+
+        deleted = repo.delete_cash_flow(
+            cash_flow_id=cash_flow_id
+        )
+
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail="입출금 내역을 찾을 수 없습니다.",
+            )
+
+        return {
+            "deleted": True,
+            "cash_flow_id": cash_flow_id,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="입출금 내역을 삭제하지 못했습니다.",
+        )
+        
 
 
 # =========================================================
