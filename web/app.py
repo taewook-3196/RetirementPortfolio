@@ -4326,24 +4326,15 @@ function renderPositions(
         return;
     }
 
+
     const accountCurrency =
         getAccountCurrency(
             account
         );
 
+
     for (const position of positions) {
 
-        /*
-        개별 종목의 가격과 평가금액은
-        해당 종목의 원래 통화로 표시합니다.
-
-        예:
-        한국 ETF -> KRW
-        AAPL -> USD
-
-        계좌 합계와 비중 계산만
-        계좌 기준통화를 사용합니다.
-        */
         const assetCurrency =
             String(
                 position.currency
@@ -4357,7 +4348,7 @@ function renderPositions(
             );
 
         row.className =
-            "transaction-row";
+            "transaction-row position-row";
 
 
         const header =
@@ -4391,10 +4382,17 @@ function renderPositions(
             );
 
 
-        header.appendChild(name);
-        header.appendChild(value);
+        header.appendChild(
+            name
+        );
 
-        row.appendChild(header);
+        header.appendChild(
+            value
+        );
+
+        row.appendChild(
+            header
+        );
 
 
         row.appendChild(
@@ -4437,11 +4435,6 @@ function renderPositions(
         );
 
 
-        /*
-        종목 통화와 계좌 기준통화가 다르면
-        계좌 합계 계산에 사용된 환산 평가액도
-        함께 보여줍니다.
-        */
         if (
             assetCurrency
             !== accountCurrency
@@ -4452,7 +4445,7 @@ function renderPositions(
                     "계좌 환산 평가금액 "
                     + formatMoney(
                         position
-                        .account_current_value,
+                            .account_current_value,
                         accountCurrency
                     )
                 )
@@ -4525,11 +4518,358 @@ function renderPositions(
         }
 
 
-        row.appendChild(pnl);
+        row.appendChild(
+            pnl
+        );
 
-        container.appendChild(row);
+
+        const hint =
+            document.createElement(
+                "div"
+            );
+
+        hint.className =
+            "position-chart-hint";
+
+        hint.textContent =
+            "종목을 누르면 매매 차트를 볼 수 있습니다.";
+
+        row.appendChild(
+            hint
+        );
+
+
+        const chartPanel =
+            document.createElement(
+                "div"
+            );
+
+        chartPanel.className =
+            "asset-chart-panel";
+
+        chartPanel.style.display =
+            "none";
+
+
+        let chartLoaded =
+            false;
+
+        let chartLoading =
+            false;
+
+
+        row.addEventListener(
+            "click",
+            async (event) => {
+
+                if (
+                    event.target.closest(
+                        "button"
+                    )
+                    || event.target.closest(
+                        "input"
+                    )
+                    || event.target.closest(
+                        "select"
+                    )
+                    || event.target.closest(
+                        "textarea"
+                    )
+                ) {
+                    return;
+                }
+
+
+                if (
+                    chartPanel.style.display
+                    !== "none"
+                ) {
+                    chartPanel.style.display =
+                        "none";
+
+                    return;
+                }
+
+
+                chartPanel.style.display =
+                    "block";
+
+
+                if (
+                    chartLoaded
+                    || chartLoading
+                ) {
+                    return;
+                }
+
+
+                chartLoading =
+                    true;
+
+
+                chartPanel.innerHTML = "";
+
+
+                const loading =
+                    document.createElement(
+                        "div"
+                    );
+
+                loading.className =
+                    "asset-chart-loading";
+
+                loading.textContent =
+                    "차트 데이터를 불러오는 중입니다.";
+
+                chartPanel.appendChild(
+                    loading
+                );
+
+
+                try {
+
+                    const chartData =
+                        await loadAssetChart(
+                            accessToken,
+                            account.id,
+                            position.ticker
+                        );
+
+
+                    chartPanel.innerHTML =
+                        "";
+
+
+                    const chartHeader =
+                        document.createElement(
+                            "div"
+                        );
+
+                    chartHeader.className =
+                        "asset-chart-header";
+
+
+                    const titleBox =
+                        document.createElement(
+                            "div"
+                        );
+
+                    titleBox.className =
+                        "asset-chart-title";
+
+
+                    const chartName =
+                        document.createElement(
+                            "div"
+                        );
+
+                    chartName.className =
+                        "asset-chart-name";
+
+                    chartName.textContent =
+                        chartData.name
+                        || position.name
+                        || position.ticker;
+
+
+                    const chartTicker =
+                        document.createElement(
+                            "div"
+                        );
+
+                    chartTicker.className =
+                        "asset-chart-ticker";
+
+                    chartTicker.textContent =
+                        chartData.ticker
+                        + " · "
+                        + chartData.currency;
+
+
+                    titleBox.appendChild(
+                        chartName
+                    );
+
+                    titleBox.appendChild(
+                        chartTicker
+                    );
+
+
+                    const closeButton =
+                        document.createElement(
+                            "button"
+                        );
+
+                    closeButton.type =
+                        "button";
+
+                    closeButton.className =
+                        "asset-chart-close";
+
+                    closeButton.textContent =
+                        "×";
+
+
+                    closeButton.addEventListener(
+                        "click",
+                        (closeEvent) => {
+
+                            closeEvent
+                                .stopPropagation();
+
+                            chartPanel.style.display =
+                                "none";
+                        }
+                    );
+
+
+                    chartHeader.appendChild(
+                        titleBox
+                    );
+
+                    chartHeader.appendChild(
+                        closeButton
+                    );
+
+                    chartPanel.appendChild(
+                        chartHeader
+                    );
+
+
+                    const status =
+                        document.createElement(
+                            "div"
+                        );
+
+                    status.className =
+                        "status-box";
+
+
+                    const priceCount =
+                        Number(
+                            chartData.price_count
+                            || 0
+                        );
+
+
+                    const transactionCount =
+                        Number(
+                            chartData.transaction_count
+                            || 0
+                        );
+
+
+                    status.innerHTML =
+                        "가격 데이터 "
+                        + priceCount
+                        + "개"
+                        + "<br>"
+                        + "매매 기록 "
+                        + transactionCount
+                        + "개";
+
+
+                    chartPanel.appendChild(
+                        status
+                    );
+
+
+                    if (
+                        priceCount > 0
+                        && transactionCount > 0
+                    ) {
+
+                        const success =
+                            document.createElement(
+                                "div"
+                            );
+
+                        success.className =
+                            "transaction-detail success";
+
+                        success.style.marginTop =
+                            "10px";
+
+                        success.textContent =
+                            "차트 데이터를 정상적으로 불러왔습니다.";
+
+                        chartPanel.appendChild(
+                            success
+                        );
+
+                    } else {
+
+                        const warning =
+                            document.createElement(
+                                "div"
+                            );
+
+                        warning.className =
+                            "transaction-detail";
+
+                        warning.style.marginTop =
+                            "10px";
+
+                        if (
+                            priceCount === 0
+                        ) {
+                            warning.textContent =
+                                "저장된 가격 데이터가 없습니다.";
+                        } else {
+                            warning.textContent =
+                                "이 기간의 매매 기록이 없습니다.";
+                        }
+
+                        chartPanel.appendChild(
+                            warning
+                        );
+                    }
+
+
+                    chartLoaded =
+                        true;
+
+                } catch (error) {
+
+                    chartPanel.innerHTML =
+                        "";
+
+
+                    const errorBox =
+                        document.createElement(
+                            "div"
+                        );
+
+                    errorBox.className =
+                        "error";
+
+                    errorBox.textContent =
+                        error.message
+                        || "차트 데이터를 불러오지 못했습니다.";
+
+                    chartPanel.appendChild(
+                        errorBox
+                    );
+
+                } finally {
+
+                    chartLoading =
+                        false;
+                }
+            }
+        );
+
+
+        container.appendChild(
+            row
+        );
+
+        container.appendChild(
+            chartPanel
+        );
     }
 }
+
 
 function renderTransactions(
     container,
