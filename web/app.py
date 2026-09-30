@@ -1215,6 +1215,222 @@ def search_assets_api(
             detail="등록된 종목을 검색하지 못했습니다.",
         )
 
+
+@app.get(
+    "/api/accounts/{account_id}/assets/{ticker}/chart"
+)
+def get_asset_chart_api(
+    account_id: int,
+    ticker: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    limit: int | None = None,
+    authorization: str | None = Header(default=None),
+):
+    """
+    현재 사용자의 특정 계좌/종목에 대한
+    가격 차트와 실제 매수/매도 내역을 반환합니다.
+
+    선택 파라미터:
+    - start_date: YYYYMMDD 또는 YYYY-MM-DD
+    - end_date: YYYYMMDD 또는 YYYY-MM-DD
+    - limit: 최신 가격 N개
+    """
+
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        repo = Repository(
+            user_id=user_id
+        )
+
+        # -----------------------------------------------------
+        # 1. 현재 사용자가 소유한 계좌인지 확인
+        # -----------------------------------------------------
+
+        account = repo.get_account(
+            account_id
+        )
+
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="계좌를 찾을 수 없습니다.",
+            )
+
+
+        # -----------------------------------------------------
+        # 2. 종목코드 정규화
+        # -----------------------------------------------------
+
+        clean_ticker = (
+            str(
+                ticker or ""
+            )
+            .strip()
+            .upper()
+        )
+
+        if not clean_ticker:
+            raise HTTPException(
+                status_code=400,
+                detail="종목코드가 필요합니다.",
+            )
+
+
+        # -----------------------------------------------------
+        # 3. limit 검증
+        # -----------------------------------------------------
+
+        if (
+            limit is not None
+            and limit <= 0
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="limit은 1 이상이어야 합니다.",
+            )
+
+
+        # -----------------------------------------------------
+        # 4. 해당 계좌에 실제 거래가 있는 종목인지 확인
+        #
+        # 다른 계좌의 종목을 임의로 조회하는 것을 막고
+        # 현재 단계에서는 보유/거래 종목 차트만 제공합니다.
+        # -----------------------------------------------------
+
+        transactions = (
+            repo.get_transactions(
+                ticker=clean_ticker,
+                account_id=account_id,
+            )
+        )
+
+        if not transactions:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "해당 계좌에서 이 종목의 "
+                    "거래 내역을 찾을 수 없습니다."
+                ),
+            )
+
+
+        # -----------------------------------------------------
+        # 5. 가격 + 매수/매도 데이터 조회
+        # -----------------------------------------------------
+
+        chart_data = (
+            repo.get_asset_chart_data(
+                account_id=account_id,
+                ticker=clean_ticker,
+                start_date=start_date,
+                end_date=end_date,
+                limit=limit,
+            )
+        )
+
+
+        # -----------------------------------------------------
+        # 6. 가격 데이터 확인
+        # -----------------------------------------------------
+
+        prices = (
+            chart_data.get(
+                "prices",
+                [],
+            )
+            or []
+        )
+
+        chart_transactions = (
+            chart_data.get(
+                "transactions",
+                [],
+            )
+            or []
+        )
+
+
+        # -----------------------------------------------------
+        # 7. 웹 응답
+        # -----------------------------------------------------
+
+        return {
+            "account_id":
+                account.id,
+
+            "account_name":
+                account.account_name,
+
+            "account_currency":
+                str(
+                    account.currency
+                    or "KRW"
+                )
+                .strip()
+                .upper(),
+
+            "ticker":
+                chart_data.get(
+                    "ticker",
+                    clean_ticker,
+                ),
+
+            "name":
+                chart_data.get(
+                    "name",
+                    clean_ticker,
+                ),
+
+            # 차트 가격과 거래 체결가격의 통화
+            "currency":
+                chart_data.get(
+                    "currency",
+                    account.currency
+                    or "KRW",
+                ),
+
+            "market":
+                chart_data.get(
+                    "market",
+                    "",
+                ),
+
+            "price_count":
+                len(
+                    prices
+                ),
+
+            "transaction_count":
+                len(
+                    chart_transactions
+                ),
+
+            "prices":
+                prices,
+
+            "transactions":
+                chart_transactions,
+        }
+
+    except HTTPException:
+        raise
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="차트 데이터를 불러오지 못했습니다.",
+        )
+        
 # =========================================================
 # 거래 API
 # =========================================================
