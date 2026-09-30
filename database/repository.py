@@ -2057,6 +2057,355 @@ class Repository:
                 .all()
             )
 
+    def get_asset_chart_data(
+        self,
+        account_id: int,
+        ticker: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        현재 사용자의 특정 계좌/종목에 대한
+        가격 차트 데이터와 매수/매도 내역을 반환합니다.
+
+        가격 데이터:
+        - prices 테이블
+        - 날짜 오름차순
+
+        거래 데이터:
+        - 현재 사용자가 소유한 지정 계좌만 조회
+        - 지정 종목의 BUY / SELL 거래만 반환
+        - 날짜 오름차순
+        """
+
+        if not self.user_id:
+            return {
+                "prices": [],
+                "transactions": [],
+            }
+
+
+        clean_account_id = int(
+            account_id
+        )
+
+        clean_ticker = (
+            str(
+                ticker or ""
+            )
+            .strip()
+            .upper()
+        )
+
+
+        if not clean_ticker:
+            return {
+                "prices": [],
+                "transactions": [],
+            }
+
+
+        with get_db_session() as session:
+
+            # -----------------------------------------------------
+            # 현재 사용자가 실제로 소유한 계좌인지 확인
+            # -----------------------------------------------------
+
+            account = (
+                session.query(Account)
+                .filter(
+                    Account.id
+                    == clean_account_id,
+
+                    Account.user_id
+                    == self.user_id,
+                )
+                .first()
+            )
+
+
+            if account is None:
+                return {
+                    "prices": [],
+                    "transactions": [],
+                }
+
+
+            # -----------------------------------------------------
+            # 가격 조회
+            # -----------------------------------------------------
+
+            price_query = (
+                session.query(Price)
+                .filter(
+                    Price.ticker
+                    == clean_ticker,
+
+                    Price.close_price
+                    > 0,
+                )
+            )
+
+
+            if start_date:
+
+                start_dt = (
+                    datetime.strptime(
+                        str(
+                            start_date
+                        )
+                        .replace(
+                            "-",
+                            "",
+                        ),
+                        "%Y%m%d",
+                    )
+                    .date()
+                )
+
+                price_query = (
+                    price_query.filter(
+                        Price.price_date
+                        >= start_dt
+                    )
+                )
+
+
+            if end_date:
+
+                end_dt = (
+                    datetime.strptime(
+                        str(
+                            end_date
+                        )
+                        .replace(
+                            "-",
+                            "",
+                        ),
+                        "%Y%m%d",
+                    )
+                    .date()
+                )
+
+                price_query = (
+                    price_query.filter(
+                        Price.price_date
+                        <= end_dt
+                    )
+                )
+
+
+            if limit is not None:
+
+                safe_limit = int(
+                    limit
+                )
+
+                if safe_limit <= 0:
+                    price_rows = []
+
+                else:
+                    price_rows = list(
+                        price_query
+                        .order_by(
+                            Price.price_date.desc()
+                        )
+                        .limit(
+                            safe_limit
+                        )
+                        .all()
+                    )
+
+                    price_rows.reverse()
+
+            else:
+                price_rows = list(
+                    price_query
+                    .order_by(
+                        Price.price_date.asc()
+                    )
+                    .all()
+                )
+
+
+            # -----------------------------------------------------
+            # 해당 계좌의 실제 매수/매도 내역 조회
+            # -----------------------------------------------------
+
+            transaction_query = (
+                session.query(Transaction)
+                .filter(
+                    Transaction.account_id
+                    == clean_account_id,
+
+                    Transaction.ticker
+                    == clean_ticker,
+                )
+            )
+
+
+            if start_date:
+                transaction_query = (
+                    transaction_query.filter(
+                        Transaction.transaction_date
+                        >= start_dt
+                    )
+                )
+
+
+            if end_date:
+                transaction_query = (
+                    transaction_query.filter(
+                        Transaction.transaction_date
+                        <= end_dt
+                    )
+                )
+
+
+            transaction_rows = list(
+                transaction_query
+                .order_by(
+                    Transaction.transaction_date.asc(),
+                    Transaction.id.asc(),
+                )
+                .all()
+            )
+
+
+            # -----------------------------------------------------
+            # 자산 정보
+            # -----------------------------------------------------
+
+            asset = (
+                session.query(AssetMaster)
+                .filter(
+                    AssetMaster.ticker
+                    == clean_ticker
+                )
+                .first()
+            )
+
+
+            # -----------------------------------------------------
+            # API에서 바로 사용할 수 있는 형태로 변환
+            # -----------------------------------------------------
+
+            prices = [
+                {
+                    "date":
+                        row.price_date.isoformat(),
+
+                    "open":
+                        float(
+                            row.open_price
+                            or 0
+                        ),
+
+                    "high":
+                        float(
+                            row.high_price
+                            or 0
+                        ),
+
+                    "low":
+                        float(
+                            row.low_price
+                            or 0
+                        ),
+
+                    "close":
+                        float(
+                            row.close_price
+                            or 0
+                        ),
+
+                    "volume":
+                        int(
+                            row.volume
+                            or 0
+                        ),
+                }
+                for row in price_rows
+            ]
+
+
+            transactions = [
+                {
+                    "id":
+                        row.id,
+
+                    "date":
+                        row.transaction_date.isoformat(),
+
+                    "type":
+                        row.transaction_type,
+
+                    "quantity":
+                        float(
+                            row.quantity
+                            or 0
+                        ),
+
+                    "price":
+                        float(
+                            row.price
+                            or 0
+                        ),
+
+                    "fee":
+                        float(
+                            row.fee
+                            or 0
+                        ),
+
+                    "tax":
+                        float(
+                            row.tax
+                            or 0
+                        ),
+
+                    "memo":
+                        row.memo
+                        or "",
+                }
+                for row in transaction_rows
+            ]
+
+
+            return {
+                "ticker":
+                    clean_ticker,
+
+                "name":
+                    (
+                        asset.name
+                        if asset
+                        else clean_ticker
+                    ),
+
+                "currency":
+                    (
+                        asset.currency
+                        if asset
+                        else account.currency
+                    ),
+
+                "market":
+                    (
+                        asset.market
+                        if asset
+                        else ""
+                    ),
+
+                "prices":
+                    prices,
+
+                "transactions":
+                    transactions,
+            }
+            
+    
     def update_transaction(
         self,
         tx_id: int,
