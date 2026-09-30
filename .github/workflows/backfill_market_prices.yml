@@ -1,0 +1,82 @@
+name: Backfill Market Prices
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Number of trading days to backfill"
+        required: true
+        default: "260"
+        type: choice
+        options:
+          - "260"
+          - "750"
+          - "1250"
+
+jobs:
+  backfill-prices:
+    runs-on: ubuntu-latest
+
+    env:
+      TZ: Asia/Seoul
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TEST_USER_ID: ${{ secrets.TEST_USER_ID }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Backfill market prices
+        env:
+          BACKFILL_DAYS: ${{ inputs.days }}
+        run: |
+          python - <<'PY'
+          import os
+
+          from data.price_updater import update_market_prices
+
+          user_id = os.environ["TEST_USER_ID"]
+          days = int(
+              os.environ["BACKFILL_DAYS"]
+          )
+
+          if days not in {
+              260,
+              750,
+              1250,
+          }:
+              raise ValueError(
+                  "Unsupported backfill days."
+              )
+
+          print(
+              "Starting market price backfill:"
+              f" {days} trading days"
+          )
+
+          result = update_market_prices(
+              user_id=user_id,
+              days=days,
+          )
+
+          print("Backfill result:")
+          print(result)
+
+          if result.get(
+              "saved_count",
+              0,
+          ) <= 0:
+              raise RuntimeError(
+                  "No market prices were saved."
+              )
+          PY
