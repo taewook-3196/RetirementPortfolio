@@ -4146,7 +4146,8 @@ function renderAccountSummary(
 function renderPositions(
     container,
     positions,
-    account
+    account,
+    accessToken
 ) {
     container.innerHTML = "";
 
@@ -5417,7 +5418,8 @@ async function refreshPortfolioData(
     renderPositions(
         positionsList,
         positions,
-        account
+        account,
+        accessToken
     );
 
 
@@ -9478,7 +9480,8 @@ async function renderAccounts(
                 renderPositions(
                     positionsList,
                     positions,
-                    account
+                    account,
+                    accessToken
                 );
 
             } catch (error) {
