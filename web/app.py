@@ -6000,6 +6000,98 @@ function renderAccountSummary(
     );
 }
 
+function openLinkedAssetChart() {
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+
+    const accountId =
+        String(
+            params.get(
+                "account"
+            )
+            || ""
+        ).trim();
+
+
+    const ticker =
+        String(
+            params.get(
+                "ticker"
+            )
+            || ""
+        )
+        .trim()
+        .toUpperCase();
+
+
+    if (
+        !accountId
+        || !ticker
+    ) {
+        return false;
+    }
+
+
+    const rows =
+        document.querySelectorAll(
+            ".position-row"
+        );
+
+
+    let targetRow =
+        null;
+
+
+    for (const row of rows) {
+
+        if (
+            String(
+                row.dataset.accountId
+                || ""
+            ) === accountId
+            && String(
+                row.dataset.ticker
+                || ""
+            ).toUpperCase()
+            === ticker
+        ) {
+            targetRow =
+                row;
+
+            break;
+        }
+    }
+
+
+    if (!targetRow) {
+        return false;
+    }
+
+
+    targetRow.scrollIntoView({
+        behavior:
+            "smooth",
+
+        block:
+            "center",
+    });
+
+
+    window.setTimeout(
+        () => {
+
+            targetRow.click();
+
+        },
+        300
+    );
+
+
+    return true;
+}
 
 function renderPositions(
     container,
@@ -6053,7 +6145,17 @@ function renderPositions(
         row.className =
             "transaction-row position-row";
 
+        row.dataset.accountId =
+            String(
+                account.id
+            );
 
+        row.dataset.ticker =
+            String(
+                position.ticker
+                || ""
+            ).toUpperCase();
+            
         const header =
             document.createElement(
                 "div"
@@ -12480,6 +12582,7 @@ loginForm.addEventListener(
                 data.access_token
             );
 
+            openLinkedAssetChart();
 
             loginStatus.textContent =
                 "로그인 완료 · "
