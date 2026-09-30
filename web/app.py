@@ -3123,6 +3123,43 @@ button:disabled {
     display: block;
 }
 
+.asset-chart-crosshair {
+    pointer-events: none;
+}
+
+.asset-chart-touch-line {
+    stroke: #9aa0a6;
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
+    vector-effect: non-scaling-stroke;
+}
+
+.asset-chart-touch-point {
+    fill: #ffffff;
+    stroke: #202124;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+}
+
+.asset-chart-touch-label {
+    position: absolute;
+    z-index: 20;
+    display: none;
+    padding: 7px 9px;
+    border-radius: 8px;
+    background: rgba(32, 33, 36, 0.92);
+    color: #ffffff;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translateX(-50%);
+}
+
+.asset-chart-touch-label.visible {
+    display: block;
+}
+
 .asset-chart-loading {
     display: flex;
     align-items: center;
@@ -4677,6 +4714,329 @@ function renderAssetChart(
         chartContainer.appendChild(
             svg
         );
+
+        const crosshairGroup =
+            createSvgElement(
+                "g"
+            );
+
+        crosshairGroup.classList.add(
+            "asset-chart-crosshair"
+        );
+
+        crosshairGroup.style.display =
+            "none";
+
+
+        const crosshairLine =
+            createSvgElement(
+                "line"
+            );
+
+        crosshairLine.classList.add(
+            "asset-chart-touch-line"
+        );
+
+        crosshairLine.setAttribute(
+            "y1",
+            paddingTop
+        );
+
+        crosshairLine.setAttribute(
+            "y2",
+            paddingTop
+            + plotHeight
+        );
+
+
+        const crosshairPoint =
+            createSvgElement(
+                "circle"
+            );
+
+        crosshairPoint.classList.add(
+            "asset-chart-touch-point"
+        );
+
+        crosshairPoint.setAttribute(
+            "r",
+            "5"
+        );
+
+
+        crosshairGroup.appendChild(
+            crosshairLine
+        );
+
+        crosshairGroup.appendChild(
+            crosshairPoint
+        );
+
+        svg.appendChild(
+            crosshairGroup
+        );
+
+
+        const touchLabel =
+            document.createElement(
+                "div"
+            );
+
+        touchLabel.className =
+            "asset-chart-touch-label";
+
+        chartContainer.appendChild(
+            touchLabel
+        );
+
+
+        function showPriceAtPointer(
+            event
+        ) {
+            const rect =
+                svg.getBoundingClientRect();
+
+
+            if (
+                rect.width <= 0
+                || prices.length === 0
+            ) {
+                return;
+            }
+
+
+            const pointerX =
+                event.clientX
+                - rect.left;
+
+
+            const scaleX =
+                width
+                / rect.width;
+
+
+            const svgX =
+                pointerX
+                * scaleX;
+
+
+            const clampedX =
+                Math.max(
+                    paddingLeft,
+                    Math.min(
+                        width
+                        - paddingRight,
+                        svgX
+                    )
+                );
+
+
+            let index = 0;
+
+
+            if (
+                prices.length > 1
+            ) {
+                const ratio =
+                    (
+                        clampedX
+                        - paddingLeft
+                    )
+                    / plotWidth;
+
+
+                index =
+                    Math.round(
+                        ratio
+                        * (
+                            prices.length
+                            - 1
+                        )
+                    );
+
+
+                index =
+                    Math.max(
+                        0,
+                        Math.min(
+                            prices.length
+                            - 1,
+                            index
+                        )
+                    );
+            }
+
+
+            const item =
+                prices[index];
+
+
+            if (!item) {
+                return;
+            }
+
+
+            const close =
+                Number(
+                    item.close
+                );
+
+
+            if (
+                !Number.isFinite(
+                    close
+                )
+            ) {
+                return;
+            }
+
+
+            const x =
+                getX(
+                    index
+                );
+
+            const y =
+                getY(
+                    close
+                );
+
+
+            crosshairLine.setAttribute(
+                "x1",
+                x
+            );
+
+            crosshairLine.setAttribute(
+                "x2",
+                x
+            );
+
+            crosshairPoint.setAttribute(
+                "cx",
+                x
+            );
+
+            crosshairPoint.setAttribute(
+                "cy",
+                y
+            );
+
+
+            crosshairGroup.style.display =
+                "";
+
+
+            touchLabel.innerHTML =
+                "<strong>"
+                + item.date
+                + "</strong>"
+                + "<br>"
+                + "종가 "
+                + formatMoney(
+                    close,
+                    currency
+                );
+
+
+            const screenX =
+                (
+                    x
+                    / width
+                )
+                * rect.width;
+
+
+            const minimumLabelX =
+                55;
+
+            const maximumLabelX =
+                rect.width - 55;
+
+
+            const labelX =
+                Math.max(
+                    minimumLabelX,
+                    Math.min(
+                        maximumLabelX,
+                        screenX
+                    )
+                );
+
+
+            touchLabel.style.left =
+                labelX
+                + "px";
+
+            touchLabel.style.top =
+                "8px";
+
+            touchLabel.classList.add(
+                "visible"
+            );
+        }
+
+
+        function hidePricePointer() {
+            crosshairGroup.style.display =
+                "none";
+
+            touchLabel.classList.remove(
+                "visible"
+            );
+        }
+
+
+        svg.addEventListener(
+            "pointerdown",
+            (event) => {
+
+                showPriceAtPointer(
+                    event
+                );
+            }
+        );
+
+
+        svg.addEventListener(
+            "pointermove",
+            (event) => {
+
+                if (
+                    event.pointerType
+                    === "mouse"
+                    && event.buttons === 0
+                ) {
+                    return;
+                }
+
+
+                showPriceAtPointer(
+                    event
+                );
+            }
+        );
+
+
+        svg.addEventListener(
+            "pointerleave",
+            () => {
+
+                hidePricePointer();
+            }
+        );
+
+
+        svg.addEventListener(
+            "pointerup",
+            () => {
+
+                /*
+                 * 손가락을 뗀 뒤에도
+                 * 마지막 선택 가격을 유지합니다.
+                 */
+            }
+        );       
 
         chartBody.appendChild(
             chartContainer
