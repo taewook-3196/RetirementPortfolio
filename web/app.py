@@ -12420,8 +12420,330 @@ investmentProfileForm.addEventListener(
 
 
 /*
-로그인
+로그인 및 로그인 상태 유지
 */
+
+function saveAuthTokens(
+    accessToken,
+    refreshToken
+) {
+    const safeAccessToken =
+        accessToken || "";
+
+    const safeRefreshToken =
+        refreshToken || "";
+
+
+    sessionStorage.setItem(
+        "access_token",
+        safeAccessToken
+    );
+
+    sessionStorage.setItem(
+        "refresh_token",
+        safeRefreshToken
+    );
+
+
+    localStorage.setItem(
+        "access_token",
+        safeAccessToken
+    );
+
+    localStorage.setItem(
+        "refresh_token",
+        safeRefreshToken
+    );
+}
+
+
+function clearAuthTokens() {
+
+    sessionStorage.removeItem(
+        "access_token"
+    );
+
+    sessionStorage.removeItem(
+        "refresh_token"
+    );
+
+
+    localStorage.removeItem(
+        "access_token"
+    );
+
+    localStorage.removeItem(
+        "refresh_token"
+    );
+}
+
+
+async function showAuthenticatedApp(
+    accessToken
+) {
+    const user =
+        await verifyUser(
+            accessToken
+        );
+
+
+    const [
+        accounts,
+        investmentProfile
+    ] = await Promise.all([
+
+        loadAccounts(
+            accessToken
+        ),
+
+        loadInvestmentProfile(
+            accessToken
+        ),
+    ]);
+
+
+    if (investmentProfile) {
+
+        document.getElementById(
+            "risk-profile"
+        ).value =
+            investmentProfile
+            .risk_profile
+            || "balanced";
+
+
+        document.getElementById(
+            "investment-horizon"
+        ).value =
+            investmentProfile
+            .investment_horizon_years
+            ?? "";
+
+
+        document.getElementById(
+            "ai-advice-style"
+        ).value =
+            investmentProfile
+            .ai_advice_style
+            || "balanced";
+
+
+        document.getElementById(
+            "ai-advice-enabled"
+        ).checked =
+            investmentProfile
+            .ai_advice_enabled
+            !== false;
+
+
+        document.getElementById(
+            "investment-preference-text"
+        ).value =
+            investmentProfile
+            .investment_preference_text
+            || "";
+    }
+
+
+    await renderAccounts(
+        accounts,
+        accessToken
+    );
+
+
+    loginStatus.textContent =
+        "로그인 완료 · "
+        + (
+            user.email
+            || "사용자"
+        )
+        + " · 등록된 계좌 "
+        + accounts.length
+        + "개";
+
+
+    loginCard.style.display =
+        "none";
+
+
+    appArea.style.display =
+        "block";
+
+
+    /*
+    앱 영역을 먼저 표시한 뒤
+    직접 연결된 종목으로 이동합니다.
+    */
+    openLinkedAssetChart();
+}
+
+
+async function refreshLoginSession(
+    refreshToken
+) {
+    if (!refreshToken) {
+        return null;
+    }
+
+
+    const response =
+        await fetch(
+            SUPABASE_URL
+            + "/auth/v1/token"
+            + "?grant_type=refresh_token",
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+
+                    "apikey":
+                        SUPABASE_KEY,
+                },
+
+                body:
+                    JSON.stringify({
+                        refresh_token:
+                            refreshToken,
+                    }),
+            }
+        );
+
+
+    const data =
+        await response.json();
+
+
+    if (
+        !response.ok
+        || !data.access_token
+    ) {
+        return null;
+    }
+
+
+    saveAuthTokens(
+        data.access_token,
+        data.refresh_token
+        || refreshToken
+    );
+
+
+    return data.access_token;
+}
+
+
+async function restoreLoginSession() {
+
+    const savedAccessToken =
+        localStorage.getItem(
+            "access_token"
+        );
+
+
+    const savedRefreshToken =
+        localStorage.getItem(
+            "refresh_token"
+        );
+
+
+    if (
+        !savedAccessToken
+        && !savedRefreshToken
+    ) {
+        return;
+    }
+
+
+    message.textContent =
+        "로그인 상태를 확인하고 있습니다.";
+
+    message.className = "";
+
+
+    /*
+    1차:
+    저장된 access token이 아직 유효한지 확인합니다.
+    */
+    if (savedAccessToken) {
+
+        try {
+
+            saveAuthTokens(
+                savedAccessToken,
+                savedRefreshToken
+            );
+
+
+            await showAuthenticatedApp(
+                savedAccessToken
+            );
+
+
+            message.textContent = "";
+
+            return;
+
+
+        } catch (error) {
+
+            console.log(
+                "저장된 로그인 토큰이 만료되었습니다."
+            );
+        }
+    }
+
+
+    /*
+    2차:
+    access token이 만료됐다면
+    refresh token으로 새 토큰을 발급합니다.
+    */
+    try {
+
+        const newAccessToken =
+            await refreshLoginSession(
+                savedRefreshToken
+            );
+
+
+        if (!newAccessToken) {
+
+            clearAuthTokens();
+
+            message.textContent =
+                "로그인 시간이 만료되었습니다. 다시 로그인해주세요.";
+
+            message.className =
+                "error";
+
+            return;
+        }
+
+
+        await showAuthenticatedApp(
+            newAccessToken
+        );
+
+
+        message.textContent = "";
+
+
+    } catch (error) {
+
+        clearAuthTokens();
+
+
+        message.textContent =
+            "로그인 시간이 만료되었습니다. 다시 로그인해주세요.";
+
+        message.className =
+            "error";
+    }
+}
+
 
 loginForm.addEventListener(
     "submit",
@@ -12429,11 +12751,14 @@ loginForm.addEventListener(
 
         event.preventDefault();
 
+
         message.textContent = "";
         message.className = "";
 
+
         loginButton.disabled =
             true;
+
 
         loginButton.textContent =
             "로그인 중...";
@@ -12499,126 +12824,25 @@ loginForm.addEventListener(
             }
 
 
-            sessionStorage.setItem(
-                "access_token",
-                data.access_token
-            );
-
-
-            sessionStorage.setItem(
-                "refresh_token",
+            saveAuthTokens(
+                data.access_token,
                 data.refresh_token
                 || ""
             );
 
 
             loginButton.textContent =
-                "사용자 확인 중...";
-
-
-            const user =
-                await verifyUser(
-                    data.access_token
-                );
-
-
-            loginButton.textContent =
                 "계좌 확인 중...";
 
 
-            const [
-                accounts,
-                investmentProfile
-            ] = await Promise.all([
-
-                loadAccounts(
-                    data.access_token
-                ),
-
-                loadInvestmentProfile(
-                    data.access_token
-                ),
-            ]);
-
-
-            if (investmentProfile) {
-
-                document.getElementById(
-                    "risk-profile"
-                ).value =
-                    investmentProfile
-                    .risk_profile
-                    || "balanced";
-
-
-                document.getElementById(
-                    "investment-horizon"
-                ).value =
-                    investmentProfile
-                    .investment_horizon_years
-                    ?? "";
-
-
-                document.getElementById(
-                    "ai-advice-style"
-                ).value =
-                    investmentProfile
-                    .ai_advice_style
-                    || "balanced";
-
-
-                document.getElementById(
-                    "ai-advice-enabled"
-                ).checked =
-                    investmentProfile
-                    .ai_advice_enabled
-                    !== false;
-                    
-
-                document.getElementById(
-                    "investment-preference-text"
-                ).value =
-                    investmentProfile
-                    .investment_preference_text
-                    || "";
-            }
-
-
-            await renderAccounts(
-                accounts,
+            await showAuthenticatedApp(
                 data.access_token
             );
-
-            openLinkedAssetChart();
-
-            loginStatus.textContent =
-                "로그인 완료 · "
-                + (
-                    user.email
-                    || "사용자"
-                )
-                + " · 등록된 계좌 "
-                + accounts.length
-                + "개";
-
-
-            loginCard.style.display =
-                "none";
-
-
-            appArea.style.display =
-                "block";
 
 
         } catch (error) {
 
-            sessionStorage.removeItem(
-                "access_token"
-            );
-
-            sessionStorage.removeItem(
-                "refresh_token"
-            );
+            clearAuthTokens();
 
 
             message.textContent =
@@ -12635,11 +12859,19 @@ loginForm.addEventListener(
             loginButton.disabled =
                 false;
 
+
             loginButton.textContent =
                 "로그인";
         }
     }
 );
+
+
+/*
+페이지를 새로 열었을 때
+저장된 Supabase 세션으로 자동 로그인합니다.
+*/
+restoreLoginSession();
 
 </script>
 
