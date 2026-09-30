@@ -12649,10 +12649,31 @@ async function restoreLoginSession() {
         );
 
 
+    console.log(
+        "자동 로그인 확인:",
+        {
+            hasAccessToken:
+                Boolean(
+                    savedAccessToken
+                ),
+
+            hasRefreshToken:
+                Boolean(
+                    savedRefreshToken
+                ),
+        }
+    );
+
+
     if (
         !savedAccessToken
         && !savedRefreshToken
     ) {
+
+        console.log(
+            "저장된 로그인 정보가 없습니다."
+        );
+
         return;
     }
 
@@ -12663,55 +12684,57 @@ async function restoreLoginSession() {
     message.className = "";
 
 
+    let accessToken =
+        savedAccessToken;
+
+
     /*
-    1차:
-    저장된 access token이 아직 유효한지 확인합니다.
+    1단계:
+    저장된 access token 자체가
+    유효한지만 먼저 확인합니다.
+
+    계좌 로딩이나 화면 렌더링 오류를
+    인증 실패로 판단하지 않습니다.
     */
-    if (savedAccessToken) {
+    if (accessToken) {
 
         try {
 
-            saveAuthTokens(
-                savedAccessToken,
-                savedRefreshToken
+            await verifyUser(
+                accessToken
             );
 
 
-            await showAuthenticatedApp(
-                savedAccessToken
+            console.log(
+                "저장된 access token이 유효합니다."
             );
-
-
-            message.textContent = "";
-
-            return;
 
 
         } catch (error) {
 
             console.log(
-                "저장된 로그인 토큰이 만료되었습니다."
+                "access token 확인 실패. "
+                + "refresh token을 사용합니다."
             );
+
+
+            accessToken =
+                null;
         }
     }
 
 
     /*
-    2차:
-    access token이 만료됐다면
-    refresh token으로 새 토큰을 발급합니다.
+    2단계:
+    access token이 없거나 만료된 경우에만
+    refresh token으로 새 access token을 받습니다.
     */
-    try {
+    if (!accessToken) {
 
-        const newAccessToken =
-            await refreshLoginSession(
-                savedRefreshToken
-            );
-
-
-        if (!newAccessToken) {
+        if (!savedRefreshToken) {
 
             clearAuthTokens();
+
 
             message.textContent =
                 "로그인 시간이 만료되었습니다. 다시 로그인해주세요.";
@@ -12719,25 +12742,107 @@ async function restoreLoginSession() {
             message.className =
                 "error";
 
+
             return;
         }
 
 
+        try {
+
+            accessToken =
+                await refreshLoginSession(
+                    savedRefreshToken
+                );
+
+
+        } catch (error) {
+
+            console.error(
+                "로그인 갱신 오류:",
+                error
+            );
+
+
+            accessToken =
+                null;
+        }
+
+
+        if (!accessToken) {
+
+            clearAuthTokens();
+
+
+            message.textContent =
+                "로그인 시간이 만료되었습니다. 다시 로그인해주세요.";
+
+            message.className =
+                "error";
+
+
+            return;
+        }
+
+
+        console.log(
+            "refresh token으로 로그인 상태를 갱신했습니다."
+        );
+    }
+
+
+    /*
+    기존 코드의 다른 기능들이
+    sessionStorage의 access_token을 사용하므로
+    현재 세션에도 다시 복사합니다.
+    */
+    const currentRefreshToken =
+        localStorage.getItem(
+            "refresh_token"
+        )
+        || savedRefreshToken
+        || "";
+
+
+    saveAuthTokens(
+        accessToken,
+        currentRefreshToken
+    );
+
+
+    /*
+    3단계:
+    인증 성공 이후에 앱 데이터를 불러옵니다.
+
+    여기서 오류가 발생해도 인증 토큰을
+    삭제하지 않습니다.
+    */
+    try {
+
         await showAuthenticatedApp(
-            newAccessToken
+            accessToken
         );
 
 
         message.textContent = "";
 
 
+        console.log(
+            "자동 로그인 완료"
+        );
+
+
     } catch (error) {
 
-        clearAuthTokens();
+        console.error(
+            "자동 로그인 후 앱 로딩 오류:",
+            error
+        );
 
 
         message.textContent =
-            "로그인 시간이 만료되었습니다. 다시 로그인해주세요.";
+            "로그인은 유지되어 있지만 "
+            + "포트폴리오를 불러오지 못했습니다. "
+            + "페이지를 다시 열어주세요.";
 
         message.className =
             "error";
