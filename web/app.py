@@ -2951,6 +2951,161 @@ button:disabled {
     margin: 0;
 }
 
+.position-row {
+    cursor: pointer;
+    border-radius: 12px;
+    transition:
+        background 0.15s ease;
+}
+
+.position-row:active {
+    background: #f8f9fa;
+}
+
+.position-chart-hint {
+    margin-top: 8px;
+    color: #8a8f98;
+    font-size: 12px;
+}
+
+.asset-chart-panel {
+    margin: 10px 0 16px;
+    padding: 14px;
+    background: #f8f9fa;
+    border: 1px solid #eceff3;
+    border-radius: 14px;
+}
+
+.asset-chart-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.asset-chart-title {
+    min-width: 0;
+}
+
+.asset-chart-name {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.asset-chart-ticker {
+    margin-top: 3px;
+    color: #777;
+    font-size: 12px;
+}
+
+.asset-chart-close {
+    width: auto;
+    min-width: 34px;
+    min-height: 34px;
+    margin: 0;
+    padding: 5px 10px;
+    background: #e7e9ed;
+    color: #444;
+    font-size: 16px;
+}
+
+.asset-chart-summary {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.asset-chart-price {
+    font-size: 21px;
+    font-weight: 700;
+}
+
+.asset-chart-period {
+    color: #777;
+    font-size: 12px;
+}
+
+.asset-chart-container {
+    position: relative;
+    width: 100%;
+    height: 230px;
+    overflow: hidden;
+    background: white;
+    border-radius: 12px;
+}
+
+.asset-chart-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: manipulation;
+}
+
+.asset-chart-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 230px;
+    color: #777;
+    font-size: 13px;
+}
+
+.asset-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 11px;
+    color: #666;
+    font-size: 12px;
+}
+
+.asset-chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.asset-chart-marker {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.asset-chart-marker.buy-marker {
+    background: #b3261e;
+}
+
+.asset-chart-marker.sell-marker {
+    background: #137333;
+}
+
+.asset-chart-tooltip {
+    display: none;
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: white;
+    border: 1px solid #e1e4e8;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.asset-chart-tooltip.visible {
+    display: block;
+}
+
+.asset-chart-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 230px;
+    color: #777;
+    font-size: 13px;
+}
+
 @media (max-width: 380px) {
     .form-row {
         grid-template-columns: 1fr;
