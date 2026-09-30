@@ -6071,27 +6071,34 @@ function openLinkedAssetChart() {
     }
 
 
-    targetRow.scrollIntoView({
-        behavior:
-            "smooth",
+    /*
+    먼저 차트를 엽니다.
+    차트가 펼쳐지면서 화면 높이가 변하므로
+    스크롤은 차트를 연 뒤 실행합니다.
+    */
 
-        block:
-            "center",
-    });
+    targetRow.click();
 
 
     window.setTimeout(
         () => {
 
-            targetRow.click();
+            targetRow.scrollIntoView({
+                behavior:
+                    "smooth",
+
+                block:
+                    "start",
+            });
 
         },
-        300
+        500
     );
 
 
     return true;
 }
+
 
 function renderPositions(
     container,
