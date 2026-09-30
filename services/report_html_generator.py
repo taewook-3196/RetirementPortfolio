@@ -998,18 +998,59 @@ class ReportHtmlGenerator:
         if account_summaries and len(account_summaries) > 1:
             pills = ""
             for a in account_summaries:
-                a_name = a.get("name", "")
-                a_eval = a.get("total_eval", 0)
-                a_pct = a.get("total_pl_pct", 0.0)
-                a_sign = "+" if a_pct > 0 else ""
-                a_cls = "pl-plus" if a_pct > 0 else ("pl-minus" if a_pct < 0 else "pl-zero")
+                a_name = a.get(
+                    "name",
+                    "",
+                )
+
+                a_eval = a.get(
+                    "total_eval",
+                    0,
+                )
+
+                a_currency = str(
+                    a.get(
+                        "currency",
+                        "KRW",
+                    )
+                    or "KRW"
+                ).strip().upper()
+
+                a_pct = a.get(
+                    "total_pl_pct",
+                    0.0,
+                )
+
+                a_sign = (
+                    "+"
+                    if a_pct > 0
+                    else ""
+                )
+
+                a_cls = (
+                    "pl-plus"
+                    if a_pct > 0
+                    else (
+                        "pl-minus"
+                        if a_pct < 0
+                        else "pl-zero"
+                    )
+                )
+
+                a_eval_text = (
+                    self._format_money(
+                        a_eval,
+                        a_currency,
+                    )
+                )
+
                 pills += f"""
                 <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 6px 10px; font-size: 11.5px; display: flex; justify-content: space-between; align-items: center;">
                     <span style="color: #cbd5e1; font-weight: 600;">{a_name}</span>
-                    <span><strong style="color: #ffffff;">{a_eval:,.0f}원</strong> <span class="{a_cls}" style="font-weight: 700;">({a_sign}{a_pct:.1f}%)</span></span>
+                    <span><strong style="color: #ffffff;">{a_eval_text}</strong> <span class="{a_cls}" style="font-weight: 700;">({a_sign}{a_pct:.1f}%)</span></span>
                 </div>
                 """
-            acc_breakdown_html = f"""
+                acc_breakdown_html = f"""
             <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 5px;">
                 <div style="font-size: 11px; font-weight: 700; color: #94a3b8;">🏢 등록 계좌별 현황</div>
                 {pills}
