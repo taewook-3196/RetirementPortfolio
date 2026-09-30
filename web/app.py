@@ -5655,95 +5655,21 @@ function renderPositions(
                     );
 
 
-                    const status =
+                    const chartContent =
                         document.createElement(
                             "div"
                         );
 
-                    status.className =
-                        "status-box";
-
-
-                    const priceCount =
-                        Number(
-                            chartData.price_count
-                            || 0
-                        );
-
-
-                    const transactionCount =
-                        Number(
-                            chartData.transaction_count
-                            || 0
-                        );
-
-
-                    status.innerHTML =
-                        "가격 데이터 "
-                        + priceCount
-                        + "개"
-                        + "<br>"
-                        + "매매 기록 "
-                        + transactionCount
-                        + "개";
-
 
                     chartPanel.appendChild(
-                        status
+                        chartContent
                     );
 
 
-                    if (
-                        priceCount > 0
-                        && transactionCount > 0
-                    ) {
-
-                        const success =
-                            document.createElement(
-                                "div"
-                            );
-
-                        success.className =
-                            "transaction-detail success";
-
-                        success.style.marginTop =
-                            "10px";
-
-                        success.textContent =
-                            "차트 데이터를 정상적으로 불러왔습니다.";
-
-                        chartPanel.appendChild(
-                            success
-                        );
-
-                    } else {
-
-                        const warning =
-                            document.createElement(
-                                "div"
-                            );
-
-                        warning.className =
-                            "transaction-detail";
-
-                        warning.style.marginTop =
-                            "10px";
-
-                        if (
-                            priceCount === 0
-                        ) {
-                            warning.textContent =
-                                "저장된 가격 데이터가 없습니다.";
-                        } else {
-                            warning.textContent =
-                                "이 기간의 매매 기록이 없습니다.";
-                        }
-
-                        chartPanel.appendChild(
-                            warning
-                        );
-                    }
-
+                    renderAssetChart(
+                        chartContent,
+                        chartData
+                    );
 
                     chartLoaded =
                         true;
