@@ -3009,6 +3009,32 @@ button:disabled {
     color: #444;
     font-size: 16px;
 }
+.asset-chart-period-buttons {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 5px;
+    margin: 4px 0 14px;
+}
+
+.asset-chart-period-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    margin: 0;
+    padding: 6px 3px;
+    border: 1px solid #e1e4e8;
+    border-radius: 8px;
+    background: white;
+    color: #666;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.asset-chart-period-button.active {
+    border-color: #202124;
+    background: #202124;
+    color: white;
+}
 
 .asset-chart-summary {
     display: flex;
@@ -3458,7 +3484,7 @@ function renderAssetChart(
     container.innerHTML = "";
 
 
-    const prices =
+    const allPrices =
         Array.isArray(
             chartData.prices
         )
@@ -3466,7 +3492,7 @@ function renderAssetChart(
             : [];
 
 
-    const transactions =
+    const allTransactions =
         Array.isArray(
             chartData.transactions
         )
@@ -3482,7 +3508,7 @@ function renderAssetChart(
 
 
     const validPrices =
-        prices.filter(
+        allPrices.filter(
             (item) => {
 
                 const close =
@@ -3522,851 +3548,1249 @@ function renderAssetChart(
     }
 
 
-    const width =
-        600;
-
-    const height =
-        230;
-
-    const paddingLeft =
-        58;
-
-    const paddingRight =
-        18;
-
-    const paddingTop =
-        18;
-
-    const paddingBottom =
-        34;
-
-
-    const plotWidth =
-        width
-        - paddingLeft
-        - paddingRight;
-
-    const plotHeight =
-        height
-        - paddingTop
-        - paddingBottom;
-
-
-    const closeValues =
-        validPrices.map(
-            (item) =>
-                Number(
-                    item.close
-                )
-        );
-
-
-    const transactionPrices =
-        transactions
-            .map(
-                (item) =>
-                    Number(
-                        item.price
-                    )
-            )
-            .filter(
-                (value) =>
-                    Number.isFinite(
-                        value
-                    )
-                    && value > 0
-            );
-
-
-    const allValues = [
-        ...closeValues,
-        ...transactionPrices,
-    ];
-
-
-    let minimumPrice =
-        Math.min(
-            ...allValues
-        );
-
-    let maximumPrice =
-        Math.max(
-            ...allValues
-        );
-
-
-    if (
-        minimumPrice
-        === maximumPrice
+    function parseDate(
+        value
     ) {
-        const margin =
-            minimumPrice > 0
-                ? minimumPrice * 0.02
-                : 1;
-
-        minimumPrice -=
-            margin;
-
-        maximumPrice +=
-            margin;
-    }
-
-
-    const priceRange =
-        maximumPrice
-        - minimumPrice;
-
-
-    const verticalMargin =
-        priceRange * 0.08;
-
-
-    minimumPrice -=
-        verticalMargin;
-
-    maximumPrice +=
-        verticalMargin;
-
-
-    const adjustedRange =
-        maximumPrice
-        - minimumPrice;
-
-
-    function getX(index) {
-
-        if (
-            validPrices.length === 1
-        ) {
-            return (
-                paddingLeft
-                + plotWidth / 2
-            );
-        }
-
-        return (
-            paddingLeft
-            + (
-                index
-                / (
-                    validPrices.length
-                    - 1
-                )
-            )
-            * plotWidth
-        );
-    }
-
-
-    function getY(price) {
-
-        return (
-            paddingTop
-            + (
-                (
-                    maximumPrice
-                    - price
-                )
-                / adjustedRange
-            )
-            * plotHeight
-        );
-    }
-
-
-    function createSvgElement(
-        tagName
-    ) {
-        return document.createElementNS(
-            "http://www.w3.org/2000/svg",
-            tagName
-        );
-    }
-
-
-    const summary =
-        document.createElement(
-            "div"
-        );
-
-    summary.className =
-        "asset-chart-summary";
-
-
-    const latestPrice =
-        closeValues[
-            closeValues.length - 1
-        ];
-
-
-    const latestPriceElement =
-        document.createElement(
-            "div"
-        );
-
-    latestPriceElement.className =
-        "asset-chart-price";
-
-    latestPriceElement.textContent =
-        formatMoney(
-            latestPrice,
-            currency
-        );
-
-
-    const period =
-        document.createElement(
-            "div"
-        );
-
-    period.className =
-        "asset-chart-period";
-
-    period.textContent =
-        validPrices.length
-        + "개 가격 데이터";
-
-
-    summary.appendChild(
-        latestPriceElement
-    );
-
-    summary.appendChild(
-        period
-    );
-
-    container.appendChild(
-        summary
-    );
-
-
-    const chartContainer =
-        document.createElement(
-            "div"
-        );
-
-    chartContainer.className =
-        "asset-chart-container";
-
-
-    const svg =
-        createSvgElement(
-            "svg"
-        );
-
-    svg.setAttribute(
-        "viewBox",
-        "0 0 "
-        + width
-        + " "
-        + height
-    );
-
-    svg.setAttribute(
-        "preserveAspectRatio",
-        "none"
-    );
-
-    svg.classList.add(
-        "asset-chart-svg"
-    );
-
-
-    const gridCount =
-        4;
-
-
-    for (
-        let index = 0;
-        index <= gridCount;
-        index += 1
-    ) {
-
-        const ratio =
-            index
-            / gridCount;
-
-
-        const y =
-            paddingTop
-            + ratio
-            * plotHeight;
-
-
-        const gridLine =
-            createSvgElement(
-                "line"
-            );
-
-        gridLine.setAttribute(
-            "x1",
-            paddingLeft
-        );
-
-        gridLine.setAttribute(
-            "x2",
-            width
-            - paddingRight
-        );
-
-        gridLine.setAttribute(
-            "y1",
-            y
-        );
-
-        gridLine.setAttribute(
-            "y2",
-            y
-        );
-
-        gridLine.setAttribute(
-            "stroke",
-            "#eceff3"
-        );
-
-        gridLine.setAttribute(
-            "stroke-width",
-            "1"
-        );
-
-
-        svg.appendChild(
-            gridLine
-        );
-
-
-        const gridPrice =
-            maximumPrice
-            - ratio
-            * adjustedRange;
-
-
-        const priceLabel =
-            createSvgElement(
-                "text"
-            );
-
-        priceLabel.setAttribute(
-            "x",
-            paddingLeft - 7
-        );
-
-        priceLabel.setAttribute(
-            "y",
-            y + 4
-        );
-
-        priceLabel.setAttribute(
-            "text-anchor",
-            "end"
-        );
-
-        priceLabel.setAttribute(
-            "font-size",
-            "10"
-        );
-
-        priceLabel.setAttribute(
-            "fill",
-            "#8a8f98"
-        );
-
-        priceLabel.textContent =
-            currency === "USD"
-                ? gridPrice.toFixed(2)
-                : Math.round(
-                    gridPrice
-                ).toLocaleString(
-                    "ko-KR"
-                );
-
-
-        svg.appendChild(
-            priceLabel
-        );
-    }
-
-
-    const points =
-        validPrices.map(
-            (item, index) => {
-
-                return (
-                    getX(index)
-                    + ","
-                    + getY(
-                        Number(
-                            item.close
-                        )
-                    )
-                );
-            }
-        );
-
-
-    const priceLine =
-        createSvgElement(
-            "polyline"
-        );
-
-    priceLine.setAttribute(
-        "points",
-        points.join(" ")
-    );
-
-    priceLine.setAttribute(
-        "fill",
-        "none"
-    );
-
-    priceLine.setAttribute(
-        "stroke",
-        "#202124"
-    );
-
-    priceLine.setAttribute(
-        "stroke-width",
-        "2.5"
-    );
-
-    priceLine.setAttribute(
-        "stroke-linejoin",
-        "round"
-    );
-
-    priceLine.setAttribute(
-        "stroke-linecap",
-        "round"
-    );
-
-    priceLine.setAttribute(
-        "vector-effect",
-        "non-scaling-stroke"
-    );
-
-
-    svg.appendChild(
-        priceLine
-    );
-
-
-    const dateIndexes = [
-        0,
-        Math.floor(
-            (
-                validPrices.length
-                - 1
-            )
-            / 2
-        ),
-        validPrices.length - 1,
-    ];
-
-
-    const uniqueDateIndexes =
-        [
-            ...new Set(
-                dateIndexes
-            ),
-        ];
-
-
-    for (
-        const index
-        of uniqueDateIndexes
-    ) {
-
-        const item =
-            validPrices[index];
-
-
-        if (!item) {
-            continue;
-        }
-
-
-        const dateLabel =
-            createSvgElement(
-                "text"
-            );
-
-
-        let anchor =
-            "middle";
-
-
-        if (index === 0) {
-            anchor =
-                "start";
-        }
-
-
-        if (
-            index
-            === validPrices.length - 1
-        ) {
-            anchor =
-                "end";
-        }
-
-
-        dateLabel.setAttribute(
-            "x",
-            getX(index)
-        );
-
-        dateLabel.setAttribute(
-            "y",
-            height - 9
-        );
-
-        dateLabel.setAttribute(
-            "text-anchor",
-            anchor
-        );
-
-        dateLabel.setAttribute(
-            "font-size",
-            "10"
-        );
-
-        dateLabel.setAttribute(
-            "fill",
-            "#8a8f98"
-        );
-
-
         const date =
             new Date(
-                item.date
+                String(value)
                 + "T00:00:00"
             );
-
 
         if (
             Number.isNaN(
                 date.getTime()
             )
         ) {
-            dateLabel.textContent =
-                item.date;
-        } else {
-            dateLabel.textContent =
-                (
-                    date.getMonth()
-                    + 1
-                )
-                + "/"
-                + date.getDate();
+            return null;
         }
 
-
-        svg.appendChild(
-            dateLabel
-        );
+        return date;
     }
 
 
-    const tooltip =
+    function getPeriodStartDate(
+        periodKey,
+        latestDate
+    ) {
+        if (
+            periodKey === "ALL"
+        ) {
+            return null;
+        }
+
+
+        const startDate =
+            new Date(
+                latestDate.getTime()
+            );
+
+
+        if (
+            periodKey === "1M"
+        ) {
+            startDate.setMonth(
+                startDate.getMonth()
+                - 1
+            );
+
+            return startDate;
+        }
+
+
+        if (
+            periodKey === "3M"
+        ) {
+            startDate.setMonth(
+                startDate.getMonth()
+                - 3
+            );
+
+            return startDate;
+        }
+
+
+        if (
+            periodKey === "6M"
+        ) {
+            startDate.setMonth(
+                startDate.getMonth()
+                - 6
+            );
+
+            return startDate;
+        }
+
+
+        if (
+            periodKey === "1Y"
+        ) {
+            startDate.setFullYear(
+                startDate.getFullYear()
+                - 1
+            );
+
+            return startDate;
+        }
+
+
+        return null;
+    }
+
+
+    const latestDate =
+        parseDate(
+            validPrices[
+                validPrices.length - 1
+            ].date
+        );
+
+
+    if (!latestDate) {
+
+        const empty =
+            document.createElement(
+                "div"
+            );
+
+        empty.className =
+            "asset-chart-empty";
+
+        empty.textContent =
+            "가격 날짜를 확인할 수 없습니다.";
+
+        container.appendChild(
+            empty
+        );
+
+        return;
+    }
+
+
+    const periodButtons =
         document.createElement(
             "div"
         );
 
-    tooltip.className =
-        "asset-chart-tooltip";
+    periodButtons.className =
+        "asset-chart-period-buttons";
 
 
-    function findNearestPriceIndex(
-        transactionDate
+    const periods = [
+        {
+            key: "1M",
+            label: "1개월",
+        },
+        {
+            key: "3M",
+            label: "3개월",
+        },
+        {
+            key: "6M",
+            label: "6개월",
+        },
+        {
+            key: "1Y",
+            label: "1년",
+        },
+        {
+            key: "ALL",
+            label: "전체",
+        },
+    ];
+
+
+    let selectedPeriod =
+        "1Y";
+
+
+    const buttonMap =
+        new Map();
+
+
+    for (
+        const period
+        of periods
     ) {
 
-        const targetTime =
-            new Date(
-                transactionDate
-                + "T00:00:00"
-            ).getTime();
+        const button =
+            document.createElement(
+                "button"
+            );
+
+        button.type =
+            "button";
+
+        button.className =
+            "asset-chart-period-button";
+
+        button.textContent =
+            period.label;
 
 
         if (
-            !Number.isFinite(
-                targetTime
-            )
+            period.key
+            === selectedPeriod
         ) {
-            return 0;
+            button.classList.add(
+                "active"
+            );
         }
 
 
-        let nearestIndex =
-            0;
+        buttonMap.set(
+            period.key,
+            button
+        );
 
-        let nearestDifference =
-            Infinity;
+
+        periodButtons.appendChild(
+            button
+        );
+    }
+
+
+    container.appendChild(
+        periodButtons
+    );
+
+
+    const chartBody =
+        document.createElement(
+            "div"
+        );
+
+    container.appendChild(
+        chartBody
+    );
+
+
+    function drawChart(
+        periodKey
+    ) {
+        chartBody.innerHTML =
+            "";
+
+
+        const startDate =
+            getPeriodStartDate(
+                periodKey,
+                latestDate
+            );
+
+
+        const prices =
+            validPrices.filter(
+                (item) => {
+
+                    if (!startDate) {
+                        return true;
+                    }
+
+
+                    const itemDate =
+                        parseDate(
+                            item.date
+                        );
+
+
+                    if (!itemDate) {
+                        return false;
+                    }
+
+
+                    return (
+                        itemDate
+                        >= startDate
+                    );
+                }
+            );
+
+
+        if (
+            prices.length === 0
+        ) {
+
+            const empty =
+                document.createElement(
+                    "div"
+                );
+
+            empty.className =
+                "asset-chart-empty";
+
+            empty.textContent =
+                "선택한 기간의 가격 데이터가 없습니다.";
+
+            chartBody.appendChild(
+                empty
+            );
+
+            return;
+        }
+
+
+        const firstPriceDate =
+            parseDate(
+                prices[0].date
+            );
+
+
+        const lastPriceDate =
+            parseDate(
+                prices[
+                    prices.length - 1
+                ].date
+            );
+
+
+        const transactions =
+            allTransactions.filter(
+                (item) => {
+
+                    const transactionDate =
+                        parseDate(
+                            item.date
+                        );
+
+
+                    if (
+                        !transactionDate
+                        || !firstPriceDate
+                        || !lastPriceDate
+                    ) {
+                        return false;
+                    }
+
+
+                    return (
+                        transactionDate
+                        >= firstPriceDate
+                        && transactionDate
+                        <= lastPriceDate
+                    );
+                }
+            );
+
+
+        const width =
+            600;
+
+        const height =
+            230;
+
+        const paddingLeft =
+            58;
+
+        const paddingRight =
+            18;
+
+        const paddingTop =
+            18;
+
+        const paddingBottom =
+            34;
+
+
+        const plotWidth =
+            width
+            - paddingLeft
+            - paddingRight;
+
+        const plotHeight =
+            height
+            - paddingTop
+            - paddingBottom;
+
+
+        const closeValues =
+            prices.map(
+                (item) =>
+                    Number(
+                        item.close
+                    )
+            );
+
+
+        const transactionPrices =
+            transactions
+                .map(
+                    (item) =>
+                        Number(
+                            item.price
+                        )
+                )
+                .filter(
+                    (value) =>
+                        Number.isFinite(
+                            value
+                        )
+                        && value > 0
+                );
+
+
+        const allValues = [
+            ...closeValues,
+            ...transactionPrices,
+        ];
+
+
+        let minimumPrice =
+            Math.min(
+                ...allValues
+            );
+
+        let maximumPrice =
+            Math.max(
+                ...allValues
+            );
+
+
+        if (
+            minimumPrice
+            === maximumPrice
+        ) {
+
+            const margin =
+                minimumPrice > 0
+                    ? minimumPrice
+                        * 0.02
+                    : 1;
+
+            minimumPrice -=
+                margin;
+
+            maximumPrice +=
+                margin;
+        }
+
+
+        const priceRange =
+            maximumPrice
+            - minimumPrice;
+
+
+        const verticalMargin =
+            priceRange * 0.08;
+
+
+        minimumPrice -=
+            verticalMargin;
+
+        maximumPrice +=
+            verticalMargin;
+
+
+        const adjustedRange =
+            maximumPrice
+            - minimumPrice;
+
+
+        function getX(
+            index
+        ) {
+
+            if (
+                prices.length === 1
+            ) {
+                return (
+                    paddingLeft
+                    + plotWidth / 2
+                );
+            }
+
+
+            return (
+                paddingLeft
+                + (
+                    index
+                    / (
+                        prices.length
+                        - 1
+                    )
+                )
+                * plotWidth
+            );
+        }
+
+
+        function getY(
+            price
+        ) {
+
+            return (
+                paddingTop
+                + (
+                    (
+                        maximumPrice
+                        - price
+                    )
+                    / adjustedRange
+                )
+                * plotHeight
+            );
+        }
+
+
+        function createSvgElement(
+            tagName
+        ) {
+
+            return (
+                document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    tagName
+                )
+            );
+        }
+
+
+        const summary =
+            document.createElement(
+                "div"
+            );
+
+        summary.className =
+            "asset-chart-summary";
+
+
+        const latestPrice =
+            closeValues[
+                closeValues.length - 1
+            ];
+
+
+        const latestPriceElement =
+            document.createElement(
+                "div"
+            );
+
+        latestPriceElement.className =
+            "asset-chart-price";
+
+        latestPriceElement.textContent =
+            formatMoney(
+                latestPrice,
+                currency
+            );
+
+
+        const period =
+            document.createElement(
+                "div"
+            );
+
+        period.className =
+            "asset-chart-period";
+
+        period.textContent =
+            prices.length
+            + "개 가격 데이터";
+
+
+        summary.appendChild(
+            latestPriceElement
+        );
+
+        summary.appendChild(
+            period
+        );
+
+        chartBody.appendChild(
+            summary
+        );
+
+
+        const chartContainer =
+            document.createElement(
+                "div"
+            );
+
+        chartContainer.className =
+            "asset-chart-container";
+
+
+        const svg =
+            createSvgElement(
+                "svg"
+            );
+
+        svg.setAttribute(
+            "viewBox",
+            "0 0 "
+            + width
+            + " "
+            + height
+        );
+
+        svg.setAttribute(
+            "preserveAspectRatio",
+            "none"
+        );
+
+        svg.classList.add(
+            "asset-chart-svg"
+        );
+
+
+        const gridCount =
+            4;
 
 
         for (
             let index = 0;
-            index < validPrices.length;
+            index <= gridCount;
             index += 1
         ) {
 
-            const priceTime =
-                new Date(
-                    validPrices[index].date
-                    + "T00:00:00"
-                ).getTime();
+            const ratio =
+                index
+                / gridCount;
+
+
+            const y =
+                paddingTop
+                + ratio
+                * plotHeight;
+
+
+            const gridLine =
+                createSvgElement(
+                    "line"
+                );
+
+            gridLine.setAttribute(
+                "x1",
+                paddingLeft
+            );
+
+            gridLine.setAttribute(
+                "x2",
+                width
+                - paddingRight
+            );
+
+            gridLine.setAttribute(
+                "y1",
+                y
+            );
+
+            gridLine.setAttribute(
+                "y2",
+                y
+            );
+
+            gridLine.setAttribute(
+                "stroke",
+                "#eceff3"
+            );
+
+            gridLine.setAttribute(
+                "stroke-width",
+                "1"
+            );
+
+
+            svg.appendChild(
+                gridLine
+            );
+
+
+            const gridPrice =
+                maximumPrice
+                - ratio
+                * adjustedRange;
+
+
+            const priceLabel =
+                createSvgElement(
+                    "text"
+                );
+
+            priceLabel.setAttribute(
+                "x",
+                paddingLeft - 7
+            );
+
+            priceLabel.setAttribute(
+                "y",
+                y + 4
+            );
+
+            priceLabel.setAttribute(
+                "text-anchor",
+                "end"
+            );
+
+            priceLabel.setAttribute(
+                "font-size",
+                "10"
+            );
+
+            priceLabel.setAttribute(
+                "fill",
+                "#8a8f98"
+            );
+
+
+            priceLabel.textContent =
+                currency === "USD"
+                    ? gridPrice.toFixed(
+                        2
+                    )
+                    : Math.round(
+                        gridPrice
+                    ).toLocaleString(
+                        "ko-KR"
+                    );
+
+
+            svg.appendChild(
+                priceLabel
+            );
+        }
+
+
+        const points =
+            prices.map(
+                (
+                    item,
+                    index
+                ) => {
+
+                    return (
+                        getX(
+                            index
+                        )
+                        + ","
+                        + getY(
+                            Number(
+                                item.close
+                            )
+                        )
+                    );
+                }
+            );
+
+
+        const priceLine =
+            createSvgElement(
+                "polyline"
+            );
+
+        priceLine.setAttribute(
+            "points",
+            points.join(
+                " "
+            )
+        );
+
+        priceLine.setAttribute(
+            "fill",
+            "none"
+        );
+
+        priceLine.setAttribute(
+            "stroke",
+            "#202124"
+        );
+
+        priceLine.setAttribute(
+            "stroke-width",
+            "2.5"
+        );
+
+        priceLine.setAttribute(
+            "stroke-linejoin",
+            "round"
+        );
+
+        priceLine.setAttribute(
+            "stroke-linecap",
+            "round"
+        );
+
+        priceLine.setAttribute(
+            "vector-effect",
+            "non-scaling-stroke"
+        );
+
+
+        svg.appendChild(
+            priceLine
+        );
+
+
+        const dateIndexes = [
+            0,
+            Math.floor(
+                (
+                    prices.length
+                    - 1
+                )
+                / 2
+            ),
+            prices.length - 1,
+        ];
+
+
+        const uniqueDateIndexes = [
+            ...new Set(
+                dateIndexes
+            ),
+        ];
+
+
+        for (
+            const index
+            of uniqueDateIndexes
+        ) {
+
+            const item =
+                prices[index];
+
+
+            if (!item) {
+                continue;
+            }
+
+
+            const dateLabel =
+                createSvgElement(
+                    "text"
+                );
+
+
+            let anchor =
+                "middle";
+
+
+            if (
+                index === 0
+            ) {
+                anchor =
+                    "start";
+            }
+
+
+            if (
+                index
+                === prices.length - 1
+            ) {
+                anchor =
+                    "end";
+            }
+
+
+            dateLabel.setAttribute(
+                "x",
+                getX(
+                    index
+                )
+            );
+
+            dateLabel.setAttribute(
+                "y",
+                height - 9
+            );
+
+            dateLabel.setAttribute(
+                "text-anchor",
+                anchor
+            );
+
+            dateLabel.setAttribute(
+                "font-size",
+                "10"
+            );
+
+            dateLabel.setAttribute(
+                "fill",
+                "#8a8f98"
+            );
+
+
+            const date =
+                parseDate(
+                    item.date
+                );
+
+
+            if (!date) {
+                dateLabel.textContent =
+                    item.date;
+            } else {
+                dateLabel.textContent =
+                    (
+                        date.getMonth()
+                        + 1
+                    )
+                    + "/"
+                    + date.getDate();
+            }
+
+
+            svg.appendChild(
+                dateLabel
+            );
+        }
+
+
+        const tooltip =
+            document.createElement(
+                "div"
+            );
+
+        tooltip.className =
+            "asset-chart-tooltip";
+
+
+        function findNearestPriceIndex(
+            transactionDate
+        ) {
+
+            const targetDate =
+                parseDate(
+                    transactionDate
+                );
+
+
+            if (!targetDate) {
+                return 0;
+            }
+
+
+            const targetTime =
+                targetDate.getTime();
+
+
+            let nearestIndex =
+                0;
+
+            let nearestDifference =
+                Infinity;
+
+
+            for (
+                let index = 0;
+                index < prices.length;
+                index += 1
+            ) {
+
+                const priceDate =
+                    parseDate(
+                        prices[index]
+                            .date
+                    );
+
+
+                if (!priceDate) {
+                    continue;
+                }
+
+
+                const difference =
+                    Math.abs(
+                        priceDate.getTime()
+                        - targetTime
+                    );
+
+
+                if (
+                    difference
+                    < nearestDifference
+                ) {
+
+                    nearestDifference =
+                        difference;
+
+                    nearestIndex =
+                        index;
+                }
+            }
+
+
+            return nearestIndex;
+        }
+
+
+        for (
+            const transaction
+            of transactions
+        ) {
+
+            const transactionPrice =
+                Number(
+                    transaction.price
+                );
 
 
             if (
                 !Number.isFinite(
-                    priceTime
+                    transactionPrice
                 )
+                || transactionPrice <= 0
+                || !transaction.date
             ) {
                 continue;
             }
 
 
-            const difference =
-                Math.abs(
-                    priceTime
-                    - targetTime
+            const nearestIndex =
+                findNearestPriceIndex(
+                    transaction.date
                 );
 
 
-            if (
-                difference
-                < nearestDifference
-            ) {
-                nearestDifference =
-                    difference;
+            const x =
+                getX(
+                    nearestIndex
+                );
 
-                nearestIndex =
-                    index;
+            const y =
+                getY(
+                    transactionPrice
+                );
+
+
+            const marker =
+                createSvgElement(
+                    "circle"
+                );
+
+            marker.setAttribute(
+                "cx",
+                x
+            );
+
+            marker.setAttribute(
+                "cy",
+                y
+            );
+
+            marker.setAttribute(
+                "r",
+                "6"
+            );
+
+
+            const transactionType =
+                String(
+                    transaction.type
+                    || ""
+                ).toUpperCase();
+
+
+            if (
+                transactionType
+                === "SELL"
+            ) {
+                marker.setAttribute(
+                    "fill",
+                    "#137333"
+                );
+            } else {
+                marker.setAttribute(
+                    "fill",
+                    "#b3261e"
+                );
             }
+
+
+            marker.setAttribute(
+                "stroke",
+                "#ffffff"
+            );
+
+            marker.setAttribute(
+                "stroke-width",
+                "2"
+            );
+
+            marker.setAttribute(
+                "vector-effect",
+                "non-scaling-stroke"
+            );
+
+            marker.style.cursor =
+                "pointer";
+
+
+            marker.addEventListener(
+                "click",
+                (event) => {
+
+                    event.stopPropagation();
+
+
+                    const typeText =
+                        transactionType
+                        === "SELL"
+                            ? "매도"
+                            : "매수";
+
+
+                    tooltip.innerHTML =
+                        "<strong>"
+                        + transaction.date
+                        + " · "
+                        + typeText
+                        + "</strong>"
+                        + "<br>"
+                        + "체결가격 "
+                        + formatMoney(
+                            transaction.price,
+                            currency
+                        )
+                        + "<br>"
+                        + "수량 "
+                        + formatNumber(
+                            transaction.quantity
+                        )
+                        + "주"
+                        + "<br>"
+                        + "수수료 "
+                        + formatMoney(
+                            transaction.fee,
+                            currency
+                        )
+                        + " · 세금 "
+                        + formatMoney(
+                            transaction.tax,
+                            currency
+                        );
+
+
+                    tooltip.classList.add(
+                        "visible"
+                    );
+                }
+            );
+
+
+            svg.appendChild(
+                marker
+            );
         }
 
 
-        return nearestIndex;
+        chartContainer.appendChild(
+            svg
+        );
+
+        chartBody.appendChild(
+            chartContainer
+        );
+
+
+        const legend =
+            document.createElement(
+                "div"
+            );
+
+        legend.className =
+            "asset-chart-legend";
+
+
+        const buyLegend =
+            document.createElement(
+                "div"
+            );
+
+        buyLegend.className =
+            "asset-chart-legend-item";
+
+        buyLegend.innerHTML =
+            '<span class="asset-chart-marker buy-marker"></span>'
+            + "매수";
+
+
+        const sellLegend =
+            document.createElement(
+                "div"
+            );
+
+        sellLegend.className =
+            "asset-chart-legend-item";
+
+        sellLegend.innerHTML =
+            '<span class="asset-chart-marker sell-marker"></span>'
+            + "매도";
+
+
+        legend.appendChild(
+            buyLegend
+        );
+
+        legend.appendChild(
+            sellLegend
+        );
+
+        chartBody.appendChild(
+            legend
+        );
+
+        chartBody.appendChild(
+            tooltip
+        );
     }
 
 
     for (
-        const transaction
-        of transactions
+        const period
+        of periods
     ) {
 
-        const transactionPrice =
-            Number(
-                transaction.price
+        const button =
+            buttonMap.get(
+                period.key
             );
 
 
-        if (
-            !Number.isFinite(
-                transactionPrice
-            )
-            || transactionPrice <= 0
-            || !transaction.date
-        ) {
+        if (!button) {
             continue;
         }
 
 
-        const nearestIndex =
-            findNearestPriceIndex(
-                transaction.date
-            );
-
-
-        const x =
-            getX(
-                nearestIndex
-            );
-
-        const y =
-            getY(
-                transactionPrice
-            );
-
-
-        const marker =
-            createSvgElement(
-                "circle"
-            );
-
-        marker.setAttribute(
-            "cx",
-            x
-        );
-
-        marker.setAttribute(
-            "cy",
-            y
-        );
-
-        marker.setAttribute(
-            "r",
-            "6"
-        );
-
-
-        const transactionType =
-            String(
-                transaction.type
-                || ""
-            ).toUpperCase();
-
-
-        if (
-            transactionType
-            === "SELL"
-        ) {
-            marker.setAttribute(
-                "fill",
-                "#137333"
-            );
-        } else {
-            marker.setAttribute(
-                "fill",
-                "#b3261e"
-            );
-        }
-
-
-        marker.setAttribute(
-            "stroke",
-            "#ffffff"
-        );
-
-        marker.setAttribute(
-            "stroke-width",
-            "2"
-        );
-
-        marker.setAttribute(
-            "vector-effect",
-            "non-scaling-stroke"
-        );
-
-        marker.style.cursor =
-            "pointer";
-
-
-        marker.addEventListener(
+        button.addEventListener(
             "click",
             (event) => {
 
                 event.stopPropagation();
 
 
-                const typeText =
-                    transactionType
-                    === "SELL"
-                        ? "매도"
-                        : "매수";
+                selectedPeriod =
+                    period.key;
 
 
-                tooltip.innerHTML =
-                    "<strong>"
-                    + transaction.date
-                    + " · "
-                    + typeText
-                    + "</strong>"
-                    + "<br>"
-                    + "체결가격 "
-                    + formatMoney(
-                        transaction.price,
-                        currency
-                    )
-                    + "<br>"
-                    + "수량 "
-                    + formatNumber(
-                        transaction.quantity
-                    )
-                    + "주"
-                    + "<br>"
-                    + "수수료 "
-                    + formatMoney(
-                        transaction.fee,
-                        currency
-                    )
-                    + " · 세금 "
-                    + formatMoney(
-                        transaction.tax,
-                        currency
-                    );
+                for (
+                    const [
+                        key,
+                        periodButton,
+                    ]
+                    of buttonMap
+                ) {
+
+                    periodButton
+                        .classList
+                        .toggle(
+                            "active",
+                            key
+                            === selectedPeriod
+                        );
+                }
 
 
-                tooltip.classList.add(
-                    "visible"
+                drawChart(
+                    selectedPeriod
                 );
             }
-        );
-
-
-        svg.appendChild(
-            marker
         );
     }
 
 
-    chartContainer.appendChild(
-        svg
-    );
-
-    container.appendChild(
-        chartContainer
-    );
-
-
-    const legend =
-        document.createElement(
-            "div"
-        );
-
-    legend.className =
-        "asset-chart-legend";
-
-
-    const buyLegend =
-        document.createElement(
-            "div"
-        );
-
-    buyLegend.className =
-        "asset-chart-legend-item";
-
-    buyLegend.innerHTML =
-        '<span class="asset-chart-marker buy-marker"></span>'
-        + "매수";
-
-
-    const sellLegend =
-        document.createElement(
-            "div"
-        );
-
-    sellLegend.className =
-        "asset-chart-legend-item";
-
-    sellLegend.innerHTML =
-        '<span class="asset-chart-marker sell-marker"></span>'
-        + "매도";
-
-
-    legend.appendChild(
-        buyLegend
-    );
-
-    legend.appendChild(
-        sellLegend
-    );
-
-    container.appendChild(
-        legend
-    );
-
-    container.appendChild(
-        tooltip
+    drawChart(
+        selectedPeriod
     );
 }
 
