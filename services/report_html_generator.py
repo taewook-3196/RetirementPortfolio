@@ -24,6 +24,47 @@ class ReportHtmlGenerator:
     def __init__(self, config: Optional[MorningReportConfig] = None):
         self.config = config or MorningReportConfig()
 
+    @staticmethod
+    def _format_money(
+        value: Any,
+        currency: str = "KRW",
+    ) -> str:
+        """통화에 맞춰 금액을 표시합니다."""
+
+        try:
+            amount = float(
+                value or 0
+            )
+        except (
+            TypeError,
+            ValueError,
+        ):
+            amount = 0.0
+
+
+        currency_code = str(
+            currency or "KRW"
+        ).strip().upper()
+
+
+        if currency_code == "USD":
+            return (
+                f"${amount:,.2f}"
+            )
+
+
+        if currency_code == "KRW":
+            return (
+                f"{amount:,.0f}원"
+            )
+
+
+        return (
+            f"{amount:,.2f} "
+            f"{currency_code}"
+        )
+        
+
     def generate_html(
         self,
         report_data: Dict[str, Any],
@@ -1870,7 +1911,17 @@ class ReportHtmlGenerator:
                     ag_pl = ag.get("total_pl", 0.0)
                     ag_pl_pct = ag.get("total_pl_pct", 0.0)
                     ag_cash = ag.get("cash_balance", 0.0)
+
+                    ag_currency = str(
+                        ag.get(
+                            "currency",
+                            "KRW",
+                        )
+                        or "KRW"
+                    ).strip().upper()
+
                     ag_pos = ag.get("positions", [])
+                    
 
                     ag_sign = "+" if ag_pl > 0 else ""
                     ag_badge_cls = "badge-success" if ag_pl >= 0 else "badge-danger"
@@ -1900,14 +1951,14 @@ class ReportHtmlGenerator:
                                 {broker_badge}
                             </div>
                             <div class="account-group-kpi">
-                                <span class="account-eval-amount">{ag_eval:,.0f}원</span>
+                                <span class="account-eval-amount">{self._format_money(ag_eval, ag_currency)}</span>
                                 <span class="badge {ag_badge_cls}">{ag_sign}{ag_pl_pct:.2f}%</span>
                             </div>
                         </div>
                         <div class="account-sub-meta">
-                            <span>원금 {ag_cost:,.0f}원</span>
+                            <span>원금 {self._format_money(ag_cost, ag_currency)}</span>
                             <span>•</span>
-                            <span>예수금 {ag_cash:,.0f}원</span>
+                            <span>예수금 {self._format_money(ag_cash, ag_currency)}</span>
                             <span>•</span>
                             <span>종목 {len(ag_pos)}개</span>
                         </div>
@@ -1969,6 +2020,15 @@ class ReportHtmlGenerator:
                 ag_pl = ag.get("total_pl", 0.0)
                 ag_pl_pct = ag.get("total_pl_pct", 0.0)
                 ag_cash = ag.get("cash_balance", 0.0)
+
+                ag_currency = str(
+                    ag.get(
+                        "currency",
+                        "KRW",
+                    )
+                    or "KRW"
+                ).strip().upper()
+
                 ag_pos = ag.get("positions", [])
                 ag_sign = "+" if ag_pl > 0 else ""
                 ag_badge_cls = "badge-success" if ag_pl >= 0 else "badge-danger"
@@ -1996,15 +2056,14 @@ class ReportHtmlGenerator:
                                 {broker_badge}
                             </div>
                             <div class="account-group-kpi">
-                                <span class="account-eval-amount">{ag_eval:,.0f}원</span>
+                                <span class="account-eval-amount">{self._format_money(ag_eval, ag_currency)}</span>
                                 <span class="badge {ag_badge_cls}">{ag_sign}{ag_pl_pct:.2f}%</span>
                             </div>
                         </div>
                         <div class="account-sub-meta">
-                            <span>원금 {ag_cost:,.0f}원</span>
+                            <span>원금 {self._format_money(ag_cost, ag_currency)}</span>
                             <span>•</span>
-                            <span>예수금 {ag_cash:,.0f}원</span>
-                        </div>
+                            <span>예수금 {self._format_money(ag_cash, ag_currency)}</span>                        </div>
                         <div>
                             {items_html}
                         </div>
@@ -2062,6 +2121,13 @@ class ReportHtmlGenerator:
                 "current_price",
                 0,
             )
+            currency = str(
+                p.get(
+                    "currency",
+                    "KRW",
+                )
+                or "KRW"
+            ).strip().upper()            
             cur_weight = (
                 p.get(
                     "current_weight",
@@ -2137,14 +2203,14 @@ class ReportHtmlGenerator:
             if shares > 0:
                 detail_html = f"""
                 <div class="pos-details">
-                    <span>{shares:,}주 × {current_price:,.0f}원</span>
+                    <span>{shares:,}주 × {self._format_money(current_price, currency)}</span>
                     <span class="{pl_class}">{pl_sign}{pl_pct:.2f}%</span>
                 </div>
                 """
             else:
                 detail_html = f"""
                 <div class="pos-details">
-                    <span style="color: var(--text-dim);">미보유 (현재가: {current_price:,.0f}원)</span>
+                    <span style="color: var(--text-dim);">미보유 (현재가: {self._format_money(current_price, currency)})</span>                    <span style="color: var(--text-dim);">미보유 (현재가: {current_price:,.0f}원)</span>
                     <span style="color: #94a3b8; font-size: 11px;">신규 편입 대기</span>
                 </div>
                 """
@@ -2153,7 +2219,7 @@ class ReportHtmlGenerator:
             <div class="pos-item">
                 <div class="pos-header">
                     {name_html}
-                    <span class="pos-eval">{eval_amount:,.0f}원</span>
+                    <span class="pos-eval">{self._format_money(eval_amount, currency)}</span>
                 </div>
                 {detail_html}
                 <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 6px;">
