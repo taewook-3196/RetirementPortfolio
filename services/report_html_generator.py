@@ -1879,7 +1879,10 @@ class ReportHtmlGenerator:
                         f'<button class="account-tab-btn" onclick="filterAccountPositions(\'acc-group-{ag_id}\', this)">🏢 {ag_name} ({len(ag_pos)}개)</button>'
                     )
 
-                    items_html = self._render_position_rows(ag_pos)
+                    items_html = self._render_position_rows(
+                        ag_pos,
+                        account_id=ag_id,
+                    )                    
                     if not items_html:
                         items_html = """
                         <div style="text-align: center; padding: 14px; font-size: 12px; color: var(--text-dim);">
@@ -1958,6 +1961,7 @@ class ReportHtmlGenerator:
             # 1-2. 단일 계좌인 경우: 깔끔한 계좌 헤더와 종목 리스트
             else:
                 ag = account_groups[0]
+                ag_id = ag.get("account_id")
                 ag_name = ag.get("account_name", "기본 계좌")
                 ag_broker = ag.get("broker", "")
                 ag_eval = ag.get("total_eval", 0.0)
@@ -1970,7 +1974,10 @@ class ReportHtmlGenerator:
                 ag_badge_cls = "badge-success" if ag_pl >= 0 else "badge-danger"
 
                 broker_badge = f'<span class="account-broker-label">• {ag_broker}</span>' if ag_broker else ""
-                items_html = self._render_position_rows(ag_pos)
+                items_html = self._render_position_rows(
+                    ag_pos,
+                    account_id=ag_id,
+                )
 
                 return f"""
                 <section class="card">
@@ -2023,22 +2030,109 @@ class ReportHtmlGenerator:
         </section>
         """
 
-    def _render_position_rows(self, positions: List[Dict[str, Any]]) -> str:
+    def _render_position_rows(
+        self,
+        positions: List[Dict[str, Any]],
+        account_id: Optional[int] = None,
+    ) -> str:
         """종목 리스트 HTML 행 렌더링 헬퍼"""
+
+        web_app_url = (
+            "https://retirementportfolio.onrender.com/"
+        )
+
         rows_html = ""
+
         for p in positions:
             name = p.get("name", "")
             ticker = p.get("ticker", "")
-            eval_amount = p.get("eval_amount", 0)
-            pl_pct = p.get("pl_pct", 0.0)
-            shares = p.get("shares", 0)
-            current_price = p.get("current_price", 0)
-            cur_weight = p.get("current_weight", 0.0) * 100
-            target_weight = p.get("target_weight", 0.0) * 100
+            eval_amount = p.get(
+                "eval_amount",
+                0,
+            )
+            pl_pct = p.get(
+                "pl_pct",
+                0.0,
+            )
+            shares = p.get(
+                "shares",
+                0,
+            )
+            current_price = p.get(
+                "current_price",
+                0,
+            )
+            cur_weight = (
+                p.get(
+                    "current_weight",
+                    0.0,
+                )
+                * 100
+            )
+            target_weight = (
+                p.get(
+                    "target_weight",
+                    0.0,
+                )
+                * 100
+            )
 
-            pl_class = "pl-plus" if pl_pct > 0 else ("pl-minus" if pl_pct < 0 else "pl-zero")
-            pl_sign = "+" if pl_pct > 0 else ""
-            progress_width = min(cur_weight, 100.0)
+            pl_class = (
+                "pl-plus"
+                if pl_pct > 0
+                else (
+                    "pl-minus"
+                    if pl_pct < 0
+                    else "pl-zero"
+                )
+            )
+
+            pl_sign = (
+                "+"
+                if pl_pct > 0
+                else ""
+            )
+
+            progress_width = min(
+                cur_weight,
+                100.0,
+            )
+
+            if (
+                account_id is not None
+                and ticker
+            ):
+                chart_url = (
+                    web_app_url
+                    + "?account="
+                    + str(account_id)
+                    + "&ticker="
+                    + str(ticker)
+                )
+
+                name_html = (
+                    f'<a href="{chart_url}" '
+                    f'target="_blank" '
+                    f'class="pos-name" '
+                    f'style="text-decoration: none;">'
+                    f'{name} '
+                    f'<span style="font-size: 11px; '
+                    f'color: var(--text-dim); '
+                    f'font-weight: normal;">'
+                    f'({ticker})</span>'
+                    f'</a>'
+                )
+
+            else:
+                name_html = (
+                    f'<span class="pos-name">'
+                    f'{name} '
+                    f'<span style="font-size: 11px; '
+                    f'color: var(--text-dim); '
+                    f'font-weight: normal;">'
+                    f'({ticker})</span>'
+                    f'</span>'
+                )
 
             if shares > 0:
                 detail_html = f"""
@@ -2058,7 +2152,7 @@ class ReportHtmlGenerator:
             rows_html += f"""
             <div class="pos-item">
                 <div class="pos-header">
-                    <span class="pos-name">{name} <span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">({ticker})</span></span>
+                    {name_html}
                     <span class="pos-eval">{eval_amount:,.0f}원</span>
                 </div>
                 {detail_html}
@@ -2071,6 +2165,7 @@ class ReportHtmlGenerator:
                 </div>
             </div>
             """
+
         return rows_html
 
     def _render_news_section(self, news_items: List[Dict[str, Any]]) -> str:
