@@ -3613,6 +3613,125 @@ async function loadPositions(
     };
 }
 
+async function loadAssetChart(
+    accessToken,
+    accountId,
+    ticker,
+    options = {}
+) {
+    const params =
+        new URLSearchParams();
+
+
+    if (options.startDate) {
+        params.set(
+            "start_date",
+            options.startDate
+        );
+    }
+
+
+    if (options.endDate) {
+        params.set(
+            "end_date",
+            options.endDate
+        );
+    }
+
+
+    if (options.limit) {
+        params.set(
+            "limit",
+            String(
+                options.limit
+            )
+        );
+    }
+
+
+    let path =
+        "/api/accounts/"
+        + encodeURIComponent(
+            accountId
+        )
+        + "/assets/"
+        + encodeURIComponent(
+            ticker
+        )
+        + "/chart";
+
+
+    const queryString =
+        params.toString();
+
+
+    if (queryString) {
+        path +=
+            "?"
+            + queryString;
+    }
+
+
+    const data =
+        await apiRequest(
+            path,
+            accessToken
+        );
+
+
+    return {
+        account_id:
+            data.account_id,
+
+        account_name:
+            data.account_name || "",
+
+        account_currency:
+            data.account_currency || "KRW",
+
+        ticker:
+            data.ticker || ticker,
+
+        name:
+            data.name || ticker,
+
+        currency:
+            data.currency
+            || data.account_currency
+            || "KRW",
+
+        market:
+            data.market || "",
+
+        price_count:
+            Number(
+                data.price_count
+                || 0
+            ),
+
+        transaction_count:
+            Number(
+                data.transaction_count
+                || 0
+            ),
+
+        prices:
+            Array.isArray(
+                data.prices
+            )
+                ? data.prices
+                : [],
+
+        transactions:
+            Array.isArray(
+                data.transactions
+            )
+                ? data.transactions
+                : [],
+    };
+}
+
+
 async function lookupUsAsset(
     accessToken,
     ticker
