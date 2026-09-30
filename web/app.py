@@ -4590,27 +4590,6 @@ function renderAssetChart(
                 );
 
 
-            const marker =
-                createSvgElement(
-                    "circle"
-                );
-
-            marker.setAttribute(
-                "cx",
-                x
-            );
-
-            marker.setAttribute(
-                "cy",
-                y
-            );
-
-            marker.setAttribute(
-                "r",
-                "6"
-            );
-
-
             const transactionType =
                 String(
                     transaction.type
@@ -4618,15 +4597,125 @@ function renderAssetChart(
                 ).toUpperCase();
 
 
+            const marker =
+                createSvgElement(
+                    "polygon"
+                );
+
+
+            /*
+            삼각형의 꼭짓점이 실제 체결가격을 가리키도록 합니다.
+
+            매수:
+            가격 아래에서 위를 향하는 ▲
+
+            매도:
+            가격 위에서 아래를 향하는 ▼
+            */
+
+            const markerWidth =
+                8;
+
+            const markerHeight =
+                10;
+
+            const markerGap =
+                3;
+
+
+            let markerPoints =
+                "";
+
+
             if (
                 transactionType
                 === "SELL"
             ) {
+
+                /*
+                매도 ▼
+
+                실제 체결가격 위치(y)에서
+                위쪽으로 삼각형을 배치하고,
+                아래쪽 꼭짓점이 가격을 가리킵니다.
+                */
+
+                const tipY =
+                    y - markerGap;
+
+
+                markerPoints =
+                    x
+                    + ","
+                    + tipY
+                    + " "
+                    + (
+                        x
+                        - markerWidth
+                    )
+                    + ","
+                    + (
+                        tipY
+                        - markerHeight
+                    )
+                    + " "
+                    + (
+                        x
+                        + markerWidth
+                    )
+                    + ","
+                    + (
+                        tipY
+                        - markerHeight
+                    );
+
+
                 marker.setAttribute(
                     "fill",
                     "#137333"
                 );
+
+
             } else {
+
+                /*
+                매수 ▲
+
+                실제 체결가격 위치(y)에서
+                아래쪽으로 삼각형을 배치하고,
+                위쪽 꼭짓점이 가격을 가리킵니다.
+                */
+
+                const tipY =
+                    y + markerGap;
+
+
+                markerPoints =
+                    x
+                    + ","
+                    + tipY
+                    + " "
+                    + (
+                        x
+                        - markerWidth
+                    )
+                    + ","
+                    + (
+                        tipY
+                        + markerHeight
+                    )
+                    + " "
+                    + (
+                        x
+                        + markerWidth
+                    )
+                    + ","
+                    + (
+                        tipY
+                        + markerHeight
+                    );
+
+
                 marker.setAttribute(
                     "fill",
                     "#b3261e"
@@ -4635,19 +4724,34 @@ function renderAssetChart(
 
 
             marker.setAttribute(
+                "points",
+                markerPoints
+            );
+
+
+            marker.setAttribute(
                 "stroke",
                 "#ffffff"
             );
 
+
             marker.setAttribute(
                 "stroke-width",
-                "2"
+                "1.5"
             );
+
+
+            marker.setAttribute(
+                "stroke-linejoin",
+                "round"
+            );
+
 
             marker.setAttribute(
                 "vector-effect",
                 "non-scaling-stroke"
             );
+
 
             marker.style.cursor =
                 "pointer";
