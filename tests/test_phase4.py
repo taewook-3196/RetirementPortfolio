@@ -7,6 +7,8 @@ Phase 4 검증 테스트:
 """
 
 import pytest
+pytestmark = pytest.mark.legacy_desktop
+
 from pathlib import Path
 from database.connection import init_db
 from database.repository import Repository
