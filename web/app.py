@@ -2290,13 +2290,12 @@ def get_account_positions_api(
         # -----------------------------------------------------
         # 3. 실제 현금잔고 계산
         #
-        # initial_capital은 실제 현금으로 자동 포함하지 않습니다.
-        #
         # 현금잔고 =
-        # 입금
+        # 초기투자금
+        # + 추가입금
         # - 출금
-        # - 매수
-        # + 매도
+        # - 매수대금
+        # + 매도대금
         # + 배당 실수령액
         # -----------------------------------------------------
 
@@ -2304,7 +2303,7 @@ def get_account_positions_api(
             portfolio_service
             .get_cash_balance(
                 account_id=account_id,
-                include_initial_capital=False,
+                include_initial_capital=True,
             )
         )
 
