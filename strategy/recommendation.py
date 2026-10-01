@@ -1055,23 +1055,58 @@ def generate_recommendations(
 
             reasons.append(
                 "목표 비중이 0%인 종목으로 "
-                "매수 추천에서 제외됩니다."
+                "기본매수 대상에서 제외됩니다."
             )
 
-        elif parsed["weight_gap"] <= 0:
-
-            reasons.append(
-                f"현재 비중({current_pct:.1f}%)이 "
-                f"목표 비중({target_pct:.1f}%) "
-                "이상이므로 신규 매수를 제한합니다."
-            )
 
         else:
 
-            reasons.append(
-                f"목표 비중 대비 "
-                f"{abs(gap_pct):.1f}%p 부족합니다."
-            )
+            if result.base_buy > 0:
+
+                reasons.append(
+                    f"현재 비중은 "
+                    f"{current_pct:.1f}%이고 "
+                    f"목표 비중은 "
+                    f"{target_pct:.1f}%입니다."
+                )
+
+                reasons.append(
+                    "이번 신규자금 투입 후 "
+                    "목표 비중에 가까워지도록 "
+                    "기본매수 금액을 조정했습니다."
+                )
+
+
+            elif (
+                parsed[
+                    "base_buy_need"
+                ] <= 0
+            ):
+
+                reasons.append(
+                    f"현재 비중은 "
+                    f"{current_pct:.1f}%이고 "
+                    f"목표 비중은 "
+                    f"{target_pct:.1f}%입니다."
+                )
+
+                reasons.append(
+                    "이번 신규자금을 모두 투입한 "
+                    "이후를 기준으로 계산해도 "
+                    "현재 평가액이 목표 평가액 이상이므로 "
+                    "기본매수를 배정하지 않았습니다."
+                )
+
+
+            else:
+
+                reasons.append(
+                    f"현재 비중은 "
+                    f"{current_pct:.1f}%이고 "
+                    f"목표 비중은 "
+                    f"{target_pct:.1f}%입니다."
+                )
+
 
             reasons.append(
                 f"최근 3개월 고점 대비 "
@@ -1082,7 +1117,8 @@ def generate_recommendations(
         if result.base_buy > 0:
 
             reasons.append(
-                "이번 주기 남은 기본 매수 가능 한도는 "
+                "이번 주기 이 종목에 배정된 "
+                "기본매수 금액은 "
                 f"{format_money(result.base_buy)}입니다."
             )
 
