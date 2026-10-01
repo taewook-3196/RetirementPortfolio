@@ -9,13 +9,45 @@ tests/test_macro_indicators.py
 """
 
 import pytest
-from services.macro_indicator_service import MacroIndicatorService, YAHOO_SYMBOLS, US_ECONOMIC_INDICATORS
+from unittest.mock import Mock
+from services.macro_indicator_service import (
+    BEA_CORE_PCE_TABLE,
+    BLS_NFP_SERIES,
+    BLS_UNEMPLOYMENT_SERIES,
+    MacroIndicatorService,
+    YAHOO_SYMBOLS,
+)
 from services.report_html_generator import ReportHtmlGenerator
 from services.daily_report_service import DailyReportService
 from core.config import MorningReportConfig, AppConfig
 
 
-def test_symbols_and_fundamentals_defined():
+MOCK_FUNDAMENTALS = {
+    "core_pce": {
+        "name": "근원 PCE 물가지수",
+        "latest_value": "+2.8% YoY",
+        "trend_badge": "▲ 상승",
+        "period": "2026.08월",
+        "success": True,
+    },
+    "jobs_nfp": {
+        "name": "미국 비농업 신규고용 (NFP)",
+        "latest_value": "+142K",
+        "trend_badge": "━ 고용 증가폭 유사",
+        "period": "2026.08월",
+        "success": True,
+    },
+    "unemployment_rate": {
+        "name": "미국 실업률",
+        "latest_value": "4.2%",
+        "trend_badge": "━ 실업률 보합",
+        "period": "2026.08월",
+        "success": True,
+    },
+}
+
+
+def test_symbols_and_fundamental_sources_defined():
     """10대 필수 매크로 지표 정의 확인"""
     # 1. 미국 3대
     assert "sp500" in YAHOO_SYMBOLS
@@ -31,10 +63,11 @@ def test_symbols_and_fundamentals_defined():
     assert "wti_oil" in YAHOO_SYMBOLS
     assert "us10y_yield" in YAHOO_SYMBOLS
 
-    # 4. 미국 펀더멘털 지표 (PCE & 고용)
-    assert "core_pce" in US_ECONOMIC_INDICATORS
-    assert "jobs_nfp" in US_ECONOMIC_INDICATORS
-    assert "unemployment_rate" in US_ECONOMIC_INDICATORS
+    # 4. 미국 펀더멘털은 오래된 하드코딩 상수가 아니라
+    # 현재 BEA/BLS 공식 데이터 소스에서 동적으로 수집합니다.
+    assert BEA_CORE_PCE_TABLE == "T20804"
+    assert BLS_NFP_SERIES == "CES0000000001"
+    assert BLS_UNEMPLOYMENT_SERIES == "LNS14000000"
 
 
 def test_trend_calculation_logic():
@@ -101,7 +134,7 @@ def test_build_summary_for_gemini():
             "wti_oil": {"price_str": "$71.47", "change_str": "-0.28%", "trend_badge": "▼ 완만한 하락 (-0.8%)"},
             "us10y_yield": {"price_str": "3.73%", "change_str": "-0.02%p", "trend_badge": "▼ 완만한 하락 (-0.05%p)"},
         },
-        "fundamentals": US_ECONOMIC_INDICATORS,
+        "fundamentals": MOCK_FUNDAMENTALS,
     }
 
     summary_text = svc.build_summary_for_gemini(mock_macro_data)
@@ -131,17 +164,17 @@ def test_build_kakao_macro_lines():
             "wti_oil": {"price": 71.47},
             "us10y_yield": {"price": 3.73},
         },
-        "fundamentals": US_ECONOMIC_INDICATORS,
+        "fundamentals": MOCK_FUNDAMENTALS,
     }
 
     lines = svc.build_kakao_macro_lines(mock_macro_data)
     full_text = "\n".join(lines)
-    assert "글로벌 10대 지표 & 최근 트렌드" in full_text
+    assert "글로벌 주요 지표 & 최근 트렌드" in full_text
     assert "S&P" in full_text
     assert "코스피" in full_text
     assert "환율" in full_text
     assert "PCE" in full_text
-    assert "고용" in full_text
+    assert "NFP" in full_text
 
 
 def test_html_generator_renders_macro_dashboard(tmp_path):
@@ -160,7 +193,7 @@ def test_html_generator_renders_macro_dashboard(tmp_path):
             "wti_oil": {"name": "WTI 국제유가", "symbol": "CL=F", "price_str": "$71.47", "change_pct": 0.50, "change_str": "+0.50%", "trend": "UP", "trend_badge": "▲ 상승 추세"},
             "us10y_yield": {"name": "미국 10년물 국채금리", "symbol": "^TNX", "price_str": "3.73%", "change_pct": -0.02, "change_str": "-0.02%p", "trend": "DOWN", "trend_badge": "▼ 하락 추세"},
         },
-        "fundamentals": US_ECONOMIC_INDICATORS,
+        "fundamentals": MOCK_FUNDAMENTALS,
     }
 
     report_data = {
@@ -194,7 +227,7 @@ def test_html_generator_renders_macro_dashboard(tmp_path):
 def test_daily_report_service_kakao_text_includes_macro():
     """DailyReportService의 _build_kakao_summary_text가 매크로 라인을 정상 포함하는지 검증"""
     cfg = AppConfig()
-    service = DailyReportService(cfg)
+    service = DailyReportService(cfg, repo=Mock())
 
     mock_macro_data = {
         "raw_items": {
@@ -205,7 +238,7 @@ def test_daily_report_service_kakao_text_includes_macro():
             "wti_oil": {"price": 71.47},
             "us10y_yield": {"price": 3.73},
         },
-        "fundamentals": US_ECONOMIC_INDICATORS,
+        "fundamentals": MOCK_FUNDAMENTALS,
     }
 
     text = service._build_kakao_summary_text(
@@ -218,7 +251,7 @@ def test_daily_report_service_kakao_text_includes_macro():
         macro_data=mock_macro_data,
     )
 
-    assert "글로벌 10대 지표 & 최근 트렌드" in text
+    assert "글로벌 주요 지표 & 최근 트렌드" in text
     assert "S&P" in text
     assert "코스피" in text
     assert "환율" in text
@@ -228,7 +261,7 @@ def test_daily_report_service_kakao_text_includes_macro():
 def test_kakao_summary_with_all_registered_stocks_and_accounts():
     """전체 등록 종목 목록 및 다중 계좌 현황이 카카오톡 메시지에 완벽히 반영되는지 검증"""
     cfg = AppConfig()
-    service = DailyReportService(cfg)
+    service = DailyReportService(cfg, repo=Mock())
 
     positions = [
         {"name": "RISE TDF2040액티브", "shares": 100, "current_price": 12850, "pl_pct": 3.5, "current_weight": 0.55, "target_weight": 0.60},
@@ -273,7 +306,7 @@ def test_kakao_summary_with_all_registered_stocks_and_accounts():
     assert "TIGER 미국나스닥TOP10" in text
     assert "미보유" in text
 
-    # 3. 전체 추천 종목 포함
-    assert "🎯 이번 주기 추천 매수 (2종목):" in text
-    assert "+5주" in text
-    assert "+10주" in text
+    # 3. 현재 Kakao 요약은 엔진의 주문 수량을 재표시하지 않고
+    # 매수주기 가이드와 상세 리포트 링크를 제공합니다.
+    assert "정기 매수 검토 기준일까지 D-3" in text
+    assert "https://test.pages.dev/report.html" in text

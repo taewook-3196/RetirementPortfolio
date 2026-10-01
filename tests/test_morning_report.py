@@ -192,6 +192,7 @@ def test_kakao_service_without_token():
     assert "Access Token이 비어있습니다" in msg
 
 
+@pytest.mark.legacy_desktop
 def test_daily_report_service_generation(monkeypatch):
     """DailyReportService 오케스트레이터의 HTML 생성 및 카카오 발송 흐름 검증"""
     init_db()
@@ -217,6 +218,7 @@ def test_daily_report_service_generation(monkeypatch):
     assert "성공적" in msg
 
 
+@pytest.mark.legacy_desktop
 def test_daily_report_service_updates_prices_before_generation(monkeypatch):
     """리포트 생성 시작 시 update_market_prices 호출 여부 검증"""
     init_db()
@@ -377,12 +379,12 @@ def test_report_html_generator_multi_account_ai_briefing(tmp_path):
     assert "기본 계좌 (퇴직연금)" in content
     assert "공격형 위탁 계좌" in content
     assert "D-3" in content
-    assert "이번 주기 매수 완료" in content
+    assert "현재 계산상 추가 사용 가능한 매수 범위가 없습니다." in content
     assert "KODEX 200" in content
     assert "10주" in content
     assert "400,000원" in content
-    assert "안정형 포트폴리오: KODEX 200 비중 확대를 추천합니다." in content
-    assert "이번 주기 매수가 이미 완료되었습니다." in content
+    assert "매수 가능 상한이며 실제 매수 지시가 아닙니다." in content
+    assert "현재 추가 범위 없음" in content
 
 
 def test_investment_stance_html_and_kakao_rendering():
@@ -416,7 +418,7 @@ def test_investment_stance_html_and_kakao_rendering():
     assert "단기 조정은 매수 기회입니다." in html_content
 
     # 2. 카카오톡 요약 텍스트 검증
-    service = DailyReportService()
+    service = DailyReportService(repo=MagicMock())
     kakao_text = service._build_kakao_summary_text(
         account_name="테스트 계좌",
         summary={"total_eval": 10000000, "total_pl": 1000000, "total_pl_pct": 11.1},
@@ -424,6 +426,4 @@ def test_investment_stance_html_and_kakao_rendering():
         news_items=[],
         gemini_analysis=gemini_data,
     )
-    assert "• 🤖 AI 시황 [🚀 공격적]: 단기 조정은 매수 기회입니다." in kakao_text
-
-
+    assert "• AI 요약 [🚀 공격적]: 단기 조정은 매수 기회입니다." in kakao_text

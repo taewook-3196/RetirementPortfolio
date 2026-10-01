@@ -7,6 +7,9 @@ Phase 5~9 GUI 검증 테스트 (pytest-qt 활용):
 """
 
 import pytest
+pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+pytestmark = pytest.mark.legacy_gui
+
 from PySide6.QtWidgets import QApplication
 from core.config import get_default_config
 from database.connection import init_db
@@ -355,7 +358,6 @@ def test_settings_page_investment_stance_slider(app_window):
     settings.slider_investment_stance.setValue(3)
     assert "공격적" in settings.lbl_stance_title.text()
     assert settings.config.morning_report.ai_investment_stance == "aggressive"
-
 
 
 

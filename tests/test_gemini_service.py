@@ -204,7 +204,7 @@ def test_auto_fallback_on_404_model_not_found():
     with patch("urllib.request.urlopen", side_effect=mock_urlopen):
         res = service.generate_macro_investment_guide({"account_name": "폴백 테스트"})
         assert res["success"] is True
-        assert res["model_used"] == "gemini-3.6-flash"
+        assert res["model_used"] == "gemini-3.7-flash"
         assert call_count >= 2
 
 
@@ -247,7 +247,7 @@ def test_auto_fallback_on_503_high_demand():
     with patch("urllib.request.urlopen", side_effect=mock_urlopen):
         res = service.generate_macro_investment_guide({"account_name": "503 폴백 테스트"})
         assert res["success"] is True
-        assert res["model_used"] == "gemini-3.6-flash"
+        assert res["model_used"] == "gemini-3.7-flash"
         assert call_count >= 2
 
 
@@ -256,7 +256,7 @@ def test_graceful_fallback_when_api_unconfigured():
     service = GeminiService(api_key="")
     res = service.generate_macro_investment_guide({})
     assert res["success"] is False
-    assert res["one_line_summary"] == ""
+    assert res["one_line_summary"]
     assert "stance_badge" in res
 
 
@@ -289,4 +289,3 @@ def test_investment_stance_profiles_and_prompt_injection():
     # 4. 잘못된 성향 전달 시 기본값(balanced) 자동 보정
     service_invalid = GeminiService(api_key="test", investment_stance="invalid_xyz")
     assert service_invalid.investment_stance == "balanced"
-

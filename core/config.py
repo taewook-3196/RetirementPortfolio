@@ -6,6 +6,7 @@ config.yaml 설정 파일을 로드하고 유효성을 검증하며, GUI 및 전
 from __future__ import annotations
 import os
 import yaml
+from urllib.parse import urlparse
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any
 from pathlib import Path
@@ -14,6 +15,22 @@ from core.paths import get_config_path
 
 # .env 환경변수 자동 로드
 load_dotenv()
+
+
+DEFAULT_WEB_APP_URL = "https://retirementportfolio.onrender.com/"
+
+
+def get_web_app_url() -> str:
+    """보고서와 웹 deep link가 공유하는 공개 웹앱 URL을 반환합니다."""
+    value = os.getenv(
+        "RETIREMENT_PORTFOLIO_WEB_URL",
+        DEFAULT_WEB_APP_URL,
+    ).strip()
+    value = value or DEFAULT_WEB_APP_URL
+    parsed = urlparse(value)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        value = DEFAULT_WEB_APP_URL
+    return value.rstrip("/") + "/"
 
 
 @dataclass

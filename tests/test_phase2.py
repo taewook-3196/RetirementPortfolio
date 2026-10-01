@@ -7,6 +7,8 @@ Phase 2 검증 테스트:
 """
 
 import pytest
+pytestmark = pytest.mark.legacy_desktop
+
 from datetime import datetime
 from data.mock_provider import MockDataProvider
 from data.price_updater import update_market_prices
