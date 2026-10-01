@@ -1804,14 +1804,22 @@ class DailyReportService:
                     or "KRW"
                 )
 
-                formatted_eval = self._format_money(
-                    a.get("total_eval", 0),
-                    currency,
+                formatted_total_assets = (
+                    self._format_money(
+                        a.get(
+                            "total_assets",
+                            a.get(
+                                "total_eval",
+                                0,
+                            ),
+                        ),
+                        currency,
+                    )
                 )
 
                 acc_strs.append(
                     f"{a['name']} "
-                    f"{formatted_eval}"
+                    f"{formatted_total_assets}"
                     f"({s_sign}"
                     f"{a['total_pl_pct']:.1f}%)"
                 )
