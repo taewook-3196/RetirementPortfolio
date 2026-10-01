@@ -250,13 +250,17 @@ class DailyReportService:
 
                     # 실제 현금잔고
                     #
-                    # initial_capital은 투자 설정값이므로
-                    # 현재 현금에 포함하지 않습니다.
+                    # 초기투자금
+                    # + 추가입금
+                    # - 출금
+                    # - 매수대금
+                    # + 매도대금
+                    # + 배당금
                     acc_cash = (
                         self.portfolio_service
                         .get_cash_balance(
                             account_id=acc.id,
-                            include_initial_capital=False,
+                            include_initial_capital=True,
                         )
                     )
 
