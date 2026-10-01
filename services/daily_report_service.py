@@ -1013,13 +1013,179 @@ class DailyReportService:
                 }
                 
 
-            # 포트폴리오 요약 데이터 딕셔너리화
+            # ---------------------------------------------------------
+            # 전체 포트폴리오 요약
+            #
+            # 모든 계좌의
+            # 주식 평가액 + 실제 예수금을
+            # KRW로 환산하여 전체 총자산을 계산합니다.
+            # ---------------------------------------------------------
+
+            total_assets_krw = 0.0
+            total_stock_eval_krw = 0.0
+            total_cash_krw = 0.0
+            total_cost_krw = 0.0
+            total_pl_krw = 0.0
+
+
+            for account_group in account_groups:
+
+                account_currency = str(
+                    account_group.get(
+                        "currency",
+                        "KRW",
+                    )
+                    or "KRW"
+                ).strip().upper()
+
+
+                stock_eval = float(
+                    account_group.get(
+                        "total_eval",
+                        0.0,
+                    )
+                    or 0.0
+                )
+
+
+                cash_balance = float(
+                    account_group.get(
+                        "cash_balance",
+                        0.0,
+                    )
+                    or 0.0
+                )
+
+
+                total_cost = float(
+                    account_group.get(
+                        "total_cost",
+                        0.0,
+                    )
+                    or 0.0
+                )
+
+
+                total_pl = float(
+                    account_group.get(
+                        "total_pl",
+                        0.0,
+                    )
+                    or 0.0
+                )
+
+
+                stock_eval_krw = (
+                    self.portfolio_service
+                    .convert_amount(
+                        value=stock_eval,
+                        from_currency=(
+                            account_currency
+                        ),
+                        to_currency="KRW",
+                    )
+                )
+
+
+                cash_krw = (
+                    self.portfolio_service
+                    .convert_amount(
+                        value=cash_balance,
+                        from_currency=(
+                            account_currency
+                        ),
+                        to_currency="KRW",
+                    )
+                )
+
+
+                cost_krw = (
+                    self.portfolio_service
+                    .convert_amount(
+                        value=total_cost,
+                        from_currency=(
+                            account_currency
+                        ),
+                        to_currency="KRW",
+                    )
+                )
+
+
+                pl_krw = (
+                    self.portfolio_service
+                    .convert_amount(
+                        value=total_pl,
+                        from_currency=(
+                            account_currency
+                        ),
+                        to_currency="KRW",
+                    )
+                )
+
+
+                total_stock_eval_krw += (
+                    stock_eval_krw
+                )
+
+
+                total_cash_krw += (
+                    cash_krw
+                )
+
+
+                total_cost_krw += (
+                    cost_krw
+                )
+
+
+                total_pl_krw += (
+                    pl_krw
+                )
+
+
+            total_assets_krw = (
+                total_stock_eval_krw
+                + total_cash_krw
+            )
+
+
+            if total_cost_krw > 0:
+
+                total_pl_pct = (
+                    total_pl_krw
+                    / total_cost_krw
+                    * 100.0
+                )
+
+            else:
+
+                total_pl_pct = 0.0
+
+
             summary = {
-                "total_eval": getattr(summary_raw, "total_current_value", 0),
-                "total_cost": getattr(summary_raw, "total_invested", 0),
-                "total_pl": getattr(summary_raw, "total_pnl", getattr(summary_raw, "total_unrealized_pnl", 0)),
-                "total_pl_pct": getattr(summary_raw, "total_roi", 0.0) * 100.0,
-                "cash_balance": getattr(summary_raw, "remaining_cash", 0),
+                # 전체 총자산:
+                # 주식 평가액 + 예수금
+                "total_eval":
+                    total_assets_krw,
+
+                # 전체 주식 평가액
+                "stock_eval":
+                    total_stock_eval_krw,
+
+                # 전체 예수금
+                "cash_balance":
+                    total_cash_krw,
+
+                # 전체 매수원가
+                "total_cost":
+                    total_cost_krw,
+
+                # 전체 평가손익
+                "total_pl":
+                    total_pl_krw,
+
+                "total_pl_pct":
+                    total_pl_pct,
             }
 
             # 1-1. 전체 등록 종목 맵 구성
