@@ -159,7 +159,7 @@ class PortfolioService:
     def get_cash_balance(
         self,
         account_id: int,
-        include_initial_capital: bool = False,
+        include_initial_capital: bool = True,
     ) -> float:
         """
         특정 계좌의 실제 현금 잔고를 계산합니다.
@@ -179,11 +179,16 @@ class PortfolioService:
 
         모든 금액은 계좌 기준통화로 환산합니다.
 
-        include_initial_capital=False가 기본값입니다.
+        initial_capital은 계좌의 실제 시작 자금으로
+        현금 계산에 포함합니다.
 
-        현재 initial_capital은 계좌에 따라
-        실제 입금액과 투자 설정값의 의미가 섞여 있으므로,
-        명시적으로 요청하지 않는 한 현금으로 간주하지 않습니다.
+        이후 입금과 출금은 cash_flows,
+        매수와 매도는 transactions,
+        배당은 dividends를 반영합니다.
+
+        include_initial_capital=False는
+        초기자금을 제외한 현금 변동만 별도로
+        계산해야 하는 경우에 사용할 수 있습니다.
         """
 
         account = (
