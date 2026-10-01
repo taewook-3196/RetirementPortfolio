@@ -7,6 +7,10 @@ NewsTickerBanner 위젯 단위 테스트.
 """
 
 import pytest
+pytest.importorskip("PySide6.QtCore", exc_type=ImportError)
+pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+pytestmark = pytest.mark.legacy_gui
+
 from PySide6.QtCore import Qt
 from ui.widgets.news_ticker_banner import NewsTickerBanner
 

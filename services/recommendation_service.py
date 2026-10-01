@@ -213,6 +213,7 @@ class RecommendationService:
 
         # 기본값
         account_currency = "KRW"
+        available_cash: Optional[float] = None
 
         # ---------------------------------------------------------
         # 1. 계좌별 투자 예산
@@ -251,6 +252,16 @@ class RecommendationService:
                 max_additional_monthly = float(
                     account.max_additional_monthly
                     or 0
+                )
+
+                # 추천 예산의 최종 상한은 투자원금 잔여액이
+                # 아니라 이 계좌의 실제 현금잔고입니다.
+                # get_cash_balance()는 계좌 기준통화로 반환합니다.
+                available_cash = (
+                    self.portfolio_service
+                    .get_cash_balance(
+                        account_id=account.id
+                    )
                 )
 
                 cycle_type = (
@@ -732,6 +743,7 @@ class RecommendationService:
                 already_invested_in_cycle=False,
                 cycle_desc=cycle_desc,
                 currency=account_currency,
+                available_cash=available_cash,
             )
         )
 

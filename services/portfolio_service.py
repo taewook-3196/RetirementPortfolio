@@ -12,6 +12,7 @@ services/portfolio_service.py
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Dict, List, Optional
 
 from core.config import AppConfig, ETFConfig, load_config
@@ -734,19 +735,29 @@ class PortfolioService:
                 else None
             )
 
-            return calculate_portfolio_summary(
+            summary = calculate_portfolio_summary(
                 current_positions,
                 initial_capital=initial_capital,
                 base_currency=base_currency,
                 usd_krw_rate=usd_krw_rate,
             )
 
-            return calculate_portfolio_summary(
-                current_positions,
-                initial_capital=initial_capital,
-                base_currency=base_currency,
-                usd_krw_rate=usd_krw_rate,
-            )
+            # 실제 계좌의 현금은 투자 예산에서 현재 보유분의
+            # 매수원가를 뺀 값이 아니라 모든 현금 변동을 반영한
+            # get_cash_balance()의 결과를 사용합니다. 계산 결과를
+            # 직접 변경하지 않고 새 요약을 만들어 두 개념을
+            # 명시적으로 분리합니다.
+            if account:
+                summary = replace(
+                    summary,
+                    remaining_cash=(
+                        self.get_cash_balance(
+                            account_id=account.id,
+                        )
+                    ),
+                )
+
+            return summary
 
         # -----------------------------------------------------
         # 2. 전체 포트폴리오
@@ -896,10 +907,13 @@ class PortfolioService:
                 )
             )
 
+            # remaining_cash는 추천용 투자 한도가 아니라 실제
+            # 계좌 현금이므로 기준 함수의 결과를 KRW로 환산합니다.
             total_remaining_cash += (
                 to_krw(
-                    account_summary
-                    .remaining_cash
+                    self.get_cash_balance(
+                        account_id=account.id,
+                    )
                 )
             )
 

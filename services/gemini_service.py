@@ -170,6 +170,27 @@ class GeminiService:
         """Gemini API 키가 정상적으로 설정되어 있는지 확인"""
         return bool(self.api_key and len(self.api_key) > 5)
 
+    def build_fallback_response(
+        self,
+        reason: str = "AI 분석을 사용할 수 없음",
+    ) -> Dict[str, Any]:
+        """AI 장애가 보고서 생성을 막지 않도록 안전한 대체 응답을 만듭니다."""
+        stance_info = INVESTMENT_STANCE_PROFILES.get(
+            self.investment_stance,
+            INVESTMENT_STANCE_PROFILES["balanced"],
+        )
+        return {
+            "success": False,
+            "error": reason,
+            "model_used": self.model,
+            "investment_stance": self.investment_stance,
+            "stance_badge": stance_info["badge"],
+            "stance_label": stance_info["label"],
+            "one_line_summary": "AI 분석을 사용할 수 없어 검증된 계좌·시장 데이터만 표시합니다.",
+            "macro_analysis": "AI 시장 분석을 일시적으로 제공할 수 없습니다.",
+            "strategy_advice": "시스템이 계산한 기존 매수추천과 현금 한도를 확인해 주세요.",
+        }
+
     def fetch_macro_context(self) -> Dict[str, Any]:
         """실시간 거시경제(USD/KRW 환율 등) 보조 지표 수집"""
         context = {
@@ -228,17 +249,7 @@ class GeminiService:
         stance_info = INVESTMENT_STANCE_PROFILES.get(self.investment_stance, INVESTMENT_STANCE_PROFILES["balanced"])
         if not self.is_configured():
             logger.info("Gemini API 키가 설정되지 않아 AI 매크로 가이드를 생성하지 않습니다.")
-            return {
-                "success": False,
-                "error": "Gemini API 키 미설정",
-                "model_used": self.model,
-                "investment_stance": self.investment_stance,
-                "stance_badge": stance_info["badge"],
-                "stance_label": stance_info["label"],
-                "one_line_summary": "",
-                "macro_analysis": "",
-                "strategy_advice": "",
-            }
+            return self.build_fallback_response("Gemini API 키 미설정")
 
         # 1. 10대 매크로 지표 및 트렌드 요약, 환율 확인
         macro_summary = report_context.get("macro_summary", "")
@@ -273,31 +284,52 @@ class GeminiService:
         )
 
         # 3. Gemini API 호출 (자동 폴백 포함 및 구조화 JSON 모드 활성화)
-        success, used_model, raw_response = self._call_gemini_api(
-            prompt=prompt,
-            model=self.model,
-            api_key=self.api_key,
-            allow_fallback=True,
-            json_mode=True,
-        )
+        try:
+            success, used_model, raw_response = self._call_gemini_api(
+                prompt=prompt,
+                model=self.model,
+                api_key=self.api_key,
+                allow_fallback=True,
+                json_mode=True,
+            )
+        except Exception as exc:
+            logger.warning("Gemini API 호출 중 예외가 발생했습니다: %s", type(exc).__name__)
+            return self.build_fallback_response("Gemini API 호출 예외")
 
         if not success:
-            logger.warning(f"Gemini API 호출 실패: {raw_response}")
-            return {
-                "success": False,
-                "error": raw_response,
-                "model_used": used_model,
-                "investment_stance": self.investment_stance,
-                "stance_badge": stance_info["badge"],
-                "stance_label": stance_info["label"],
-                "one_line_summary": "",
-                "macro_analysis": "",
-                "strategy_advice": stance_info.get("fallback_advice", ""),
-                "usd_krw": usd_krw,
-            }
+            logger.warning(
+                "Gemini API 호출 실패 (model=%s)",
+                used_model,
+            )
+            fallback = self.build_fallback_response("Gemini API 호출 실패")
+            fallback["model_used"] = used_model
+            fallback["usd_krw"] = usd_krw
+            return fallback
+
+        if (
+            not str(raw_response or "").strip()
+            or "{" not in raw_response
+            or "macro_analysis" not in raw_response
+        ):
+            return self.build_fallback_response("Gemini 응답 형식 오류")
 
         # 4. JSON 파싱
         parsed = self._parse_json_response(raw_response)
+
+        try:
+            structured_response = json.loads(raw_response.strip())
+        except (TypeError, ValueError, json.JSONDecodeError):
+            structured_response = {}
+
+        if not any(
+            str(parsed.get(key, "") or "").strip()
+            for key in (
+                "one_line_summary",
+                "macro_analysis",
+                "strategy_advice",
+            )
+        ):
+            return self.build_fallback_response("Gemini 빈 응답")
 
         action = str(
             parsed.get(
@@ -328,6 +360,12 @@ class GeminiService:
             "one_line_summary": parsed.get("one_line_summary", "").strip(),
             "macro_analysis": parsed.get("macro_analysis", "").strip(),
             "strategy_advice": parsed.get("strategy_advice", "").strip(),
+            "portfolio_status": str(
+                structured_response.get("portfolio_status", "") or ""
+            ).strip(),
+            "risk_checks": str(
+                structured_response.get("risk_checks", "") or ""
+            ).strip(),
             "usd_krw": usd_krw,
             "raw_text": raw_response,
         }
@@ -1104,8 +1142,37 @@ class GeminiService:
         else:
 
             macro_block = (
-                "매크로 지표 집계 중"
+                "데이터 없음"
             )
+
+        # 서비스 계층에서 계산·수집한 사실 데이터를 그대로 전달합니다.
+        # AI는 이 JSON의 숫자를 재계산하거나 임의 보완하지 않아야 합니다.
+        verified_input = {
+            "market": {
+                "macro_summary": macro_summary or "데이터 없음",
+                "usd_krw": usd_krw or "데이터 없음",
+                "market_indices": ctx.get("market_indices") or {},
+            },
+            "portfolio_summary": summary,
+            "accounts": account_groups,
+            "positions": positions,
+            "recommendations": {
+                "overall": recommendations,
+                "by_account": account_recommendations,
+            },
+            "recent_transactions": ctx.get("recent_transactions") or [],
+            "news": news_items,
+            "watchlist": ctx.get("watchlist") or [],
+            "investment_preference_text": (
+                investment_preference_text or "데이터 없음"
+            ),
+        }
+        verified_input_json = json.dumps(
+            verified_input,
+            ensure_ascii=False,
+            default=str,
+            indent=2,
+        )
 
         # -------------------------------------------------
         # 프롬프트
@@ -1116,6 +1183,13 @@ class GeminiService:
 
 오늘의 시장 데이터, 실제 포트폴리오 상태, 사용자가 직접 설정한 투자 원칙,
 그리고 각 계좌에 저장된 자금 운용 규칙을 구분하여 분석하세요.
+
+[검증된 구조화 입력 데이터]
+{verified_input_json}
+
+위 JSON의 금액, 수량, 가격, 비중, 손익 및 추천금액은 기존 서비스가 계산한
+확정 입력입니다. 이 숫자를 다시 계산하거나 수정하지 말고 그대로 인용하세요.
+없는 값은 추측하지 말고 반드시 '데이터 없음'으로 표현하세요.
 
 절대로 '월 기본 매수 한도'를 '매달 새로 입금되는 돈'으로 해석하지 마세요.
 
@@ -1194,11 +1268,16 @@ class GeminiService:
 31. WAIT(대기)는 현재 사용할 수 있는 매수 가능 범위가 있지만 시장·금리·밸류에이션 등의 이유로 지금은 사용하지 않고, 상황 변화에 따라 가까운 시점에도 다시 판단할 필요가 있는 경우에 사용한다.
 32. HOLD(기존 계획 유지)는 현재 자산배분과 투자 계획을 변경할 특별한 필요성이 낮아 별도 행동 없이 기존 계획을 유지하는 경우에 사용한다. HOLD 역시 정기 검토 기준일까지 아무것도 하지 말라는 의미는 아니다.
 33. WAIT와 HOLD를 구분할 때 단순히 정기 검토 기준일까지 남은 일수를 기준으로 판단하지 않는다. 현재 매수 가능 범위의 존재, 목표 비중과 실제 비중의 차이, 시장 가격과 밸류에이션, 금리 및 경기 환경, 사용자의 장기 투자 원칙을 종합해서 판단한다.
+34. 제공되지 않은 가격, 수익률, 보유수량, 경제지표 또는 뉴스 사실을 만들지 않는다.
+35. 실제 입력 데이터와 AI의 해석을 문장에서 명확히 구분한다.
+36. 미래 수익률을 확정적으로 예측하거나 매수·매도 결정을 강요하지 않는다.
+37. 시스템 추천금액은 RecommendationService의 결과이므로 새 주문금액을 계산하거나 현금 상한을 우회하지 않는다.
+38. 투자성향과 자유 입력 투자 원칙은 설명 관점과 위험관리 참고사항에만 사용하고 실제 숫자를 변경하지 않는다.
 
 [작성 지침]
 차분하고 신뢰감 있는 금융 분석 문체를 사용하세요.
 
-반드시 아래 네 필드를 포함하는 유효한 JSON 하나만 출력하세요.
+반드시 아래 여섯 필드를 포함하는 유효한 JSON 하나만 출력하세요.
 
 - "action":
   오늘 또는 이번 매수 주기의 최종 행동 판단입니다.
@@ -1233,8 +1312,8 @@ class GeminiService:
 
   행동은 매수, 일부 분할매수, 추가매수, 대기, 기존 계획 유지 중에서 선택할 수 있습니다.
 
-  매수를 제시한다면 시스템의 사용 가능 예산을 초과하지 말고,
-  가능한 경우 실제 매수할 금액 또는 수량을 명확히 제시하세요.
+  매수를 언급하더라도 시스템이 제공한 추천금액만 인용하고,
+  별도의 금액이나 수량을 새로 계산해 제안하지 마세요.
 
   대기를 제시한다면 사용 가능한 예산이 있더라도
   왜 현재 시점에서는 사용하지 않는지가 드러나도록 설명하세요.
@@ -1257,6 +1336,14 @@ class GeminiService:
   특정 날짜까지 아무 행동도 하지 말라는 의미가 아닙니다.
 
   strategy_advice의 실제 행동 내용은 반드시 action 필드와 일치해야 합니다.
+
+- "portfolio_status":
+  내 포트폴리오 상태를 1~3문장으로 설명하세요. 제공된 보유수량, 매수원가,
+  평가액, 실제 현금, 손익, 현재비중과 목표비중만 사용하세요.
+
+- "risk_checks":
+  주요 위험요인과 오늘 확인할 사항을 1~3문장으로 설명하세요.
+  데이터가 부족한 부분은 불확실하거나 데이터 없음이라고 명시하세요.
   
 one_line_summary, macro_analysis, strategy_advice에는
 BUY, PARTIAL, WAIT, HOLD 같은 내부 action 코드명을 직접 표시하지 마세요.
@@ -1273,7 +1360,9 @@ JSON 앞뒤에 설명이나 Markdown 코드블록을 붙이지 마세요.
   "action": "BUY | PARTIAL | WAIT | HOLD 중 하나",
   "one_line_summary": "...",
   "macro_analysis": "...",
-  "strategy_advice": "..."
+  "portfolio_status": "...",
+  "strategy_advice": "...",
+  "risk_checks": "..."
 }}
 """
 

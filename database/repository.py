@@ -13,8 +13,10 @@ PostgreSQL/Supabase 데이터베이스 접근 및 CRUD 함수를 제공합니다
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+import math
 from typing import Any, Dict, List, Optional, Tuple
+from uuid import UUID
 
 from core.config import ETFConfig, load_config
 from database.connection import get_db_session, init_db
@@ -36,7 +38,99 @@ from database.models import (
 class Repository:
     def __init__(self, user_id: Optional[str] = None):
         init_db()
-        self.user_id = user_id
+        try:
+            self.user_id = UUID(user_id) if isinstance(user_id, str) else user_id
+        except ValueError:
+            # 일부 로컬 도구/테스트는 UUID가 아닌 식별자를 사용합니다.
+            # Supabase에서 검증된 실제 user_id는 항상 UUID입니다.
+            self.user_id = user_id
+
+    @staticmethod
+    def _parse_input_date(value, field_name: str) -> date:
+        """API와 직접 호출 모두에서 동일한 날짜 형식을 검증합니다."""
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+
+        try:
+            return datetime.strptime(
+                str(value).strip().replace("-", ""),
+                "%Y%m%d",
+            ).date()
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{field_name}은 YYYY-MM-DD 형식이어야 합니다."
+            ) from exc
+
+    @staticmethod
+    def _positive_number(value, field_name: str) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{field_name}은 숫자여야 합니다."
+            ) from exc
+        if not math.isfinite(number) or number <= 0:
+            raise ValueError(
+                f"{field_name}은 0보다 커야 합니다."
+            )
+        return number
+
+    @staticmethod
+    def _non_negative_number(value, field_name: str) -> float:
+        try:
+            number = float(value or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{field_name}은 숫자여야 합니다."
+            ) from exc
+        if not math.isfinite(number) or number < 0:
+            raise ValueError(
+                f"{field_name}은 0 이상이어야 합니다."
+            )
+        return number
+
+    @staticmethod
+    def _ensure_sell_quantity(
+        transactions,
+        *,
+        ticker: str,
+        transaction_type: str,
+        quantity: float,
+        transaction_date: date,
+        exclude_transaction_id: Optional[int] = None,
+        transaction_order: int = 10**30,
+    ) -> None:
+        """거래 반영 후 어느 시점에도 보유수량이 음수가 되지 않게 합니다."""
+        ledger = [
+            (
+                row.transaction_date,
+                int(row.id or 0),
+                str(row.transaction_type).upper(),
+                float(row.quantity or 0),
+            )
+            for row in transactions
+            if (
+                str(row.ticker).strip().upper() == ticker
+                and row.id != exclude_transaction_id
+            )
+        ]
+        ledger.append(
+            (
+                transaction_date,
+                transaction_order,
+                transaction_type,
+                quantity,
+            )
+        )
+        balance = 0.0
+        for _, _, row_type, row_quantity in sorted(ledger):
+            balance += row_quantity if row_type == "BUY" else -row_quantity
+            if balance < -1e-9:
+                raise ValueError(
+                    "보유수량보다 많은 수량을 매도할 수 없습니다."
+                )
 
     # -------------------------------------------------------------
     # 가격 데이터 (Price) 관리
@@ -761,7 +855,7 @@ class Repository:
         """
         현재 사용자의 계좌를 삭제합니다.
     
-        transactions, dividends, account_targets는
+        transactions, cash_flows, dividends, account_targets는
         DB의 ON DELETE CASCADE에 의해 함께 삭제됩니다.
     
         삭제한 계좌가 기본 계좌였다면
@@ -807,6 +901,7 @@ class Repository:
             #
             # DB Foreign Key의 ON DELETE CASCADE에 의해
             # transactions
+            # cash_flows
             # dividends
             # account_targets
             # 도 함께 삭제됩니다.
@@ -946,14 +1041,14 @@ class Repository:
                 "DEPOSIT 또는 WITHDRAWAL이어야 합니다."
             )
 
-        clean_amount = float(
-            amount or 0
+        clean_amount = self._positive_number(
+            amount,
+            "입출금 금액",
         )
-
-        if clean_amount <= 0:
-            raise ValueError(
-                "입출금 금액은 0보다 커야 합니다."
-            )
+        clean_flow_date = self._parse_input_date(
+            flow_date,
+            "입출금 날짜",
+        )
 
         clean_currency = (
             str(
@@ -988,9 +1083,17 @@ class Repository:
                     "계좌를 찾을 수 없습니다."
                 )
 
+            account_currency = str(
+                account.currency or "KRW"
+            ).strip().upper()
+            if clean_currency != account_currency:
+                raise ValueError(
+                    "입출금 통화는 계좌 통화와 같아야 합니다."
+                )
+
             cash_flow = CashFlow(
                 account_id=clean_account_id,
-                flow_date=flow_date,
+                flow_date=clean_flow_date,
                 flow_type=clean_flow_type,
                 amount=clean_amount,
                 currency=clean_currency,
@@ -1048,14 +1151,14 @@ class Repository:
                 "DEPOSIT 또는 WITHDRAWAL이어야 합니다."
             )
 
-        clean_amount = float(
-            amount or 0
+        clean_amount = self._positive_number(
+            amount,
+            "입출금 금액",
         )
-
-        if clean_amount <= 0:
-            raise ValueError(
-                "입출금 금액은 0보다 커야 합니다."
-            )
+        clean_flow_date = self._parse_input_date(
+            flow_date,
+            "입출금 날짜",
+        )
 
         clean_currency = (
             str(
@@ -1093,8 +1196,27 @@ class Repository:
             if cash_flow is None:
                 return False
 
+            account = (
+                session.query(Account)
+                .filter(
+                    Account.id == cash_flow.account_id,
+                    Account.user_id == self.user_id,
+                )
+                .first()
+            )
+            if account is None:
+                return False
+
+            account_currency = str(
+                account.currency or "KRW"
+            ).strip().upper()
+            if clean_currency != account_currency:
+                raise ValueError(
+                    "입출금 통화는 계좌 통화와 같아야 합니다."
+                )
+
             cash_flow.flow_date = (
-                flow_date
+                clean_flow_date
             )
 
             cash_flow.flow_type = (
@@ -1402,52 +1524,6 @@ class Repository:
             )
 
             account.is_default = True
-
-            return True
-
-    def delete_account(
-        self,
-        account_id: int,
-    ) -> bool:
-        """현재 사용자의 계좌를 삭제합니다."""
-        if not self.user_id:
-            return False
-
-        with get_db_session() as session:
-            account = (
-                session.query(Account)
-                .filter(
-                    Account.id == account_id,
-                    Account.user_id == self.user_id,
-                )
-                .first()
-            )
-
-            if not account:
-                return False
-
-            was_default = bool(
-                account.is_default
-            )
-
-            session.delete(account)
-            session.flush()
-
-            if was_default:
-                remaining = (
-                    session.query(Account)
-                    .filter(
-                        Account.user_id
-                        == self.user_id
-                    )
-                    .order_by(
-                        Account.id.asc()
-                    )
-                    .first()
-                )
-
-                if remaining:
-                    remaining.is_default = True
 
             return True
 
@@ -1891,9 +1967,9 @@ class Repository:
                 "거래를 저장하려면 user_id가 필요합니다."
             )
 
-        clean_ticker = str(
-            ticker
-        ).strip()
+        clean_ticker = str(ticker or "").strip().upper()
+        if not clean_ticker:
+            raise ValueError("종목코드를 입력해야 합니다.")
 
         tx_type = str(
             transaction_type
@@ -1907,31 +1983,11 @@ class Repository:
                 "거래 유형은 BUY 또는 SELL이어야 합니다."
             )
 
-        clean_quantity = float(
-            quantity
-        )
-
-        if clean_quantity <= 0:
-            raise ValueError(
-                "거래 수량은 0보다 커야 합니다."
-            )
-
-        clean_price = float(
-            price
-        )
-
-        if clean_price < 0:
-            raise ValueError(
-                "거래 가격은 0 이상이어야 합니다."
-            )
-
-        tx_date = datetime.strptime(
-            str(transaction_date).replace(
-                "-",
-                "",
-            ),
-            "%Y%m%d",
-        ).date()
+        clean_quantity = self._positive_number(quantity, "거래 수량")
+        clean_price = self._positive_number(price, "거래 가격")
+        clean_fee = self._non_negative_number(fee, "수수료")
+        clean_tax = self._non_negative_number(tax, "세금")
+        tx_date = self._parse_input_date(transaction_date, "거래 날짜")
 
         with get_db_session() as session:
             if account_id is None:
@@ -1979,6 +2035,19 @@ class Repository:
                     "거래를 저장할 계좌를 찾을 수 없습니다."
                 )
 
+            existing_transactions = (
+                session.query(Transaction)
+                .filter(Transaction.account_id == account.id)
+                .all()
+            )
+            self._ensure_sell_quantity(
+                existing_transactions,
+                ticker=clean_ticker,
+                transaction_type=tx_type,
+                quantity=clean_quantity,
+                transaction_date=tx_date,
+            )
+
             asset = (
                 session.query(AssetMaster)
                 .filter(
@@ -2001,8 +2070,8 @@ class Repository:
                 transaction_type=tx_type,
                 quantity=clean_quantity,
                 price=clean_price,
-                fee=float(fee or 0),
-                tax=float(tax or 0),
+                fee=clean_fee,
+                tax=clean_tax,
                 memo=str(
                     memo or ""
                 ).strip(),
@@ -2423,9 +2492,9 @@ class Repository:
         if not self.user_id:
             return False
 
-        clean_ticker = str(
-            ticker
-        ).strip()
+        clean_ticker = str(ticker or "").strip().upper()
+        if not clean_ticker:
+            raise ValueError("종목코드를 입력해야 합니다.")
 
         tx_type = str(
             transaction_type
@@ -2439,31 +2508,11 @@ class Repository:
                 "거래 유형은 BUY 또는 SELL이어야 합니다."
             )
 
-        clean_quantity = float(
-            quantity
-        )
-
-        if clean_quantity <= 0:
-            raise ValueError(
-                "거래 수량은 0보다 커야 합니다."
-            )
-
-        clean_price = float(
-            price
-        )
-
-        if clean_price < 0:
-            raise ValueError(
-                "거래 가격은 0 이상이어야 합니다."
-            )
-
-        tx_date = datetime.strptime(
-            str(transaction_date).replace(
-                "-",
-                "",
-            ),
-            "%Y%m%d",
-        ).date()
+        clean_quantity = self._positive_number(quantity, "거래 수량")
+        clean_price = self._positive_number(price, "거래 가격")
+        clean_fee = self._non_negative_number(fee, "수수료")
+        clean_tax = self._non_negative_number(tax, "세금")
+        tx_date = self._parse_input_date(transaction_date, "거래 날짜")
 
         with get_db_session() as session:
             transaction = (
@@ -2519,6 +2568,24 @@ class Repository:
                     new_account.id
                 )
 
+            existing_transactions = (
+                session.query(Transaction)
+                .filter(
+                    Transaction.account_id
+                    == transaction.account_id
+                )
+                .all()
+            )
+            self._ensure_sell_quantity(
+                existing_transactions,
+                ticker=clean_ticker,
+                transaction_type=tx_type,
+                quantity=clean_quantity,
+                transaction_date=tx_date,
+                exclude_transaction_id=tx_id,
+                transaction_order=tx_id,
+            )
+
             transaction.transaction_date = (
                 tx_date
             )
@@ -2539,13 +2606,8 @@ class Repository:
                 clean_price
             )
 
-            transaction.fee = float(
-                fee or 0
-            )
-
-            transaction.tax = float(
-                tax or 0
-            )
+            transaction.fee = clean_fee
+            transaction.tax = clean_tax
 
             transaction.memo = str(
                 memo or ""

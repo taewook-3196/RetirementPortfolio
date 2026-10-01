@@ -8,6 +8,8 @@ Phase 1 검증 테스트:
 """
 
 import pytest
+pytestmark = pytest.mark.legacy_desktop
+
 import shutil
 from pathlib import Path
 from core.paths import get_project_root, ensure_directories

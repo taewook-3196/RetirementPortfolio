@@ -8,6 +8,8 @@ Phase 3 검증 테스트:
 """
 
 import pytest
+pytestmark = pytest.mark.legacy_desktop
+
 from strategy.drawdown import (
     calculate_drawdown,
     calculate_drawdown_score,
