@@ -1947,8 +1947,20 @@ class ReportHtmlGenerator:
                     ag_id = ag.get("account_id", idx)
                     ag_name = ag.get("account_name", f"계좌 {idx}")
                     ag_broker = ag.get("broker", "")
-                    ag_eval = ag.get("total_eval", 0.0)
-                    ag_cost = ag.get("total_cost", 0.0)
+                    ag_eval = ag.get(
+                        "total_eval",
+                        0.0,
+                    )
+
+                    ag_total_assets = ag.get(
+                        "total_assets",
+                        ag_eval,
+                    )
+
+                    ag_cost = ag.get(
+                        "total_cost",
+                        0.0,
+                    )
                     ag_pl = ag.get("total_pl", 0.0)
                     ag_pl_pct = ag.get("total_pl_pct", 0.0)
                     ag_cash = ag.get("cash_balance", 0.0)
@@ -1992,14 +2004,17 @@ class ReportHtmlGenerator:
                                 {broker_badge}
                             </div>
                             <div class="account-group-kpi">
-                                <span class="account-eval-amount">{self._format_money(ag_eval, ag_currency)}</span>
+                                <span style="font-size: 10px; color: var(--text-dim);">총자산</span>
+                                <span class="account-eval-amount">{self._format_money(ag_total_assets, ag_currency)}</span>
                                 <span class="badge {ag_badge_cls}">{ag_sign}{ag_pl_pct:.2f}%</span>
                             </div>
                         </div>
                         <div class="account-sub-meta">
-                            <span>원금 {self._format_money(ag_cost, ag_currency)}</span>
+                            <span>주식평가액 {self._format_money(ag_eval, ag_currency)}</span>
                             <span>•</span>
                             <span>예수금 {self._format_money(ag_cash, ag_currency)}</span>
+                            <span>•</span>
+                            <span>매수원가 {self._format_money(ag_cost, ag_currency)}</span>
                             <span>•</span>
                             <span>종목 {len(ag_pos)}개</span>
                         </div>
@@ -2056,8 +2071,20 @@ class ReportHtmlGenerator:
                 ag_id = ag.get("account_id")
                 ag_name = ag.get("account_name", "기본 계좌")
                 ag_broker = ag.get("broker", "")
-                ag_eval = ag.get("total_eval", 0.0)
-                ag_cost = ag.get("total_cost", 0.0)
+                ag_eval = ag.get(
+                    "total_eval",
+                    0.0,
+                )
+
+                ag_total_assets = ag.get(
+                    "total_assets",
+                    ag_eval,
+                )
+
+                ag_cost = ag.get(
+                    "total_cost",
+                    0.0,
+                )
                 ag_pl = ag.get("total_pl", 0.0)
                 ag_pl_pct = ag.get("total_pl_pct", 0.0)
                 ag_cash = ag.get("cash_balance", 0.0)
@@ -2097,15 +2124,18 @@ class ReportHtmlGenerator:
                                 {broker_badge}
                             </div>
                             <div class="account-group-kpi">
-                                <span class="account-eval-amount">{self._format_money(ag_eval, ag_currency)}</span>
+                                <span style="font-size: 10px; color: var(--text-dim);">총자산</span>
+                                <span class="account-eval-amount">{self._format_money(ag_total_assets, ag_currency)}</span>
                                 <span class="badge {ag_badge_cls}">{ag_sign}{ag_pl_pct:.2f}%</span>
                             </div>
                         </div>
                         <div class="account-sub-meta">
-                            <span>원금 {self._format_money(ag_cost, ag_currency)}</span>
+                            <span>주식평가액 {self._format_money(ag_eval, ag_currency)}</span>
                             <span>•</span>
-                            <span>예수금 {self._format_money(ag_cash, ag_currency)}</span>                        </div>
-                        <div>
+                            <span>예수금 {self._format_money(ag_cash, ag_currency)}</span>
+                            <span>•</span>
+                            <span>매수원가 {self._format_money(ag_cost, ag_currency)}</span>
+                        </div>
                             {items_html}
                         </div>
                     </div>
