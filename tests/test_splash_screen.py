@@ -7,6 +7,10 @@ GoldenPigSplashScreen 단위 테스트.
 """
 
 import pytest
+pytest.importorskip("PySide6.QtCore", exc_type=ImportError)
+pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+pytestmark = pytest.mark.legacy_gui
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 from ui.widgets.splash_screen import GoldenPigSplashScreen
@@ -86,4 +90,3 @@ def test_splash_screen_option_in_settings(qtbot, tmp_path):
     page.refresh()
     assert page.combo_splash.currentIndex() == 1
     assert page.combo_splash.currentData() is False
-

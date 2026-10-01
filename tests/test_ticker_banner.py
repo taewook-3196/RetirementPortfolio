@@ -7,6 +7,10 @@ tests/test_ticker_banner.py
 """
 
 import pytest
+pytest.importorskip("PySide6.QtCore", exc_type=ImportError)
+pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+pytestmark = pytest.mark.legacy_gui
+
 from PySide6.QtCore import Qt
 from ui.widgets.ticker_banner import TickerBanner
 from core.paths import get_project_root

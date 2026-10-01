@@ -7,13 +7,17 @@ services/report_html_generator.py
 """
 
 from __future__ import annotations
+import html
+import json
 import re
 import logging
 import datetime
+import os
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from urllib.parse import urlencode, urlparse
 from core.paths import get_report_dir
-from core.config import MorningReportConfig
+from core.config import MorningReportConfig, get_web_app_url
 
 logger = logging.getLogger("RetirementPortfolio.ReportHtmlGenerator")
 
@@ -78,6 +82,11 @@ class ReportHtmlGenerator:
         date_str = now.strftime("%Y-%m-%d")
         time_str = now.strftime("%H:%M")
         weekday_kr = ["월", "화", "수", "목", "금", "토", "일"][now.weekday()]
+        build_id = (
+            os.getenv("REPORT_BUILD_ID", "").strip()
+            or os.getenv("GITHUB_SHA", "").strip()[:12]
+            or f"local-{now.strftime('%Y%m%d%H%M')}"
+        )
 
         if not output_filename:
             output_filename = f"morning_report_{now.strftime('%Y%m%d')}.html"
@@ -93,16 +102,32 @@ class ReportHtmlGenerator:
         market_indices = report_data.get("market_indices", {})
         macro_indicators = report_data.get("macro_indicators", {})
         account_name = report_data.get("account_name", "전체 계좌 통합")
+        web_app_url = str(
+            report_data.get("portfolio_management_url")
+            or get_web_app_url()
+        ).strip()
+        parsed_web_app_url = urlparse(web_app_url)
+        if (
+            parsed_web_app_url.scheme not in ("http", "https")
+            or not parsed_web_app_url.netloc
+        ):
+            web_app_url = get_web_app_url()
+        web_app_url = web_app_url.rstrip("/") + "/"
 
         # 섹션별 HTML 조각 생성
         account_summaries = report_data.get("account_summaries", [])
         account_groups = report_data.get("account_groups", [])
         account_recommendations = report_data.get("account_recommendations", [])
         gemini_analysis = report_data.get("gemini_analysis", {})
-        gemini_html = self._render_gemini_section(gemini_analysis) if gemini_analysis and gemini_analysis.get("success") else ""
+        gemini_html = self._render_gemini_section(gemini_analysis) if gemini_analysis else ""
         summary_html = self._render_summary_section(summary, account_summaries) if self.config.include_summary else ""
         ai_briefing_html = self._render_ai_briefing_section(recommendations, summary, account_recommendations=account_recommendations) if self.config.include_ai_briefing else ""
-        positions_html = self._render_positions_section(positions, account_groups=account_groups) if self.config.include_positions else ""
+        positions_html = self._render_positions_section(
+            positions,
+            account_groups=account_groups,
+            web_app_url=web_app_url,
+        ) if self.config.include_positions else ""
+        chart_assets_html = self._render_chart_assets(positions, account_groups)
         news_html = self._render_news_section(news_items) if self.config.include_news else ""
         
         # 10대 글로벌 매크로 지표 대시보드 (또는 기존 시장지수 fallback)
@@ -122,6 +147,7 @@ class ReportHtmlGenerator:
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
+    <meta name="report-build" content="{html.escape(build_id, quote=True)}">
     <title>모닝 포트폴리오 리포트 | {date_str}</title>
     <style>
         :root {{
@@ -935,6 +961,72 @@ class ReportHtmlGenerator:
         .footer p {{
             margin-bottom: 4px;
         }}
+
+        .report-chart-toggle {{
+            width: 100%;
+            min-height: 44px;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: inherit;
+            text-align: left;
+            cursor: pointer;
+        }}
+        .report-chart-panel {{
+            display: none;
+            margin-top: 12px;
+            padding: 12px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            background: rgba(2, 6, 23, 0.72);
+            overflow: hidden;
+        }}
+        .report-chart-panel.open {{ display: block; }}
+        .report-chart-periods {{
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 5px;
+            margin-bottom: 10px;
+        }}
+        .report-chart-period {{
+            min-height: 44px;
+            padding: 6px 2px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            background: var(--bg-card-sub);
+            color: var(--text-muted);
+            font-size: 11px;
+        }}
+        .report-chart-period.active {{
+            border-color: var(--accent-primary);
+            color: #fff;
+            background: rgba(99, 102, 241, 0.3);
+        }}
+        .report-chart-svg {{ width: 100%; height: auto; display: block; touch-action: pan-y; }}
+        .report-chart-status {{ min-height: 20px; color: var(--text-muted); font-size: 11px; }}
+        .report-chart-actions {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 11px;
+        }}
+        .report-chart-detail-link,
+        .management-link {{
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 700;
+        }}
+        .report-chart-detail-link {{ padding: 0 12px; color: #c7d2fe; border: 1px solid var(--border-accent); }}
+        .report-chart-hint {{ display: block; margin-top: 2px; color: var(--text-dim); font-size: 10px; font-weight: 500; }}
+        .management-card {{ text-align: center; }}
+        .management-card p {{ color: var(--text-muted); font-size: 12px; line-height: 1.6; }}
+        .management-link {{ width: 100%; background: var(--accent-primary); color: #fff; }}
     </style>
 </head>
 <body>
@@ -957,10 +1049,24 @@ class ReportHtmlGenerator:
         {positions_html}
         {news_html}
 
+        <section class="card management-card">
+            <div class="card-header">
+                <div class="card-title-group">
+                    <span class="card-icon">⚙️</span>
+                    <h2 class="card-title">계좌 · 거래 관리</h2>
+                </div>
+            </div>
+            <p>계좌·거래·입출금·투자설정을 확인하고 관리할 수 있습니다.</p>
+            <a class="management-link" href="{html.escape(web_app_url, quote=True)}">계좌 · 거래 관리 열기</a>
+        </section>
+
+        {chart_assets_html}
+
         <!-- 푸터 -->
         <footer class="footer">
             <p>퇴직연금 & 자산배분 스마트 포트폴리오 매니저</p>
             <p style="font-size: 11px; color: #475569;">본 리포트는 개인 자산관리 참고용이며 투자 권유가 아닙니다.</p>
+            <p style="font-size: 10px; color: #334155;">빌드 {html.escape(build_id)}</p>
         </footer>
     </div>
 </body>
@@ -985,11 +1091,18 @@ class ReportHtmlGenerator:
         account_summaries: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """자산 총괄 KPI 카드 렌더링"""
-        total_eval = summary.get("total_eval", 0)
+        total_assets = summary.get(
+            "total_assets",
+            summary.get("total_eval", 0),
+        )
+        cash_balance = summary.get("cash_balance", 0)
+        stock_eval = summary.get(
+            "stock_eval",
+            total_assets - cash_balance,
+        )
         total_cost = summary.get("total_cost", 0)
         total_pl = summary.get("total_pl", 0)
         total_pl_pct = summary.get("total_pl_pct", 0.0)
-        cash_balance = summary.get("cash_balance", 0)
 
         pl_class = "pl-plus" if total_pl > 0 else ("pl-minus" if total_pl < 0 else "pl-zero")
         pl_sign = "+" if total_pl > 0 else ""
@@ -1073,15 +1186,19 @@ class ReportHtmlGenerator:
             </div>
 
             <div class="kpi-main">
-                <div class="kpi-label">총 평가자산</div>
-                <div class="kpi-value-huge">{total_eval:,.0f}원</div>
+                <div class="kpi-label">총자산</div>
+                <div class="kpi-value-huge">{total_assets:,.0f}원</div>
                 <div class="kpi-pl-group">
-                    <span class="kpi-label">평가손익:</span>
+                    <span class="kpi-label">총손익:</span>
                     <span class="{pl_class}">{pl_sign}{total_pl:,.0f}원 ({pl_sign}{total_pl_pct:.2f}%)</span>
                 </div>
             </div>
 
             <div class="kpi-grid">
+                <div class="kpi-sub-item">
+                    <div class="kpi-sub-label">주식평가액</div>
+                    <div class="kpi-sub-val">{stock_eval:,.0f}원</div>
+                </div>
                 <div class="kpi-sub-item">
                     <div class="kpi-sub-label">주식 매수원가</div>
                     <div class="kpi-sub-val">{total_cost:,.0f}원</div>
@@ -1932,6 +2049,7 @@ class ReportHtmlGenerator:
         self,
         positions: List[Dict[str, Any]],
         account_groups: Optional[List[Dict[str, Any]]] = None,
+        web_app_url: Optional[str] = None,
     ) -> str:
         """등록 및 보유 종목별 세부 현황 렌더링 (계좌별 분리 렌더링 및 모바일 탭 인터랙션 지원)"""
         # 1. 계좌별 그룹 데이터가 있는 경우
@@ -1989,6 +2107,7 @@ class ReportHtmlGenerator:
                     items_html = self._render_position_rows(
                         ag_pos,
                         account_id=ag_id,
+                        web_app_url=web_app_url,
                     )                    
                     if not items_html:
                         items_html = """
@@ -2108,6 +2227,7 @@ class ReportHtmlGenerator:
                 items_html = self._render_position_rows(
                     ag_pos,
                     account_id=ag_id,
+                    web_app_url=web_app_url,
                 )
 
                 return f"""
@@ -2149,7 +2269,10 @@ class ReportHtmlGenerator:
         if not positions:
             return ""
 
-        rows_html = self._render_position_rows(positions)
+        rows_html = self._render_position_rows(
+            positions,
+            web_app_url=web_app_url,
+        )
         return f"""
         <section class="card">
             <div class="card-header">
@@ -2167,12 +2290,11 @@ class ReportHtmlGenerator:
         self,
         positions: List[Dict[str, Any]],
         account_id: Optional[int] = None,
+        web_app_url: Optional[str] = None,
     ) -> str:
         """종목 리스트 HTML 행 렌더링 헬퍼"""
 
-        web_app_url = (
-            "https://retirementportfolio.onrender.com/"
-        )
+        web_app_url = (web_app_url or get_web_app_url()).rstrip("/") + "/"
 
         rows_html = ""
 
@@ -2242,37 +2364,24 @@ class ReportHtmlGenerator:
                 account_id is not None
                 and ticker
             ):
-                chart_url = (
-                    web_app_url
-                    + "?account="
-                    + str(account_id)
-                    + "&ticker="
-                    + str(ticker)
-                )
-
-                name_html = (
-                    f'<a href="{chart_url}" '
-                    f'target="_blank" '
-                    f'class="pos-name" '
-                    f'style="text-decoration: none;">'
-                    f'{name} '
-                    f'<span style="font-size: 11px; '
-                    f'color: var(--text-dim); '
-                    f'font-weight: normal;">'
-                    f'({ticker})</span>'
-                    f'</a>'
-                )
+                chart_url = web_app_url + "?" + urlencode({
+                    "account": account_id,
+                    "ticker": ticker,
+                })
 
             else:
-                name_html = (
-                    f'<span class="pos-name">'
-                    f'{name} '
-                    f'<span style="font-size: 11px; '
-                    f'color: var(--text-dim); '
-                    f'font-weight: normal;">'
-                    f'({ticker})</span>'
-                    f'</span>'
-                )
+                chart_url = web_app_url
+
+            safe_name = html.escape(str(name))
+            safe_ticker = html.escape(str(ticker))
+            chart_key = f"{account_id}:{ticker}" if account_id is not None else f"none:{ticker}"
+            safe_chart_key = html.escape(chart_key, quote=True)
+            name_html = (
+                f'<span class="pos-name">{safe_name} '
+                f'<span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">'
+                f'({safe_ticker})</span>'
+                f'<span class="report-chart-hint">차트 보기 ▾</span></span>'
+            )
 
             if shares > 0:
                 detail_html = f"""
@@ -2284,13 +2393,14 @@ class ReportHtmlGenerator:
             else:
                 detail_html = f"""
                 <div class="pos-details">
-                    <span style="color: var(--text-dim);">미보유 (현재가: {self._format_money(current_price, currency)})</span>                    <span style="color: var(--text-dim);">미보유 (현재가: {current_price:,.0f}원)</span>
+                    <span style="color: var(--text-dim);">미보유 (현재가: {self._format_money(current_price, currency)})</span>
                     <span style="color: #94a3b8; font-size: 11px;">신규 편입 대기</span>
                 </div>
                 """
 
             rows_html += f"""
-            <div class="pos-item">
+            <div class="pos-item" data-chart-key="{safe_chart_key}">
+                <button class="report-chart-toggle" type="button" aria-expanded="false" aria-label="{safe_name} 차트 펼치기" onclick="toggleReportChart(this)">
                 <div class="pos-header">
                     {name_html}
                     <span class="pos-eval">{self._format_money(eval_amount, currency)}</span>
@@ -2303,10 +2413,168 @@ class ReportHtmlGenerator:
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill" style="width: {progress_width:.1f}%;"></div>
                 </div>
+                </button>
+                <div class="report-chart-panel" aria-hidden="true">
+                    <div class="report-chart-periods" role="group" aria-label="차트 기간">
+                        {''.join(f'<button class="report-chart-period{' active' if period == '3M' else ''}" type="button" data-period="{period}">{period}</button>' for period in ('1M', '3M', '6M', '1Y', 'ALL'))}
+                    </div>
+                    <div class="report-chart-status">종목 행을 눌러 차트를 확인하세요.</div>
+                    <svg class="report-chart-svg" viewBox="0 0 640 260" role="img" aria-label="{safe_name} 가격 차트"></svg>
+                    <div class="report-chart-actions">
+                        <span><b style="color:#f87171">BUY ▲</b> · <b style="color:#60a5fa">SELL ▼</b></span>
+                        <a class="report-chart-detail-link" href="{html.escape(chart_url, quote=True)}" target="_blank" rel="noopener">웹앱 상세보기</a>
+                    </div>
+                </div>
             </div>
             """
 
         return rows_html
+
+    def _render_chart_assets(
+        self,
+        positions: List[Dict[str, Any]],
+        account_groups: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
+        """인증정보 없는 정적 차트 payload와 모바일 차트 스크립트."""
+        payload: Dict[str, Dict[str, Any]] = {}
+
+        if account_groups:
+            sources = [
+                (group.get("account_id"), position)
+                for group in account_groups
+                for position in (group.get("positions", []) or [])
+            ]
+        else:
+            sources = [
+                (position.get("account_id"), position)
+                for position in positions
+            ]
+
+        for account_id, position in sources:
+            ticker = str(position.get("ticker", "")).strip().upper()
+            if not ticker:
+                continue
+            chart_data = position.get("chart_data", {}) or {}
+            payload[f"{account_id if account_id is not None else 'none'}:{ticker}"] = {
+                "prices": chart_data.get("prices", []) or [],
+                "transactions": chart_data.get("transactions", []) or [],
+            }
+
+        payload_json = json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+
+        return f"""
+        <script id="report-chart-data" type="application/json">{payload_json}</script>
+        <script>
+        (function () {{
+            var node = document.getElementById('report-chart-data');
+            var charts = {{}};
+            try {{ charts = JSON.parse(node ? node.textContent : '{{}}'); }} catch (error) {{ charts = {{}}; }}
+
+            function svgEl(name, attrs) {{
+                var el = document.createElementNS('http://www.w3.org/2000/svg', name);
+                Object.keys(attrs || {{}}).forEach(function (key) {{ el.setAttribute(key, attrs[key]); }});
+                return el;
+            }}
+
+            function filteredPrices(prices, period) {{
+                if (!prices.length || period === 'ALL') return prices;
+                var days = {{'1M': 31, '3M': 93, '6M': 186, '1Y': 366}}[period] || 93;
+                var latest = new Date(prices[prices.length - 1].date + 'T00:00:00');
+                var cutoff = new Date(latest.getTime() - days * 86400000);
+                return prices.filter(function (item) {{
+                    return new Date(item.date + 'T00:00:00') >= cutoff;
+                }});
+            }}
+
+            function drawChart(item, period) {{
+                var key = item.getAttribute('data-chart-key');
+                var data = charts[key] || {{prices: [], transactions: []}};
+                var prices = filteredPrices(data.prices || [], period);
+                var svg = item.querySelector('.report-chart-svg');
+                var status = item.querySelector('.report-chart-status');
+                while (svg.firstChild) svg.removeChild(svg.firstChild);
+                if (!prices.length) {{
+                    status.textContent = '표시할 가격 데이터가 없습니다. 웹앱 상세보기를 이용해주세요.';
+                    return;
+                }}
+
+                var width = 640, height = 260, left = 42, right = 12, top = 16, bottom = 34;
+                var closes = prices.map(function (p) {{ return Number(p.close) || 0; }});
+                var lows = prices.map(function (p) {{ return Number(p.low || p.close) || 0; }});
+                var highs = prices.map(function (p) {{ return Number(p.high || p.close) || 0; }});
+                var min = Math.min.apply(null, lows), max = Math.max.apply(null, highs);
+                if (max <= min) {{ max = min + 1; }}
+                function x(index) {{ return left + index * (width - left - right) / Math.max(1, prices.length - 1); }}
+                function y(value) {{ return top + (max - value) * (height - top - bottom) / (max - min); }}
+
+                var points = prices.map(function (p, index) {{ return x(index) + ',' + y(closes[index]); }}).join(' ');
+                svg.appendChild(svgEl('polyline', {{points: points, fill: 'none', stroke: '#818cf8', 'stroke-width': '3', 'stroke-linejoin': 'round'}}));
+
+                var dateIndex = {{}};
+                prices.forEach(function (p, index) {{ dateIndex[p.date] = index; }});
+                (data.transactions || []).forEach(function (tx) {{
+                    if (dateIndex[tx.date] === undefined) return;
+                    var index = dateIndex[tx.date], isBuy = tx.type === 'BUY';
+                    var marker = svgEl('text', {{
+                        x: x(index), y: y(Number(tx.price) || closes[index]) + (isBuy ? 18 : -8),
+                        'text-anchor': 'middle', fill: isBuy ? '#f87171' : '#60a5fa',
+                        'font-size': '15', 'font-weight': '800'
+                    }});
+                    marker.textContent = isBuy ? '▲' : '▼';
+                    svg.appendChild(marker);
+                }});
+
+                var guide = svgEl('line', {{y1: top, y2: height - bottom, stroke: '#64748b', 'stroke-dasharray': '4 4', visibility: 'hidden'}});
+                svg.appendChild(guide);
+                var hit = svgEl('rect', {{x: left, y: top, width: width-left-right, height: height-top-bottom, fill: 'transparent'}});
+                function inspect(event) {{
+                    var rect = svg.getBoundingClientRect();
+                    var clientX = event.touches && event.touches[0] ? event.touches[0].clientX : event.clientX;
+                    var local = (clientX - rect.left) * width / rect.width;
+                    var index = Math.max(0, Math.min(prices.length - 1, Math.round((local-left) * Math.max(1, prices.length-1) / (width-left-right))));
+                    guide.setAttribute('x1', x(index)); guide.setAttribute('x2', x(index)); guide.setAttribute('visibility', 'visible');
+                    status.textContent = prices[index].date + ' · 종가 ' + Number(prices[index].close).toLocaleString();
+                }}
+                hit.addEventListener('mousemove', inspect);
+                hit.addEventListener('touchstart', inspect, {{passive: true}});
+                hit.addEventListener('touchmove', inspect, {{passive: true}});
+                svg.appendChild(hit);
+                status.textContent = prices[0].date + ' ~ ' + prices[prices.length - 1].date + ' · ' + prices.length + '개 시점';
+            }}
+
+            window.toggleReportChart = function (button) {{
+                var item = button.closest('.pos-item');
+                var panel = item.querySelector('.report-chart-panel');
+                var opening = !panel.classList.contains('open');
+                document.querySelectorAll('.report-chart-panel.open').forEach(function (openPanel) {{
+                    if (openPanel !== panel) {{
+                        openPanel.classList.remove('open');
+                        openPanel.setAttribute('aria-hidden', 'true');
+                        var otherButton = openPanel.parentNode.querySelector('.report-chart-toggle');
+                        if (otherButton) otherButton.setAttribute('aria-expanded', 'false');
+                    }}
+                }});
+                panel.classList.toggle('open', opening);
+                panel.setAttribute('aria-hidden', opening ? 'false' : 'true');
+                button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+                if (opening) drawChart(item, '3M');
+            }};
+
+            document.querySelectorAll('.report-chart-period').forEach(function (button) {{
+                button.addEventListener('click', function () {{
+                    var item = button.closest('.pos-item');
+                    item.querySelectorAll('.report-chart-period').forEach(function (sibling) {{ sibling.classList.remove('active'); }});
+                    button.classList.add('active');
+                    drawChart(item, button.getAttribute('data-period'));
+                }});
+            }});
+        }})();
+        </script>
+        """
 
     def _render_news_section(self, news_items: List[Dict[str, Any]]) -> str:
         """관심/보유 종목 맞춤 뉴스 브리핑 렌더링"""
@@ -2500,8 +2768,28 @@ class ReportHtmlGenerator:
 
     def _render_gemini_section(self, gemini_analysis: Dict[str, Any]) -> str:
         """Google Gemini AI 매크로 투자 가이드 섹션 렌더링"""
-        if not gemini_analysis or not gemini_analysis.get("success"):
+        if not gemini_analysis:
             return ""
+
+        if not gemini_analysis.get("success"):
+            fallback_text = self._clean_display_text(
+                gemini_analysis.get(
+                    "one_line_summary",
+                    "AI 분석을 일시적으로 사용할 수 없습니다.",
+                )
+            )
+            return f"""
+            <section class="card">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <span class="card-icon">🤖</span>
+                        <h2 class="card-title">AI 투자분석</h2>
+                    </div>
+                    <span class="badge badge-info">일시적 대체 안내</span>
+                </div>
+                <p style="color: var(--text-dim);">{fallback_text}</p>
+            </section>
+            """
 
         model_name = gemini_analysis.get("model_used", "gemini-3.8-flash")
         model_display = model_name.upper().replace("-", " ")
@@ -2517,6 +2805,14 @@ class ReportHtmlGenerator:
 
         strategy_text = self._clean_display_text(
             gemini_analysis.get("strategy_advice", "")
+        ).replace("\n", "<br>")
+
+        portfolio_text = self._clean_display_text(
+            gemini_analysis.get("portfolio_status", "")
+        ).replace("\n", "<br>")
+
+        risk_text = self._clean_display_text(
+            gemini_analysis.get("risk_checks", "")
         ).replace("\n", "<br>")
 
         usd_krw = str(
@@ -2666,7 +2962,7 @@ class ReportHtmlGenerator:
 
             <div class="gemini-block">
                 <div class="gemini-block-title">
-                    <span>🌍 글로벌 매크로 & 시황 분석</span>
+                    <span>🌍 오늘 시장 핵심 요약</span>
                     {usd_tag_html}
                 </div>
 
@@ -2675,13 +2971,31 @@ class ReportHtmlGenerator:
                 </div>
             </div>
 
+            <div class="gemini-block">
+                <div class="gemini-block-title">
+                    <span>📊 내 포트폴리오 상태</span>
+                </div>
+                <div class="gemini-block-content">
+                    {portfolio_text or '제공된 포트폴리오 데이터를 확인해 주세요.'}
+                </div>
+            </div>
+
             <div class="gemini-block" style="margin-bottom: 0;">
                 <div class="gemini-block-title" style="color: #c084fc;">
-                    <span>🎯 포트폴리오 맞춤 투자 전략</span>
+                    <span>🎯 현재 매수전략 관련 참고사항</span>
                 </div>
 
                 <div class="gemini-block-content">
                     {strategy_text}
+                </div>
+            </div>
+
+            <div class="gemini-block" style="margin-bottom: 0;">
+                <div class="gemini-block-title">
+                    <span>⚠️ 주요 위험요인/확인할 사항</span>
+                </div>
+                <div class="gemini-block-content">
+                    {risk_text or '추가로 확인된 위험 데이터가 없습니다.'}
                 </div>
             </div>
         </section>
