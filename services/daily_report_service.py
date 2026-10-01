@@ -214,11 +214,65 @@ class DailyReportService:
                 try:
                     acc_pos_raw = self.portfolio_service.get_positions(account_id=acc.id)
                     acc_sum = self.portfolio_service.get_summary(acc_pos_raw, account_id=acc.id)
-                    acc_eval = getattr(acc_sum, "total_current_value", 0.0)
-                    acc_cost = getattr(acc_sum, "total_invested", 0.0)
-                    acc_pl = getattr(acc_sum, "total_pnl", getattr(acc_sum, "total_unrealized_pnl", 0.0))
-                    acc_pl_pct = getattr(acc_sum, "total_roi", 0.0) * 100.0
-                    acc_cash = getattr(acc_sum, "remaining_cash", 0.0)
+                    # 주식 평가액
+                    acc_eval = getattr(
+                        acc_sum,
+                        "total_current_value",
+                        0.0,
+                    )
+
+                    # 실제 매수원가
+                    acc_cost = getattr(
+                        acc_sum,
+                        "total_invested",
+                        0.0,
+                    )
+
+                    # 평가손익
+                    acc_pl = getattr(
+                        acc_sum,
+                        "total_pnl",
+                        getattr(
+                            acc_sum,
+                            "total_unrealized_pnl",
+                            0.0,
+                        ),
+                    )
+
+                    acc_pl_pct = (
+                        getattr(
+                            acc_sum,
+                            "total_roi",
+                            0.0,
+                        )
+                        * 100.0
+                    )
+
+                    # 실제 현금잔고
+                    #
+                    # initial_capital은 투자 설정값이므로
+                    # 현재 현금에 포함하지 않습니다.
+                    acc_cash = (
+                        self.portfolio_service
+                        .get_cash_balance(
+                            account_id=acc.id,
+                            include_initial_capital=False,
+                        )
+                    )
+
+                    # 계좌 총자산
+                    #
+                    # 주식 평가액 + 실제 현금잔고
+                    acc_total_assets = (
+                        float(
+                            acc_eval
+                            or 0
+                        )
+                        + float(
+                            acc_cash
+                            or 0
+                        )
+                    )
 
                     account_summaries.append({
                         "id": acc.id,
@@ -233,6 +287,8 @@ class DailyReportService:
                             or "KRW"
                         ),
                         "total_eval": acc_eval,
+                        "cash_balance": acc_cash,
+                        "total_assets": acc_total_assets,                        
                         "total_pl": acc_pl,
                         "total_pl_pct": acc_pl_pct,
                     })
@@ -469,6 +525,7 @@ class DailyReportService:
                             "25",
                         ) or "25",
                         "total_eval": acc_eval,
+                        "total_assets": acc_total_assets,
                         "total_cost": acc_cost,
                         "total_pl": acc_pl,
                         "total_pl_pct": acc_pl_pct,
