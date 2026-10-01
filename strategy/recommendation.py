@@ -454,57 +454,191 @@ def generate_recommendations(
 
     # ---------------------------------------------------------
     # 4. 기본 매수 예산 배분
+    #
+    # 기본 정기매수는 현재 비중이 목표보다 높은 종목도
+    # 무조건 제외하지 않습니다.
+    #
+    # 이번 기본매수 예산을 모두 투자한 뒤의
+    # 예상 포트폴리오 총액을 먼저 계산하고,
+    # 그 시점의 목표 평가액과 현재 평가액의 차이를
+    # 기준으로 매수 예산을 배분합니다.
+    #
+    # 예:
+    # 현재 비중이 목표보다 약간 높더라도
+    # 신규자금 투입으로 전체 포트폴리오가 커지면
+    # 해당 종목도 추가 매수가 필요할 수 있습니다.
     # ---------------------------------------------------------
 
-    eligible_base_items = [
+    projected_portfolio_value = (
+        total_portfolio_value
+        + remaining_base_budget
+    )
+
+
+    # 목표비중이 있는 종목만 기본매수 대상입니다.
+    target_items = [
         parsed
         for parsed in parsed_items
         if (
             parsed["target_weight"] > 0
-            and parsed["weight_gap"] > 0
         )
     ]
 
-    total_positive_gap = sum(
-        max(
-            0.0,
-            float(
-                parsed["weight_gap"]
-            ),
-        )
-        for parsed in eligible_base_items
-    )
+
+    total_base_need = 0.0
+
 
     for parsed in parsed_items:
 
+        parsed["base_buy"] = 0.0
+        parsed["base_target_value"] = 0.0
+        parsed["base_buy_need"] = 0.0
+
+
         if (
-            parsed["target_weight"] <= 0
-            or parsed["weight_gap"] <= 0
-            or remaining_base_budget <= 0
+            parsed["target_weight"]
+            <= 0
         ):
-            parsed["base_buy"] = 0.0
+            continue
 
-        elif total_positive_gap > 0:
 
-            ratio = (
-                parsed["weight_gap"]
-                / total_positive_gap
-            )
+        # 이번 기본매수 예산을 모두 투자한 뒤
+        # 이 종목이 가져야 할 목표 평가액
+        target_value_after_buy = (
+            projected_portfolio_value
+            * parsed["target_weight"]
+        )
 
-            parsed["base_buy"] = (
-                _round_buy_amount(
-                    remaining_base_budget
-                    * ratio
+
+        # 목표 평가액까지 필요한 신규 매수금
+        buy_need = max(
+            0.0,
+            target_value_after_buy
+            - parsed["current_asset_value"],
+        )
+
+
+        parsed[
+            "base_target_value"
+        ] = target_value_after_buy
+
+
+        parsed[
+            "base_buy_need"
+        ] = buy_need
+
+
+        total_base_need += (
+            buy_need
+        )
+
+
+    # ---------------------------------------------------------
+    # 목표 평가액까지 필요한 금액이
+    # 기본매수 예산보다 많으면 필요한 금액 비율대로
+    # 예산을 배분합니다.
+    #
+    # 일반적으로 목표비중 합계가 100%이고
+    # 현재 비목표 자산이 없다면
+    # total_base_need와 remaining_base_budget가
+    # 거의 같아집니다.
+    # ---------------------------------------------------------
+
+    if (
+        remaining_base_budget > 0
+        and total_base_need > 0
+    ):
+
+        if (
+            total_base_need
+            <= remaining_base_budget
+        ):
+
+            # 필요한 금액을 그대로 배정
+            for parsed in target_items:
+
+                parsed["base_buy"] = (
+                    _round_buy_amount(
+                        parsed[
+                            "base_buy_need"
+                        ]
+                    )
                 )
+
+
+            # 계산 오차 또는 목표비중 합계 문제로
+            # 예산이 남는 경우 목표비중에 따라
+            # 남은 금액을 추가 배분합니다.
+            allocated_base = sum(
+                parsed["base_buy"]
+                for parsed in target_items
             )
+
+
+            leftover_base = max(
+                0.0,
+                remaining_base_budget
+                - allocated_base,
+            )
+
+
+            total_target_weight = sum(
+                parsed["target_weight"]
+                for parsed in target_items
+            )
+
+
+            if (
+                leftover_base > 0
+                and total_target_weight > 0
+            ):
+
+                for parsed in target_items:
+
+                    target_ratio = (
+                        parsed["target_weight"]
+                        / total_target_weight
+                    )
+
+
+                    parsed["base_buy"] += (
+                        _round_buy_amount(
+                            leftover_base
+                            * target_ratio
+                        )
+                    )
+
 
         else:
-            parsed["base_buy"] = 0.0
+
+            # 필요한 총액이 예산보다 크면
+            # 목표 평가액 부족분 비율대로 배분
+            for parsed in target_items:
+
+                need_ratio = (
+                    parsed["base_buy_need"]
+                    / total_base_need
+                )
+
+
+                parsed["base_buy"] = (
+                    _round_buy_amount(
+                        remaining_base_budget
+                        * need_ratio
+                    )
+                )
+
+
+    # ---------------------------------------------------------
+    # 부동소수점 계산으로 기본매수 합계가
+    # 예산을 아주 조금 초과할 가능성을 방지합니다.
+    # ---------------------------------------------------------
 
     total_base_buy = sum(
         parsed["base_buy"]
         for parsed in parsed_items
     )
+
 
     if (
         total_base_buy
@@ -517,7 +651,9 @@ def generate_recommendations(
             / total_base_buy
         )
 
+
         for parsed in parsed_items:
+
             parsed["base_buy"] = (
                 _round_buy_amount(
                     parsed["base_buy"]
