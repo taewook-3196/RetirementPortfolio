@@ -1003,9 +1003,12 @@ class ReportHtmlGenerator:
                     "",
                 )
 
-                a_eval = a.get(
-                    "total_eval",
-                    0,
+                a_total_assets = a.get(
+                    "total_assets",
+                    a.get(
+                        "total_eval",
+                        0,
+                    ),
                 )
 
                 a_currency = str(
@@ -1037,9 +1040,9 @@ class ReportHtmlGenerator:
                     )
                 )
 
-                a_eval_text = (
+                a_total_assets_text = (
                     self._format_money(
-                        a_eval,
+                        a_total_assets,
                         a_currency,
                     )
                 )
@@ -1047,7 +1050,7 @@ class ReportHtmlGenerator:
                 pills += f"""
                 <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 6px 10px; font-size: 11.5px; display: flex; justify-content: space-between; align-items: center;">
                     <span style="color: #cbd5e1; font-weight: 600;">{a_name}</span>
-                    <span><strong style="color: #ffffff;">{a_eval_text}</strong> <span class="{a_cls}" style="font-weight: 700;">({a_sign}{a_pct:.1f}%)</span></span>
+                    <span><strong style="color: #ffffff;">{a_total_assets_text}</strong> <span class="{a_cls}" style="font-weight: 700;">({a_sign}{a_pct:.1f}%)</span></span>
                 </div>
                 """
                 acc_breakdown_html = f"""
@@ -1080,7 +1083,7 @@ class ReportHtmlGenerator:
 
             <div class="kpi-grid">
                 <div class="kpi-sub-item">
-                    <div class="kpi-sub-label">총 투자원금</div>
+                    <div class="kpi-sub-label">주식 매수원가</div>
                     <div class="kpi-sub-val">{total_cost:,.0f}원</div>
                 </div>
                 <div class="kpi-sub-item">
