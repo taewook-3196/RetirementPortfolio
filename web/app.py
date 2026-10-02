@@ -406,6 +406,15 @@ def kakao_callback(code: str = "", state: str = "", error: str = ""):
         refresh_token_expires_at=now + timedelta(seconds=int(token_data.get("refresh_token_expires_in", 0) or 0)),
         scopes=str(token_data.get("scope", "")),
     )
+    settings = Repository(user_id=user_id).get_user_settings()
+    if settings is not None and not settings.kakao_enabled:
+        Repository(user_id=user_id).save_user_settings(
+            morning_report_enabled=settings.morning_report_enabled,
+            morning_report_time=settings.morning_report_time.strftime("%H:%M"),
+            kakao_enabled=True,
+            news_enabled=settings.news_enabled,
+            ai_advice_enabled=settings.ai_advice_enabled,
+        )
     return RedirectResponse(url="/?kakao=connected", status_code=303)
 
 
