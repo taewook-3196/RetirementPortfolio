@@ -12,7 +12,6 @@ import json
 import logging
 import urllib.request
 import urllib.parse
-import ssl
 from typing import Dict, Any, Optional, Tuple
 from core.config import (
     AppConfig,
@@ -34,7 +33,6 @@ class KakaoService:
     def __init__(self, config: AppConfig):
         self.config = config
         self.morning_cfg: MorningReportConfig = getattr(config, "morning_report", MorningReportConfig())
-        self.ssl_context = ssl._create_unverified_context()
 
     def is_configured(self) -> bool:
         """카카오 API 키 또는 Access Token 설정 여부 확인"""
@@ -65,7 +63,7 @@ class KakaoService:
         )
 
         try:
-            with urllib.request.urlopen(req, context=self.ssl_context, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 result = json.loads(resp.read().decode("utf-8"))
                 new_access = result.get("access_token")
                 new_refresh = result.get("refresh_token")
@@ -138,7 +136,7 @@ class KakaoService:
         req = urllib.request.Request(self.SEND_MEMO_URL, data=payload, headers=headers, method="POST")
 
         try:
-            with urllib.request.urlopen(req, context=self.ssl_context, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 if resp.status == 200:
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     if resp_data.get("result_code") == 0:
