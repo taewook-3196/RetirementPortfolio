@@ -4,11 +4,18 @@ from contextlib import contextmanager
 from uuid import uuid4
 
 from sqlalchemy import create_engine, event
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import sessionmaker
 
 import database.repository as repository_module
 from database.models import InvestmentProfile, UserSetting
 from database.repository import Repository
+
+
+@compiles(ARRAY, "sqlite")
+def compile_array_as_json(type_, compiler, **kw):
+    return "JSON"
 
 
 def test_user_bootstrap_is_idempotent(monkeypatch):
