@@ -4140,7 +4140,7 @@ morningReportSettingsForm.addEventListener("submit", async (event) => {
             }),
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || "모닝 리포트 설정을 저장하지 못했습니다.");
+        if (!response.ok) {\n            const detail = Array.isArray(data.detail)\n                ? data.detail.map(item => item.msg || JSON.stringify(item)).join(" / ")\n                : data.detail;\n            throw new Error(detail || "모닝 리포트 설정을 저장하지 못했습니다.");\n        }
         morningReportSettingsMessage.textContent = "저장되었습니다.";
     } catch (error) {
         morningReportSettingsMessage.textContent = error.message || "모닝 리포트 설정을 저장하지 못했습니다.";
