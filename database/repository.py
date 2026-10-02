@@ -46,6 +46,75 @@ class Repository:
             # Supabase에서 검증된 실제 user_id는 항상 UUID입니다.
             self.user_id = user_id
 
+    def ensure_user_initialized(self) -> Dict[str, bool]:
+        """새 사용자의 공용 기본 레코드를 멱등적으로 생성합니다."""
+        if not self.user_id:
+            raise ValueError(
+                "사용자 초기화에는 user_id가 필요합니다."
+            )
+
+        created_profile = False
+        created_settings = False
+
+        with get_db_session() as session:
+            profile = (
+                session.query(InvestmentProfile)
+                .filter(
+                    InvestmentProfile.user_id
+                    == self.user_id
+                )
+                .first()
+            )
+
+            if profile is None:
+                session.add(
+                    InvestmentProfile(
+                        user_id=self.user_id,
+                        risk_profile="balanced",
+                        monthly_investment=0,
+                        preferred_markets=[],
+                        excluded_assets=[],
+                        ai_advice_enabled=True,
+                        ai_advice_style="balanced",
+                        investment_preference_text="",
+                    )
+                )
+                created_profile = True
+
+            settings = (
+                session.query(UserSetting)
+                .filter(
+                    UserSetting.user_id
+                    == self.user_id
+                )
+                .first()
+            )
+
+            if settings is None:
+                session.add(
+                    UserSetting(
+                        user_id=self.user_id,
+                        morning_report_enabled=True,
+                        morning_report_time=datetime.strptime(
+                            "07:00",
+                            "%H:%M",
+                        ).time(),
+                        kakao_enabled=False,
+                        news_enabled=True,
+                        ai_advice_enabled=True,
+                    )
+                )
+                created_settings = True
+
+            session.flush()
+
+        return {
+            "investment_profile_created":
+                created_profile,
+            "user_settings_created":
+                created_settings,
+        }
+
     @staticmethod
     def _parse_input_date(value, field_name: str) -> date:
         """API와 직접 호출 모두에서 동일한 날짜 형식을 검증합니다."""
