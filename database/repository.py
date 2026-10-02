@@ -28,6 +28,7 @@ from database.models import (
     Dividend,
     ExchangeRate,
     InvestmentProfile,
+    KakaoCredential,
     MorningReport,
     Price,
     RecommendationLog,
@@ -3714,6 +3715,53 @@ class Repository:
     # -------------------------------------------------------------
     # 사용자 설정 (UserSetting) 관리
     # -------------------------------------------------------------
+
+    def get_kakao_credential(self) -> Optional[KakaoCredential]:
+        if not self.user_id:
+            return None
+        with get_db_session() as session:
+            return session.query(KakaoCredential).filter(
+                KakaoCredential.user_id == self.user_id
+            ).first()
+
+    def save_kakao_credential(
+        self,
+        access_token_encrypted: str,
+        refresh_token_encrypted: str,
+        access_token_expires_at=None,
+        refresh_token_expires_at=None,
+        scopes: str = "",
+    ) -> KakaoCredential:
+        if not self.user_id:
+            raise ValueError("Kakao credential requires user_id")
+        with get_db_session() as session:
+            row = session.query(KakaoCredential).filter(
+                KakaoCredential.user_id == self.user_id
+            ).first()
+            if row is None:
+                row = KakaoCredential(user_id=self.user_id)
+                session.add(row)
+            row.access_token_encrypted = access_token_encrypted
+            row.refresh_token_encrypted = refresh_token_encrypted
+            row.access_token_expires_at = access_token_expires_at
+            row.refresh_token_expires_at = refresh_token_expires_at
+            row.scopes = scopes
+            row.updated_at = datetime.now()
+            session.flush()
+            session.refresh(row)
+            return row
+
+    def delete_kakao_credential(self) -> bool:
+        if not self.user_id:
+            return False
+        with get_db_session() as session:
+            row = session.query(KakaoCredential).filter(
+                KakaoCredential.user_id == self.user_id
+            ).first()
+            if row is None:
+                return False
+            session.delete(row)
+            return True
 
     @staticmethod
     def get_morning_report_user_ids() -> List[UUID]:
