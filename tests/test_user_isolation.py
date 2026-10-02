@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from datetime import date
 from uuid import uuid4
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, JSON
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import sessionmaker
@@ -23,6 +23,12 @@ from database.repository import Repository
 @compiles(ARRAY, "sqlite")
 def compile_array_as_json(type_, compiler, **kw):
     return "JSON"
+
+
+# ARRAY is PostgreSQL-specific. For these SQLite-only isolation tests, use
+# JSON bind/result processing while keeping the production model unchanged.
+InvestmentProfile.__table__.c.preferred_markets.type = JSON()
+InvestmentProfile.__table__.c.excluded_assets.type = JSON()
 
 
 def _isolated_db(monkeypatch):
