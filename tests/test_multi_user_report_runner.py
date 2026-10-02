@@ -71,7 +71,7 @@ def test_existing_report_skips_duplicate_send(monkeypatch):
                 kakao_enabled=True,
             )
         def get_morning_report_for_date(self, report_date):
-            return object()
+            return SimpleNamespace(kakao_sent_at=datetime(2026, 10, 2, 7, 5, tzinfo=SEOUL))
 
     class FakeService:
         def __init__(self, config, repo):
@@ -84,3 +84,38 @@ def test_existing_report_skips_duplicate_send(monkeypatch):
 
     assert runner.run_all_users(datetime(2026, 10, 2, 8, 0, tzinfo=SEOUL)) == 0
     assert calls == []
+
+
+def test_unsent_kakao_report_is_retried(monkeypatch):
+    user_id = uuid4()
+    calls = []
+
+    class FakeRepo:
+        def __init__(self, user_id):
+            self.user_id = user_id
+        @staticmethod
+        def get_morning_report_user_ids():
+            return [user_id]
+        def get_user_settings(self):
+            return SimpleNamespace(
+                morning_report_enabled=True,
+                morning_report_time=time(7, 0),
+                kakao_enabled=True,
+            )
+        def get_morning_report_for_date(self, report_date):
+            return SimpleNamespace(kakao_sent_at=None)
+
+    class FakeService:
+        def __init__(self, config, repo):
+            self.repo = repo
+        def generate_and_send(self, **kwargs):
+            calls.append(self.repo.user_id)
+            return True, "ok", None
+
+    monkeypatch.setattr(runner, "init_db", lambda: None)
+    monkeypatch.setattr(runner, "load_config", lambda: object())
+    monkeypatch.setattr(runner, "Repository", FakeRepo)
+    monkeypatch.setattr(runner, "DailyReportService", FakeService)
+
+    assert runner.run_all_users(datetime(2026, 10, 2, 8, 0, tzinfo=SEOUL)) == 0
+    assert calls == [user_id]
