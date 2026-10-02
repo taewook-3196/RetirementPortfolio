@@ -496,6 +496,7 @@ class MorningReport(Base):
     user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     report_date = Column(Date, nullable=False, index=True)
     html_content = Column(Text, nullable=False)
+    kakao_sent_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.now)
     updated_at = Column(DateTime(timezone=True), default=datetime.now)
 
