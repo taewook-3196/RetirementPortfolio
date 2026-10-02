@@ -3774,6 +3774,17 @@ button:disabled {
 </section>
 
 
+<section id="kakao-settings-section" class="card">
+
+<h2>카카오톡 모닝 리포트</h2>
+<p class="subtitle">
+토큰을 직접 입력할 필요 없이 카카오 계정을 한 번 연결하면 됩니다.
+</p>
+<div id="kakao-status" class="status-box">연결 상태 확인 중...</div>
+<button id="kakao-connect-button" type="button">카카오톡 연결</button>
+
+</section>
+
 <section id="investment-settings-section" class="card">
 
 <h2>투자성향 / 투자전략</h2>
@@ -3997,6 +4008,43 @@ const accountsList =
     document.getElementById(
         "accounts-list"
     );
+
+const kakaoStatus = document.getElementById("kakao-status");
+const kakaoConnectButton = document.getElementById("kakao-connect-button");
+
+async function loadKakaoStatus(accessToken) {
+    const response = await fetch("/api/kakao/status", {
+        headers: {"Authorization": "Bearer " + accessToken},
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "카카오 연결 상태를 확인하지 못했습니다.");
+    kakaoStatus.textContent = data.connected
+        ? "카카오톡 연결 완료"
+        : "카카오톡이 아직 연결되지 않았습니다.";
+    kakaoConnectButton.textContent = data.connected
+        ? "카카오톡 다시 연결"
+        : "카카오톡 연결";
+}
+
+kakaoConnectButton.addEventListener("click", async () => {
+    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    if (!accessToken) return;
+    kakaoConnectButton.disabled = true;
+    try {
+        const response = await fetch("/api/kakao/connect", {
+            headers: {"Authorization": "Bearer " + accessToken},
+        });
+        const data = await response.json();
+        if (!response.ok || !data.authorization_url) {
+            throw new Error(data.detail || "카카오 연결을 시작하지 못했습니다.");
+        }
+        window.location.assign(data.authorization_url);
+    } catch (error) {
+        kakaoStatus.textContent = error.message || "카카오 연결을 시작하지 못했습니다.";
+        kakaoStatus.className = "status-box error";
+        kakaoConnectButton.disabled = false;
+    }
+});
 
 const reportRequested =
     new URLSearchParams(window.location.search).get("view") === "report";
@@ -13279,6 +13327,13 @@ async function showAuthenticatedApp(
         accessToken
     );
 
+    try {
+        await loadKakaoStatus(accessToken);
+    } catch (error) {
+        kakaoStatus.textContent = error.message || "카카오 연결 상태를 확인하지 못했습니다.";
+        kakaoStatus.className = "status-box error";
+    }
+
 
     loginStatus.textContent =
         "로그인 완료 · "
@@ -13299,6 +13354,7 @@ async function showAuthenticatedApp(
         "flex";
 
     if (reportRequested) {
+        document.getElementById("kakao-settings-section").style.display = "none";
         document.getElementById("investment-settings-section").style.display = "none";
         document.getElementById("asset-search-section").style.display = "none";
         document.getElementById("portfolio-section").style.display = "none";
