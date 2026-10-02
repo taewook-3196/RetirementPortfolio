@@ -122,6 +122,29 @@ def get_verified_user_id(
     return user["user_id"]
 
 
+@app.get("/api/reports/latest", response_class=HTMLResponse)
+def get_latest_morning_report(
+    authorization: str | None = Header(default=None),
+):
+    """Return the authenticated user's latest trusted server-generated HTML."""
+    user_id = get_verified_user_id(authorization)
+    report = Repository(user_id=user_id).get_latest_morning_report()
+    if report is None:
+        raise HTTPException(status_code=404, detail="저장된 모닝 리포트가 없습니다.")
+    return HTMLResponse(
+        content=report.html_content,
+        headers={
+            "Cache-Control": "private, no-store",
+            "Content-Security-Policy": (
+                "default-src 'none'; style-src 'unsafe-inline'; "
+                "script-src 'unsafe-inline'; img-src data: https:; "
+                "connect-src 'none'; frame-ancestors 'self'; "
+                "base-uri 'none'; form-action 'none'"
+            ),
+        },
+    )
+
+
 # =========================================================
 # Request Models
 # =========================================================
@@ -3423,6 +3446,11 @@ button:disabled {
 
 </section>
 
+<section id="report-section" class="card" style="display:none;padding:0;overflow:hidden;">
+<div id="report-message" class="status-box">모닝 리포트를 불러오는 중...</div>
+<iframe id="report-frame" title="내 모닝 리포트" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" style="display:none;width:100%;height:85vh;border:0;"></iframe>
+</section>
+
 
 <section id="investment-settings-section" class="card">
 
@@ -3632,6 +3660,32 @@ const accountsList =
     document.getElementById(
         "accounts-list"
     );
+
+const reportRequested =
+    new URLSearchParams(window.location.search).get("view") === "report";
+
+async function showPrivateReport(accessToken) {
+    const reportSection = document.getElementById("report-section");
+    const reportFrame = document.getElementById("report-frame");
+    const reportMessage = document.getElementById("report-message");
+    reportSection.style.display = "block";
+    try {
+        const response = await fetch("/api/reports/latest", {
+            headers: {"Authorization": "Bearer " + accessToken},
+        });
+        if (!response.ok) {
+            let detail = "모닝 리포트를 불러오지 못했습니다.";
+            try { detail = (await response.json()).detail || detail; } catch (error) {}
+            throw new Error(detail);
+        }
+        reportFrame.srcdoc = await response.text();
+        reportMessage.style.display = "none";
+        reportFrame.style.display = "block";
+    } catch (error) {
+        reportMessage.textContent = error.message || "모닝 리포트를 불러오지 못했습니다.";
+        reportMessage.className = "status-box error";
+    }
+}
 
 let storedSessionDetected = false;
 
@@ -12876,6 +12930,13 @@ async function showAuthenticatedApp(
 
     appArea.style.display =
         "flex";
+
+    if (reportRequested) {
+        document.getElementById("investment-settings-section").style.display = "none";
+        document.getElementById("asset-search-section").style.display = "none";
+        document.getElementById("portfolio-section").style.display = "none";
+        await showPrivateReport(accessToken);
+    }
 
 
     /*
