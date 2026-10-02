@@ -317,6 +317,45 @@ def get_latest_morning_report(
     )
 
 
+
+def _morning_report_link_serializer() -> URLSafeTimedSerializer:
+    secret = os.getenv("OAUTH_TOKEN_ENCRYPTION_KEY", "").strip()
+    if not secret:
+        raise HTTPException(status_code=500, detail="리포트 링크 보안 키 설정이 없습니다.")
+    return URLSafeTimedSerializer(secret, salt="morning-report-link-v1")
+
+
+@app.get("/report/{token}", response_class=HTMLResponse)
+def open_signed_morning_report(token: str):
+    """Open a user's latest report from a short-lived signed Kakao link."""
+    try:
+        data = _morning_report_link_serializer().loads(token, max_age=86400)
+    except SignatureExpired:
+        raise HTTPException(status_code=410, detail="상세 리포트 링크가 만료되었습니다.")
+    except BadSignature:
+        raise HTTPException(status_code=404, detail="유효하지 않은 상세 리포트 링크입니다.")
+
+    if data.get("purpose") != "morning-report" or not data.get("user_id"):
+        raise HTTPException(status_code=404, detail="유효하지 않은 상세 리포트 링크입니다.")
+
+    report = Repository(user_id=str(data["user_id"])).get_latest_morning_report()
+    if report is None:
+        raise HTTPException(status_code=404, detail="저장된 모닝 리포트가 없습니다.")
+
+    return HTMLResponse(
+        content=report.html_content,
+        headers={
+            "Cache-Control": "private, no-store",
+            "Referrer-Policy": "no-referrer",
+            "Content-Security-Policy": (
+                "default-src 'none'; style-src 'unsafe-inline'; "
+                "script-src 'unsafe-inline'; img-src data: https:; "
+                "connect-src 'none'; frame-ancestors 'none'; "
+                "base-uri 'none'; form-action 'none'"
+            ),
+        },
+    )
+
 # =========================================================
 # Kakao OAuth connection
 # =========================================================

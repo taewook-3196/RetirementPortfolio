@@ -14,6 +14,7 @@ import logging
 import datetime
 from datetime import date
 from pathlib import Path
+from itsdangerous import URLSafeTimedSerializer
 from typing import List, Dict, Any, Optional, Tuple
 
 from core.config import (
@@ -1630,6 +1631,19 @@ class DailyReportService:
                 logger.warning("user_id가 없어 로컬 리포트를 DB에 저장하지 않았습니다.")
 
             report_web_url = get_report_url()
+            if self.repo.user_id:
+                signing_secret = os.getenv("OAUTH_TOKEN_ENCRYPTION_KEY", "").strip()
+                if not signing_secret:
+                    raise RuntimeError("카카오 상세 리포트 서명 키가 설정되지 않았습니다.")
+                token = URLSafeTimedSerializer(
+                    signing_secret,
+                    salt="morning-report-link-v1",
+                ).dumps({"user_id": str(self.repo.user_id), "purpose": "morning-report"})
+                report_web_url = (
+                    get_web_app_url().rstrip("/")
+                    + "/report/"
+                    + token
+                )
 
             summary_text = self._build_kakao_summary_text(
                 account_name=account_name,
