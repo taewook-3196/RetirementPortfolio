@@ -1639,9 +1639,11 @@ class DailyReportService:
                     signing_secret,
                     salt="morning-report-link-v1",
                 ).dumps({"user_id": str(self.repo.user_id), "purpose": "morning-report"})
+                # Kakao report links must always target the live Render app.
+                # Do not allow stale GitHub Pages/repository environment overrides
+                # to redirect private report links to a retired host.
                 report_web_url = (
-                    get_web_app_url().rstrip("/")
-                    + "/report?token="
+                    "https://retirementportfolio.onrender.com/report?token="
                     + token
                 )
 
