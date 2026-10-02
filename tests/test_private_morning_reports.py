@@ -110,3 +110,35 @@ def test_operational_clients_do_not_disable_tls_verification():
     assert "_create_unverified_context" not in source
     assert "CERT_NONE" not in source
     assert "check_hostname = False" not in source
+
+
+def test_signed_report_link_serves_only_signed_owner(monkeypatch):
+    monkeypatch.setenv("OAUTH_TOKEN_ENCRYPTION_KEY", "test-report-signing-key")
+    captured = {}
+
+    class FakeRepository:
+        def __init__(self, user_id):
+            captured["user_id"] = user_id
+        def get_latest_morning_report(self):
+            return type("Report", (), {"html_content": "<h1>signed private report</h1>"})()
+
+    monkeypatch.setattr(web_app, "Repository", FakeRepository)
+    token = web_app._morning_report_link_serializer().dumps({
+        "user_id": "user-a",
+        "purpose": "morning-report",
+    })
+    response = web_app.open_signed_morning_report(token)
+    assert captured["user_id"] == "user-a"
+    assert "signed private report" in response.body.decode()
+    assert response.headers["cache-control"] == "private, no-store"
+
+
+def test_signed_report_link_rejects_tampering(monkeypatch):
+    monkeypatch.setenv("OAUTH_TOKEN_ENCRYPTION_KEY", "test-report-signing-key")
+    token = web_app._morning_report_link_serializer().dumps({
+        "user_id": "user-a",
+        "purpose": "morning-report",
+    })
+    with pytest.raises(HTTPException) as exc_info:
+        web_app.open_signed_morning_report(token + "tampered")
+    assert exc_info.value.status_code == 404
