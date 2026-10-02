@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from core.config import load_config
@@ -20,6 +21,6 @@ def test_kakao_token_helper_has_no_hardcoded_rest_key():
     from pathlib import Path
 
     source = (Path(__file__).resolve().parents[1] / "scripts" / "issue_kakao_tokens.py").read_text(encoding="utf-8")
-    assert "10dd3be26f85a71a154f11220a776fcb" not in source
+    assert re.search(r'rest_key\\s*=\\s*["\\\'][0-9a-fA-F]{32}["\\\']', source) is None
     assert 'print(f"• Access Token : {access}")' not in source
     assert 'print(f"• Refresh Token: {refresh}")' not in source
