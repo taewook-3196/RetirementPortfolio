@@ -9,13 +9,17 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from datetime import date, datetime, timezone
+import secrets
+import urllib.parse
+import urllib.request
+from datetime import date, datetime, timezone, timedelta
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from supabase import create_client
 from services.portfolio_service import PortfolioService
+from core.secret_crypto import encrypt_secret
 
 from database.connection import get_db_session
 from database.models import InviteCode
@@ -311,6 +315,102 @@ def get_latest_morning_report(
             ),
         },
     )
+
+
+# =========================================================
+# Kakao OAuth connection
+# =========================================================
+
+_KAKAO_OAUTH_STATES: dict[str, tuple[str, datetime]] = {}
+
+
+def _kakao_redirect_uri() -> str:
+    base = os.getenv("RETIREMENT_PORTFOLIO_WEB_URL", "").strip().rstrip("/")
+    if not base:
+        raise HTTPException(status_code=500, detail="웹 앱 공개 URL 설정이 없습니다.")
+    return f"{base}/api/kakao/callback"
+
+
+@app.get("/api/kakao/connect")
+def connect_kakao(authorization: str | None = Header(default=None)):
+    """Return a Kakao authorization URL; the user never handles OAuth tokens."""
+    user_id = get_verified_user_id(authorization)
+    client_id = os.getenv("KAKAO_REST_API_KEY", "").strip()
+    if not client_id:
+        raise HTTPException(status_code=500, detail="Kakao REST API 설정이 없습니다.")
+
+    state = secrets.token_urlsafe(32)
+    _KAKAO_OAUTH_STATES[state] = (
+        user_id,
+        datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+    params = urllib.parse.urlencode({
+        "client_id": client_id,
+        "redirect_uri": _kakao_redirect_uri(),
+        "response_type": "code",
+        "scope": "talk_message",
+        "state": state,
+    })
+    return {"authorization_url": f"https://kauth.kakao.com/oauth/authorize?{params}"}
+
+
+@app.get("/api/kakao/callback")
+def kakao_callback(code: str = "", state: str = "", error: str = ""):
+    """Exchange the one-time authorization code and store encrypted user tokens."""
+    state_data = _KAKAO_OAUTH_STATES.pop(state, None)
+    if (
+        not state_data
+        or state_data[1] < datetime.now(timezone.utc)
+        or error
+        or not code
+    ):
+        raise HTTPException(status_code=400, detail="카카오 연결 요청이 만료되었거나 취소되었습니다.")
+
+    user_id = state_data[0]
+    client_id = os.getenv("KAKAO_REST_API_KEY", "").strip()
+    client_secret = os.getenv("KAKAO_CLIENT_SECRET", "").strip()
+    form = {
+        "grant_type": "authorization_code",
+        "client_id": client_id,
+        "redirect_uri": _kakao_redirect_uri(),
+        "code": code,
+    }
+    if client_secret:
+        form["client_secret"] = client_secret
+
+    request = urllib.request.Request(
+        "https://kauth.kakao.com/oauth/token",
+        data=urllib.parse.urlencode(form).encode("utf-8"),
+        headers={"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            token_data = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=502, detail="카카오 토큰 발급에 실패했습니다.")
+
+    access_token = token_data.get("access_token", "")
+    refresh_token = token_data.get("refresh_token", "")
+    if not access_token or not refresh_token:
+        raise HTTPException(status_code=502, detail="카카오 토큰 응답이 올바르지 않습니다.")
+
+    now = datetime.now(timezone.utc)
+    Repository(user_id=user_id).save_kakao_credential(
+        access_token_encrypted=encrypt_secret(access_token),
+        refresh_token_encrypted=encrypt_secret(refresh_token),
+        access_token_expires_at=now + timedelta(seconds=int(token_data.get("expires_in", 0) or 0)),
+        refresh_token_expires_at=now + timedelta(seconds=int(token_data.get("refresh_token_expires_in", 0) or 0)),
+        scopes=str(token_data.get("scope", "")),
+    )
+    return RedirectResponse(url="/?kakao=connected", status_code=303)
+
+
+@app.get("/api/kakao/status")
+def kakao_status(authorization: str | None = Header(default=None)):
+    user_id = get_verified_user_id(authorization)
+    connected = Repository(user_id=user_id).get_kakao_credential() is not None
+    return {"connected": connected}
 
 
 # =========================================================
