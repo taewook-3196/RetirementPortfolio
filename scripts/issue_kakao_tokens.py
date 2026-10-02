@@ -27,10 +27,11 @@ def main():
     config = load_config()
     m_cfg = config.morning_report
     rest_key = m_cfg.kakao_rest_api_key.strip()
-    if not rest_key or len(rest_key) != 32 or "/" in rest_key:
-        rest_key = "10dd3be26f85a71a154f11220a776fcb"
-        m_cfg.kakao_rest_api_key = rest_key
-    print(f"• 카카오 REST API 키: {rest_key}")
+    if not rest_key:
+        print("❌ KAKAO_REST_API_KEY가 설정되지 않았습니다.")
+        print("   환경변수 또는 추적되지 않는 config.yaml에 카카오 REST API 키를 설정해 주세요.")
+        return
+    print("• 카카오 REST API 키가 설정되어 있습니다.")
 
     redirect_uri = "https://localhost"
     auth_url = (
@@ -91,8 +92,8 @@ def main():
             print("\n" + "=" * 70)
             print("🎉 카카오 토큰 발급 성공!")
             print("=" * 70)
-            print(f"• Access Token : {access}")
-            print(f"• Refresh Token: {refresh}")
+            print("• Access Token 발급 완료")
+            print("• Refresh Token 발급 완료" if refresh else "• Refresh Token은 응답에 포함되지 않았습니다.")
 
             m_cfg.kakao_access_token = access
             if refresh:
@@ -128,8 +129,8 @@ def main():
                     print("\n" + "=" * 70)
                     print("🎉 카카오 토큰 발급 성공!")
                     print("=" * 70)
-                    print(f"• Access Token : {access}")
-                    print(f"• Refresh Token: {refresh}")
+                    print("• Access Token 발급 완료")
+                    print("• Refresh Token 발급 완료" if refresh else "• Refresh Token은 응답에 포함되지 않았습니다.")
                     m_cfg.kakao_access_token = access
                     if refresh:
                         m_cfg.kakao_refresh_token = refresh
