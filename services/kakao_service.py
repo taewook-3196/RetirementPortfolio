@@ -52,11 +52,10 @@ class KakaoService:
         instance._credential_repo = repo
 
         credential = repo.get_kakao_credential()
-        if credential is None:
+        if credential is None or not getattr(credential, "access_token_encrypted", None):
             return instance
         instance.morning_cfg.kakao_access_token = decrypt_secret(credential.access_token_encrypted)
         instance.morning_cfg.kakao_refresh_token = decrypt_secret(credential.refresh_token_encrypted)
-        instance._credential_repo = repo
         return instance
 
     def is_configured(self) -> bool:
