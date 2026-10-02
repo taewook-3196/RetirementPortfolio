@@ -5,6 +5,7 @@ scripts/issue_kakao_tokens.py
 """
 
 import sys
+import os
 import ssl
 import json
 import webbrowser
@@ -61,7 +62,7 @@ def main():
         return
 
     # Client Secret 확인 (KOE010 방지)
-    client_secret = getattr(m_cfg, "kakao_client_secret", "").strip()
+    client_secret = os.getenv("KAKAO_CLIENT_SECRET", "").strip()
     
     # POST 토큰 요청
     token_url = "https://kauth.kakao.com/oauth/token"
