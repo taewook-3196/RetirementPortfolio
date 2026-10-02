@@ -64,10 +64,24 @@ pytest -v tests/
 2. 서비스 목록에서 **증권상품 > ETF 일별매매정보** [API 이용신청] 완료
 3. 프로그램 루트 폴더의 `.env` 파일에 발급받은 키 입력:
    ```env
-   KRX_API_KEY=7F7C34EE6A27431AB57586C942FFBC357742CDAF
+   KRX_API_KEY=your_krx_api_key
    ```
 
-### 3.3 Mock 시뮬레이션 모드 (네트워크 없는 환경)
+### 3.3 공개 Web 및 Morning Report URL 설정
+
+배포 환경에서는 다음 환경변수(또는 GitHub Actions의 같은 이름인 Repository Variable)를 설정할 수 있습니다.
+
+```env
+RETIREMENT_PORTFOLIO_WEB_URL=https://retirementportfolio.onrender.com/
+RETIREMENT_PORTFOLIO_REPORT_URL=https://taewook-3196.github.io/RetirementPortfolio/
+```
+
+- `RETIREMENT_PORTFOLIO_WEB_URL`은 포트폴리오 관리 deep link에 사용됩니다.
+- `RETIREMENT_PORTFOLIO_REPORT_URL`은 Morning Report와 카카오톡 리포트 버튼에 공통으로 사용됩니다.
+- 두 값은 공개 `http`/`https` URL만 허용하며, 잘못된 scheme 또는 hostname 없는 값은 안전한 기본 URL로 대체됩니다.
+- 기존 `GITHUB_PAGES_BASE_URL`도 Report URL의 호환용 fallback으로 계속 지원됩니다. 우선순위는 `RETIREMENT_PORTFOLIO_REPORT_URL` → `GITHUB_PAGES_BASE_URL` → `GITHUB_REPOSITORY` 기반 Pages URL → 기본값입니다.
+
+### 3.4 Mock 시뮬레이션 모드 (네트워크 없는 환경)
 
 `config.yaml` 파일에서 `data_source`를 `mock`으로 변경하거나 GUI의 [환경 설정] 화면에서 변경할 수 있습니다:
 ```yaml
