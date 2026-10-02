@@ -1,57 +1,60 @@
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
 
+from database.models import InviteCode
 import web.app as web_app
 
 
-def test_invite_code_rejected_when_not_configured(monkeypatch):
-    monkeypatch.delenv("SIGNUP_INVITE_CODES", raising=False)
-    assert web_app._valid_signup_invite_code("family-code") is False
+@pytest.fixture
+def invite_db(monkeypatch):
+    engine = create_engine("sqlite:///:memory:")
+    InviteCode.__table__.create(engine)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    next_id = {"value": 1}
+
+    @event.listens_for(session_factory, "before_flush")
+    def assign_id(session, *_):
+        for row in session.new:
+            if isinstance(row, InviteCode) and row.id is None:
+                row.id = next_id["value"]
+                next_id["value"] += 1
+
+    @contextmanager
+    def isolated_session():
+        session = session_factory()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    monkeypatch.setattr(web_app, "get_db_session", isolated_session)
+    return isolated_session
 
 
-def test_invite_code_accepts_only_configured_values(monkeypatch):
-    monkeypatch.setenv(
-        "SIGNUP_INVITE_CODES",
-        "family-one, family-two",
-    )
-
-    assert web_app._valid_signup_invite_code("family-one") is True
-    assert web_app._valid_signup_invite_code("family-two") is True
-    assert web_app._valid_signup_invite_code("wrong-code") is False
-
-
-def test_signup_rejects_invalid_invite_before_supabase(monkeypatch):
-    monkeypatch.setenv("SIGNUP_INVITE_CODES", "correct-code")
-
-    request = web_app.SignupRequest(
-        email="person@example.com",
-        password="password123",
-        invite_code="wrong-code",
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        web_app.signup_with_invite(request)
-
-    assert exc_info.value.status_code == 403
-
-
-def test_signup_returns_session_tokens_for_valid_invite(monkeypatch):
-    monkeypatch.setenv("SIGNUP_INVITE_CODES", "correct-code")
+def _configure_supabase(monkeypatch, user_id=None):
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "public-anon-key")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
 
     created_user = SimpleNamespace(
+        id=user_id or uuid4(),
         email="person@example.com",
     )
     fake_admin_client = SimpleNamespace(
         auth=SimpleNamespace(
             admin=SimpleNamespace(
-                create_user=lambda payload: SimpleNamespace(
-                    user=created_user,
-                )
+                create_user=lambda payload: SimpleNamespace(user=created_user)
             )
         )
     )
@@ -72,11 +75,43 @@ def test_signup_returns_session_tokens_for_valid_invite(monkeypatch):
         assert key == "public-anon-key"
         return fake_public_client
 
-    monkeypatch.setattr(
-        web_app,
-        "create_client",
-        fake_create_client,
-    )
+    monkeypatch.setattr(web_app, "create_client", fake_create_client)
+    return created_user
+
+
+def _insert_invite(db, code, **kwargs):
+    with db() as session:
+        session.add(
+            InviteCode(
+                code_hash=web_app._invite_code_hash(code),
+                **kwargs,
+            )
+        )
+
+
+def test_invite_hash_is_normalized_and_not_plaintext():
+    digest = web_app._invite_code_hash("  family-secret  ")
+    assert digest == web_app._invite_code_hash("family-secret")
+    assert digest != "family-secret"
+    assert len(digest) == 64
+
+
+def test_signup_rejects_unknown_invite(monkeypatch, invite_db):
+    _configure_supabase(monkeypatch)
+    with pytest.raises(HTTPException) as exc_info:
+        web_app.signup_with_invite(
+            web_app.SignupRequest(
+                email="person@example.com",
+                password="password123",
+                invite_code="wrong-code",
+            )
+        )
+    assert exc_info.value.status_code == 403
+
+
+def test_signup_consumes_invite_once(monkeypatch, invite_db):
+    created_user = _configure_supabase(monkeypatch)
+    _insert_invite(invite_db, "correct-code")
 
     result = web_app.signup_with_invite(
         web_app.SignupRequest(
@@ -87,9 +122,58 @@ def test_signup_returns_session_tokens_for_valid_invite(monkeypatch):
     )
 
     assert result["created"] is True
-    assert result["email_confirmation_required"] is False
     assert result["access_token"] == "access-token"
-    assert result["refresh_token"] == "refresh-token"
+
+    with invite_db() as session:
+        invite = session.query(InviteCode).one()
+        assert invite.used_at is not None
+        assert invite.used_by == created_user.id
+
+    with pytest.raises(HTTPException) as exc_info:
+        web_app.signup_with_invite(
+            web_app.SignupRequest(
+                email="person@example.com",
+                password="password123",
+                invite_code="correct-code",
+            )
+        )
+    assert exc_info.value.status_code == 403
+
+
+def test_signup_rejects_expired_invite(monkeypatch, invite_db):
+    _configure_supabase(monkeypatch)
+    _insert_invite(
+        invite_db,
+        "expired-code",
+        expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        web_app.signup_with_invite(
+            web_app.SignupRequest(
+                email="person@example.com",
+                password="password123",
+                invite_code="expired-code",
+            )
+        )
+    assert exc_info.value.status_code == 403
+
+
+def test_signup_honors_intended_email(monkeypatch, invite_db):
+    _configure_supabase(monkeypatch)
+    _insert_invite(
+        invite_db,
+        "family-code",
+        intended_email="allowed@example.com",
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        web_app.signup_with_invite(
+            web_app.SignupRequest(
+                email="person@example.com",
+                password="password123",
+                invite_code="family-code",
+            )
+        )
+    assert exc_info.value.status_code == 403
 
 
 def test_signup_ui_is_invite_only(monkeypatch):
@@ -105,7 +189,6 @@ def test_signup_ui_is_invite_only(monkeypatch):
 
 
 def test_signup_requires_service_role_key(monkeypatch):
-    monkeypatch.setenv("SIGNUP_INVITE_CODES", "correct-code")
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "public-anon-key")
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
