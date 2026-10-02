@@ -246,6 +246,31 @@ def signup_with_invite(request: SignupRequest):
         )
 
 
+@app.post("/api/bootstrap")
+def bootstrap_current_user(
+    authorization: str | None = Header(default=None),
+):
+    """로그인 사용자의 필수 기본 레코드를 한 번만 준비합니다."""
+    user_id = get_verified_user_id(
+        authorization
+    )
+
+    try:
+        initialized = Repository(
+            user_id=user_id
+        ).ensure_user_initialized()
+
+        return {
+            "initialized": True,
+            **initialized,
+        }
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="사용자 초기 설정을 준비하지 못했습니다.",
+        )
+
+
 @app.get("/api/reports/latest", response_class=HTMLResponse)
 def get_latest_morning_report(
     authorization: str | None = Header(default=None),
@@ -13037,6 +13062,36 @@ async function showAuthenticatedApp(
         await verifyUser(
             accessToken
         );
+
+
+    const bootstrapResponse =
+        await fetch(
+            "/api/bootstrap",
+            {
+                method: "POST",
+                headers: {
+                    "Authorization":
+                        "Bearer "
+                        + accessToken,
+                },
+            }
+        );
+
+    if (!bootstrapResponse.ok) {
+        let detail =
+            "사용자 초기 설정을 준비하지 못했습니다.";
+
+        try {
+            const bootstrapData =
+                await bootstrapResponse.json();
+
+            detail =
+                bootstrapData.detail
+                || detail;
+        } catch (error) {}
+
+        throw new Error(detail);
+    }
 
 
     const [
