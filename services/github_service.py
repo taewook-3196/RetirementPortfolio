@@ -26,7 +26,7 @@ class GitHubService:
 
     def __init__(self, config: AppConfig):
         self.config = config
-        self.ssl_context = ssl._create_unverified_context()
+        self.ssl_context = ssl.create_default_context()
 
     @property
     def morning_cfg(self) -> MorningReportConfig:
