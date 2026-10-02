@@ -1641,9 +1641,11 @@ class DailyReportService:
                 ).dumps({"user_id": str(self.repo.user_id), "purpose": "morning-report"})
                 report_web_url = (
                     get_web_app_url().rstrip("/")
-                    + "/report/"
+                    + "/report?token="
                     + token
                 )
+
+            logger.info("카카오 상세 리포트 링크 생성: /report?token=<signed>")
 
             summary_text = self._build_kakao_summary_text(
                 account_name=account_name,
