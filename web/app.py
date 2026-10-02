@@ -6,10 +6,10 @@ RetirementPortfolio 모바일 웹 애플리케이션.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
-import secrets
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 from supabase import create_client
 from services.portfolio_service import PortfolioService
 
+from database.connection import get_db_session
+from database.models import InviteCode
 from database.repository import Repository
 from portfolio.holdings import calculate_etf_positions
 from data.yfinance_client import YFinanceClient
@@ -140,99 +142,97 @@ class SignupRequest(BaseModel):
     )
 
 
-def _valid_signup_invite_code(invite_code: str) -> bool:
-    """환경변수에 등록된 초대코드 중 하나와 안전하게 비교합니다."""
-    configured_codes = [
-        value.strip()
-        for value in os.getenv(
-            "SIGNUP_INVITE_CODES",
-            "",
-        ).split(",")
-        if value.strip()
-    ]
-
+def _invite_code_hash(invite_code: str) -> str:
+    """Normalize an invite secret and return the digest stored in PostgreSQL."""
     candidate = str(invite_code or "").strip()
-
-    if not configured_codes or not candidate:
-        return False
-
-    return any(
-        secrets.compare_digest(
-            candidate,
-            configured,
-        )
-        for configured in configured_codes
-    )
+    return hashlib.sha256(candidate.encode("utf-8")).hexdigest()
 
 
 @app.post("/api/auth/signup", status_code=201)
 def signup_with_invite(request: SignupRequest):
-    """유효한 서버측 초대코드가 있을 때만 관리자 API로 사용자를 생성합니다."""
-    if not _valid_signup_invite_code(
-        request.invite_code
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="유효하지 않은 초대코드입니다.",
-        )
+    """Create exactly one user from an unused, unexpired database invitation."""
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    supabase_anon_key = os.getenv("SUPABASE_ANON_KEY", "").strip()
+    supabase_service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 
-    supabase_url = os.getenv(
-        "SUPABASE_URL",
-        "",
-    ).strip()
-    supabase_anon_key = os.getenv(
-        "SUPABASE_ANON_KEY",
-        "",
-    ).strip()
-    supabase_service_key = os.getenv(
-        "SUPABASE_SERVICE_ROLE_KEY",
-        "",
-    ).strip()
-
-    if (
-        not supabase_url
-        or not supabase_anon_key
-        or not supabase_service_key
-    ):
+    if not supabase_url or not supabase_anon_key or not supabase_service_key:
         raise HTTPException(
             status_code=500,
             detail="Supabase 회원가입 설정이 없습니다.",
         )
 
-    email = request.email.strip()
+    email = request.email.strip().lower()
+    digest = _invite_code_hash(request.invite_code)
 
     try:
-        admin_client = create_client(
-            supabase_url,
-            supabase_service_key,
-        )
-        response = admin_client.auth.admin.create_user(
-            {
-                "email": email,
-                "password": request.password,
-                "email_confirm": True,
-            }
-        )
-
-        if response.user is None:
-            raise HTTPException(
-                status_code=400,
-                detail="회원가입을 완료하지 못했습니다.",
+        # Keep the PostgreSQL row locked until auth creation and invite consumption
+        # complete. Concurrent attempts using the same code therefore serialize.
+        with get_db_session() as db:
+            invite = (
+                db.query(InviteCode)
+                .filter(InviteCode.code_hash == digest)
+                .with_for_update()
+                .one_or_none()
             )
 
-        # service_role 키는 브라우저에 절대 전달하지 않습니다.
-        # 가입 직후 로그인 세션은 공개 anon 키로 별도 생성합니다.
+            now = datetime.now(timezone.utc)
+            if invite is None or invite.used_at is not None:
+                raise HTTPException(
+                    status_code=403,
+                    detail="유효하지 않거나 이미 사용된 초대코드입니다.",
+                )
+
+            if invite.expires_at is not None:
+                expires_at = invite.expires_at
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if expires_at <= now:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="만료된 초대코드입니다.",
+                    )
+
+            if (
+                invite.intended_email
+                and invite.intended_email.strip().lower() != email
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail="이 초대코드는 지정된 이메일에서만 사용할 수 있습니다.",
+                )
+
+            admin_client = create_client(
+                supabase_url,
+                supabase_service_key,
+            )
+            response = admin_client.auth.admin.create_user(
+                {
+                    "email": email,
+                    "password": request.password,
+                    "email_confirm": True,
+                }
+            )
+
+            if response.user is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="회원가입을 완료하지 못했습니다.",
+                )
+
+            invite.used_at = now
+            invite.used_by = response.user.id
+
+        # service_role is server-only. The browser receives only a normal user
+        # session created through the public anon key.
         public_client = create_client(
             supabase_url,
             supabase_anon_key,
         )
-        session_response = (
-            public_client.auth.sign_in_with_password(
-                {
-                    "email": email,
-                    "password": request.password,
-                }
-            )
+        session_response = public_client.auth.sign_in_with_password(
+            {
+                "email": email,
+                "password": request.password,
+            }
         )
         session = session_response.session
 
@@ -240,14 +240,8 @@ def signup_with_invite(request: SignupRequest):
             "created": True,
             "email": response.user.email,
             "email_confirmation_required": False,
-            "access_token":
-                session.access_token
-                if session
-                else None,
-            "refresh_token":
-                session.refresh_token
-                if session
-                else None,
+            "access_token": session.access_token if session else None,
+            "refresh_token": session.refresh_token if session else None,
         }
 
     except HTTPException:
