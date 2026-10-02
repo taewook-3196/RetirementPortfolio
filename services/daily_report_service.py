@@ -74,7 +74,7 @@ class DailyReportService:
         self.recommendation_service = RecommendationService(self.repo, self.config, portfolio_service=self.portfolio_service)
         self.news_service = NewsService()
         self.html_generator = ReportHtmlGenerator(self.config.morning_report)
-        self.kakao_service = KakaoService(self.config)
+        self.kakao_service = KakaoService.for_user(self.config, self.repo)
         self.gemini_service = GeminiService(self.config)
         self.macro_service = MacroIndicatorService()
 
@@ -1645,17 +1645,8 @@ class DailyReportService:
                 account_recommendations=account_recommendations,
             )
 
-            # 생성/저장 후 카카오톡 분리 발송을 위한 임시 페이로드 캐싱
-            try:
-                payload_cache = get_project_root() / "exports" / ".kakao_payload.json"
-                payload_cache.parent.mkdir(parents=True, exist_ok=True)
-                import json
-                payload_cache.write_text(
-                    json.dumps({"summary_text": summary_text, "report_web_url": report_web_url}, ensure_ascii=False, indent=2),
-                    encoding="utf-8"
-                )
-            except Exception as e:
-                logger.warning(f"카카오 페이로드 캐시 저장 실패: {e}")
+            # Multi-user mode sends directly with the authenticated user's
+            # credential. Do not write portfolio/Kakao payloads to a shared file.
 
             # 6. 카카오톡 메시지 전송
             kakao_status = "카카오톡 미발송"
@@ -1668,6 +1659,8 @@ class DailyReportService:
                     ok, msg = self.kakao_service.send_morning_report(summary_text, report_web_url)
                     if not ok:
                         return False, f"리포트 HTML은 생성되었으나 카카오톡 전송에 실패했습니다: {msg}", html_file
+                    if self.repo.user_id:
+                        self.repo.mark_morning_report_kakao_sent(datetime.date.today())
                     kakao_status = "카카오톡 발송 성공!"
                 else:
                     kakao_status = "카카오톡 미발송 (설정에서 모닝 리포트 발송 기능이 꺼져 있음)"

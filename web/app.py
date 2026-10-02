@@ -9,13 +9,17 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from datetime import date, datetime, timezone
+import urllib.parse
+import urllib.request
+from datetime import date, datetime, timezone, timedelta
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from supabase import create_client
 from services.portfolio_service import PortfolioService
+from core.secret_crypto import encrypt_secret
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from database.connection import get_db_session
 from database.models import InviteCode
@@ -314,8 +318,183 @@ def get_latest_morning_report(
 
 
 # =========================================================
+# Kakao OAuth connection
+# =========================================================
+
+def _kakao_state_serializer() -> URLSafeTimedSerializer:
+    secret = os.getenv("OAUTH_TOKEN_ENCRYPTION_KEY", "").strip()
+    if not secret:
+        raise HTTPException(status_code=500, detail="OAuth 보안 키 설정이 없습니다.")
+    return URLSafeTimedSerializer(secret, salt="kakao-oauth-state-v1")
+
+
+def _kakao_redirect_uri() -> str:
+    base = os.getenv("RETIREMENT_PORTFOLIO_WEB_URL", "").strip().rstrip("/")
+    if not base:
+        raise HTTPException(status_code=500, detail="웹 앱 공개 URL 설정이 없습니다.")
+    return f"{base}/api/kakao/callback"
+
+
+@app.get("/api/kakao/connect")
+def connect_kakao(authorization: str | None = Header(default=None)):
+    """Return a Kakao authorization URL; the user never handles OAuth tokens."""
+    user_id = get_verified_user_id(authorization)
+    client_id = os.getenv("KAKAO_REST_API_KEY", "").strip()
+    if not client_id:
+        raise HTTPException(status_code=500, detail="Kakao REST API 설정이 없습니다.")
+
+    state = _kakao_state_serializer().dumps({
+        "user_id": user_id,
+        "purpose": "kakao-connect",
+    })
+    params = urllib.parse.urlencode({
+        "client_id": client_id,
+        "redirect_uri": _kakao_redirect_uri(),
+        "response_type": "code",
+        "scope": "talk_message",
+        "state": state,
+    })
+    return {"authorization_url": f"https://kauth.kakao.com/oauth/authorize?{params}"}
+
+
+@app.get("/api/kakao/callback")
+def kakao_callback(code: str = "", state: str = "", error: str = ""):
+    """Exchange the one-time authorization code and store encrypted user tokens."""
+    if error or not code or not state:
+        raise HTTPException(status_code=400, detail="카카오 연결 요청이 취소되었거나 올바르지 않습니다.")
+    try:
+        state_data = _kakao_state_serializer().loads(state, max_age=600)
+    except (BadSignature, SignatureExpired):
+        raise HTTPException(status_code=400, detail="카카오 연결 요청이 만료되었거나 유효하지 않습니다.")
+    if state_data.get("purpose") != "kakao-connect" or not state_data.get("user_id"):
+        raise HTTPException(status_code=400, detail="유효하지 않은 카카오 연결 요청입니다.")
+
+    user_id = state_data["user_id"]
+    client_id = os.getenv("KAKAO_REST_API_KEY", "").strip()
+    client_secret = os.getenv("KAKAO_CLIENT_SECRET", "").strip()
+    form = {
+        "grant_type": "authorization_code",
+        "client_id": client_id,
+        "redirect_uri": _kakao_redirect_uri(),
+        "code": code,
+    }
+    if client_secret:
+        form["client_secret"] = client_secret
+
+    request = urllib.request.Request(
+        "https://kauth.kakao.com/oauth/token",
+        data=urllib.parse.urlencode(form).encode("utf-8"),
+        headers={"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            token_data = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=502, detail="카카오 토큰 발급에 실패했습니다.")
+
+    access_token = token_data.get("access_token", "")
+    refresh_token = token_data.get("refresh_token", "")
+    if not access_token or not refresh_token:
+        raise HTTPException(status_code=502, detail="카카오 토큰 응답이 올바르지 않습니다.")
+
+    now = datetime.now(timezone.utc)
+    Repository(user_id=user_id).save_kakao_credential(
+        access_token_encrypted=encrypt_secret(access_token),
+        refresh_token_encrypted=encrypt_secret(refresh_token),
+        access_token_expires_at=now + timedelta(seconds=int(token_data.get("expires_in", 0) or 0)),
+        refresh_token_expires_at=now + timedelta(seconds=int(token_data.get("refresh_token_expires_in", 0) or 0)),
+        scopes=str(token_data.get("scope", "")),
+    )
+    settings = Repository(user_id=user_id).get_user_settings()
+    if settings is not None and not settings.kakao_enabled:
+        Repository(user_id=user_id).save_user_settings(
+            morning_report_enabled=settings.morning_report_enabled,
+            morning_report_time=settings.morning_report_time.strftime("%H:%M"),
+            kakao_enabled=True,
+            news_enabled=settings.news_enabled,
+            ai_advice_enabled=settings.ai_advice_enabled,
+        )
+    return RedirectResponse(url="/?kakao=connected", status_code=303)
+
+
+@app.get("/api/kakao/status")
+def kakao_status(authorization: str | None = Header(default=None)):
+    user_id = get_verified_user_id(authorization)
+    connected = Repository(user_id=user_id).get_kakao_credential() is not None
+    return {"connected": connected}
+
+
+@app.delete("/api/kakao/disconnect")
+def kakao_disconnect(authorization: str | None = Header(default=None)):
+    """Remove this user's Kakao OAuth credential and disable Kakao delivery."""
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    repo.delete_kakao_credential()
+    settings = repo.get_user_settings()
+    if settings is not None:
+        repo.save_user_settings(
+            morning_report_enabled=settings.morning_report_enabled,
+            morning_report_time=settings.morning_report_time.strftime("%H:%M"),
+            kakao_enabled=False,
+            news_enabled=settings.news_enabled,
+            ai_advice_enabled=settings.ai_advice_enabled,
+        )
+    return {"connected": False}
+
+
+# =========================================================
 # Request Models
 # =========================================================
+
+class MorningReportSettingsRequest(BaseModel):
+    morning_report_enabled: bool = True
+    morning_report_time: str = Field(default="07:30", pattern=r"^(?:[01]\\d|2[0-3]):[0-5]\\d$")
+    news_enabled: bool = True
+    ai_advice_enabled: bool = True
+
+
+@app.get("/api/morning-report/settings")
+def get_morning_report_settings(authorization: str | None = Header(default=None)):
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    settings = repo.get_user_settings()
+    if settings is None:
+        repo.ensure_user_initialized()
+        settings = repo.get_user_settings()
+    return {
+        "morning_report_enabled": bool(settings.morning_report_enabled),
+        "morning_report_time": settings.morning_report_time.strftime("%H:%M"),
+        "kakao_enabled": bool(settings.kakao_enabled),
+        "news_enabled": bool(settings.news_enabled),
+        "ai_advice_enabled": bool(settings.ai_advice_enabled),
+    }
+
+
+@app.put("/api/morning-report/settings")
+def update_morning_report_settings(
+    payload: MorningReportSettingsRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    current = repo.get_user_settings()
+    kakao_enabled = bool(current.kakao_enabled) if current is not None else False
+    saved = repo.save_user_settings(
+        morning_report_enabled=payload.morning_report_enabled,
+        morning_report_time=payload.morning_report_time,
+        kakao_enabled=kakao_enabled,
+        news_enabled=payload.news_enabled,
+        ai_advice_enabled=payload.ai_advice_enabled,
+    )
+    return {
+        "morning_report_enabled": bool(saved.morning_report_enabled),
+        "morning_report_time": saved.morning_report_time.strftime("%H:%M"),
+        "kakao_enabled": bool(saved.kakao_enabled),
+        "news_enabled": bool(saved.news_enabled),
+        "ai_advice_enabled": bool(saved.ai_advice_enabled),
+    }
+
 
 class AccountUpdateRequest(BaseModel):
     """계좌별 운용 및 자금 설정 수정 요청."""
@@ -3671,6 +3850,36 @@ button:disabled {
 </section>
 
 
+<section id="morning-report-settings-section" class="card">
+<h2>모닝 리포트 설정</h2>
+<p class="subtitle">사용자별 발송 여부와 기준 시간을 설정합니다. 실제 실행은 약 10분 간격 스케줄에 따라 지연될 수 있습니다.</p>
+<form id="morning-report-settings-form">
+<div class="checkbox-row">
+<input id="morning-report-enabled" type="checkbox">
+<label for="morning-report-enabled">모닝 리포트 사용</label>
+</div>
+<label for="morning-report-time">발송 기준 시간</label>
+<input id="morning-report-time" type="time" required>
+<div class="checkbox-row">
+<input id="morning-report-news-enabled" type="checkbox">
+<label for="morning-report-news-enabled">뉴스 포함</label>
+</div>
+<button type="submit">모닝 리포트 설정 저장</button>
+<div id="morning-report-settings-message" class="transaction-message"></div>
+</form>
+</section>
+
+<section id="kakao-settings-section" class="card">
+
+<h2>카카오톡 모닝 리포트</h2>
+<p class="subtitle">
+토큰을 직접 입력할 필요 없이 카카오 계정을 한 번 연결하면 됩니다.
+</p>
+<div id="kakao-status" class="status-box">연결 상태 확인 중...</div>
+<button id="kakao-connect-button" type="button">카카오톡 연결</button>\n<button id="kakao-disconnect-button" type="button" style="display:none;">카카오톡 연결 해제</button>
+
+</section>
+
 <section id="investment-settings-section" class="card">
 
 <h2>투자성향 / 투자전략</h2>
@@ -3894,6 +4103,107 @@ const accountsList =
     document.getElementById(
         "accounts-list"
     );
+
+const morningReportSettingsForm = document.getElementById("morning-report-settings-form");
+const morningReportEnabled = document.getElementById("morning-report-enabled");
+const morningReportTime = document.getElementById("morning-report-time");
+const morningReportNewsEnabled = document.getElementById("morning-report-news-enabled");
+const morningReportSettingsMessage = document.getElementById("morning-report-settings-message");
+
+async function loadMorningReportSettings(accessToken) {
+    const response = await fetch("/api/morning-report/settings", {
+        headers: {"Authorization": "Bearer " + accessToken},
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "모닝 리포트 설정을 불러오지 못했습니다.");
+    morningReportEnabled.checked = Boolean(data.morning_report_enabled);
+    morningReportTime.value = data.morning_report_time || "07:30";
+    morningReportNewsEnabled.checked = Boolean(data.news_enabled);
+}
+
+morningReportSettingsForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    if (!accessToken) return;
+    try {
+        const response = await fetch("/api/morning-report/settings", {
+            method: "PUT",
+            headers: {
+                "Authorization": "Bearer " + accessToken,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                morning_report_enabled: morningReportEnabled.checked,
+                morning_report_time: morningReportTime.value,
+                news_enabled: morningReportNewsEnabled.checked,
+                ai_advice_enabled: document.getElementById("ai-advice-enabled").checked,
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "모닝 리포트 설정을 저장하지 못했습니다.");
+        morningReportSettingsMessage.textContent = "저장되었습니다.";
+    } catch (error) {
+        morningReportSettingsMessage.textContent = error.message || "모닝 리포트 설정을 저장하지 못했습니다.";
+    }
+});
+
+const kakaoStatus = document.getElementById("kakao-status");
+const kakaoConnectButton = document.getElementById("kakao-connect-button");\nconst kakaoDisconnectButton = document.getElementById("kakao-disconnect-button");
+
+async function loadKakaoStatus(accessToken) {
+    const response = await fetch("/api/kakao/status", {
+        headers: {"Authorization": "Bearer " + accessToken},
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "카카오 연결 상태를 확인하지 못했습니다.");
+    kakaoStatus.textContent = data.connected
+        ? "카카오톡 연결 완료"
+        : "카카오톡이 아직 연결되지 않았습니다.";
+    kakaoConnectButton.textContent = data.connected
+        ? "카카오톡 다시 연결"
+        : "카카오톡 연결";
+    kakaoDisconnectButton.style.display = data.connected ? "block" : "none";
+}
+
+kakaoDisconnectButton.addEventListener("click", async () => {
+    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    if (!accessToken) return;
+    kakaoDisconnectButton.disabled = true;
+    try {
+        const response = await fetch("/api/kakao/disconnect", {
+            method: "DELETE",
+            headers: {"Authorization": "Bearer " + accessToken},
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "카카오 연결을 해제하지 못했습니다.");
+        await loadKakaoStatus(accessToken);
+    } catch (error) {
+        kakaoStatus.textContent = error.message || "카카오 연결을 해제하지 못했습니다.";
+        kakaoStatus.className = "status-box error";
+    } finally {
+        kakaoDisconnectButton.disabled = false;
+    }
+});
+
+kakaoConnectButton.addEventListener("click", async () => {
+    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    if (!accessToken) return;
+    kakaoConnectButton.disabled = true;
+    try {
+        const response = await fetch("/api/kakao/connect", {
+            headers: {"Authorization": "Bearer " + accessToken},
+        });
+        const data = await response.json();
+        if (!response.ok || !data.authorization_url) {
+            throw new Error(data.detail || "카카오 연결을 시작하지 못했습니다.");
+        }
+        window.location.assign(data.authorization_url);
+    } catch (error) {
+        kakaoStatus.textContent = error.message || "카카오 연결을 시작하지 못했습니다.";
+        kakaoStatus.className = "status-box error";
+        kakaoConnectButton.disabled = false;
+    }
+});
 
 const reportRequested =
     new URLSearchParams(window.location.search).get("view") === "report";
@@ -13176,6 +13486,19 @@ async function showAuthenticatedApp(
         accessToken
     );
 
+    try {
+        await loadMorningReportSettings(accessToken);
+    } catch (error) {
+        morningReportSettingsMessage.textContent = error.message || "모닝 리포트 설정을 불러오지 못했습니다.";
+    }
+
+    try {
+        await loadKakaoStatus(accessToken);
+    } catch (error) {
+        kakaoStatus.textContent = error.message || "카카오 연결 상태를 확인하지 못했습니다.";
+        kakaoStatus.className = "status-box error";
+    }
+
 
     loginStatus.textContent =
         "로그인 완료 · "
@@ -13196,6 +13519,7 @@ async function showAuthenticatedApp(
         "flex";
 
     if (reportRequested) {
+        document.getElementById("kakao-settings-section").style.display = "none";
         document.getElementById("investment-settings-section").style.display = "none";
         document.getElementById("asset-search-section").style.display = "none";
         document.getElementById("portfolio-section").style.display = "none";

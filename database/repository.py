@@ -28,6 +28,7 @@ from database.models import (
     Dividend,
     ExchangeRate,
     InvestmentProfile,
+    KakaoCredential,
     MorningReport,
     Price,
     RecommendationLog,
@@ -155,6 +156,34 @@ class Repository:
                 report.updated_at = datetime.now()
             session.flush()
             return report
+
+    def mark_morning_report_kakao_sent(self, report_date):
+        """Mark this owner's dated report as successfully delivered to Kakao."""
+        if not self.user_id:
+            raise ValueError("카카오 발송 완료 처리에는 user_id가 필요합니다.")
+        parsed_date = self._parse_input_date(report_date, "report_date")
+        with get_db_session() as session:
+            report = session.query(MorningReport).filter(
+                MorningReport.user_id == self.user_id,
+                MorningReport.report_date == parsed_date,
+            ).one_or_none()
+            if report is None:
+                return False
+            report.kakao_sent_at = datetime.now()
+            report.updated_at = datetime.now()
+            session.flush()
+            return True
+
+    def get_morning_report_for_date(self, report_date):
+        """Return this owner's report for one calendar date."""
+        if not self.user_id:
+            raise ValueError("모닝 리포트 조회에는 user_id가 필요합니다.")
+        parsed_date = self._parse_input_date(report_date, "report_date")
+        with get_db_session() as session:
+            return session.query(MorningReport).filter(
+                MorningReport.user_id == self.user_id,
+                MorningReport.report_date == parsed_date,
+            ).one_or_none()
 
     def get_latest_morning_report(self):
         """Return only the current owner's newest report."""
@@ -3714,6 +3743,67 @@ class Repository:
     # -------------------------------------------------------------
     # 사용자 설정 (UserSetting) 관리
     # -------------------------------------------------------------
+
+    def get_kakao_credential(self) -> Optional[KakaoCredential]:
+        if not self.user_id:
+            return None
+        with get_db_session() as session:
+            return session.query(KakaoCredential).filter(
+                KakaoCredential.user_id == self.user_id
+            ).first()
+
+    def save_kakao_credential(
+        self,
+        access_token_encrypted: str,
+        refresh_token_encrypted: str,
+        access_token_expires_at=None,
+        refresh_token_expires_at=None,
+        scopes: str = "",
+    ) -> KakaoCredential:
+        if not self.user_id:
+            raise ValueError("Kakao credential requires user_id")
+        with get_db_session() as session:
+            row = session.query(KakaoCredential).filter(
+                KakaoCredential.user_id == self.user_id
+            ).first()
+            if row is None:
+                row = KakaoCredential(user_id=self.user_id)
+                session.add(row)
+            row.access_token_encrypted = access_token_encrypted
+            row.refresh_token_encrypted = refresh_token_encrypted
+            row.access_token_expires_at = access_token_expires_at
+            row.refresh_token_expires_at = refresh_token_expires_at
+            row.scopes = scopes
+            row.updated_at = datetime.now()
+            session.flush()
+            session.refresh(row)
+            return row
+
+    def delete_kakao_credential(self) -> bool:
+        if not self.user_id:
+            return False
+        with get_db_session() as session:
+            row = session.query(KakaoCredential).filter(
+                KakaoCredential.user_id == self.user_id
+            ).first()
+            if row is None:
+                return False
+            session.delete(row)
+            return True
+
+    @staticmethod
+    def get_morning_report_user_ids() -> List[UUID]:
+        """Return users who opted in to scheduled morning reports."""
+        with get_db_session() as session:
+            return [
+                row[0]
+                for row in (
+                    session.query(UserSetting.user_id)
+                    .filter(UserSetting.morning_report_enabled.is_(True))
+                    .order_by(UserSetting.user_id.asc())
+                    .all()
+                )
+            ]
 
     def get_user_settings(
         self,

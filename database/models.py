@@ -467,6 +467,22 @@ class UserSetting(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.now)
     updated_at = Column(DateTime(timezone=True), default=datetime.now)
 
+class KakaoCredential(Base):
+    """Encrypted per-user Kakao OAuth credentials."""
+
+    __tablename__ = "kakao_credentials"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False, unique=True, index=True)
+    access_token_encrypted = Column(Text, nullable=False)
+    refresh_token_encrypted = Column(Text, nullable=False)
+    access_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    refresh_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    scopes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.now)
+    updated_at = Column(DateTime(timezone=True), default=datetime.now)
+
+
 class MorningReport(Base):
     """Server-generated private report, unique per owner and calendar date."""
 
@@ -480,6 +496,7 @@ class MorningReport(Base):
     user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     report_date = Column(Date, nullable=False, index=True)
     html_content = Column(Text, nullable=False)
+    kakao_sent_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.now)
     updated_at = Column(DateTime(timezone=True), default=datetime.now)
 

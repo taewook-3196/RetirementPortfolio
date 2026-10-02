@@ -8,11 +8,14 @@ services/kakao_service.py
 """
 
 from __future__ import annotations
+import copy
 import json
 import logging
 import urllib.request
 import urllib.parse
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, Tuple
+from core.secret_crypto import decrypt_secret, encrypt_secret
 from core.config import (
     AppConfig,
     MorningReportConfig,
@@ -33,6 +36,33 @@ class KakaoService:
     def __init__(self, config: AppConfig):
         self.config = config
         self.morning_cfg: MorningReportConfig = getattr(config, "morning_report", MorningReportConfig())
+
+
+    @classmethod
+    def for_user(cls, config: AppConfig, repo):
+        """Build a Kakao client from this user's encrypted OAuth credentials."""
+        # Never mutate the shared AppConfig used by the multi-user runner.
+        # Start every user with blank Kakao tokens so a user without a
+        # credential cannot inherit legacy/global or a previous user's token.
+        user_config = copy.deepcopy(config)
+        instance = cls(user_config)
+        instance.morning_cfg.kakao_rest_api_key = __import__("os").getenv("KAKAO_REST_API_KEY", "").strip()
+        instance.morning_cfg.kakao_access_token = ""
+        instance.morning_cfg.kakao_refresh_token = ""
+        instance._credential_repo = repo
+
+        credential = repo.get_kakao_credential()
+        # unittest.mock.Mock fabricates arbitrary attributes on access. Only
+        # accept the concrete string fields that a persisted credential has.
+        access_encrypted = getattr(credential, "access_token_encrypted", None) if credential is not None else None
+        refresh_encrypted = getattr(credential, "refresh_token_encrypted", None) if credential is not None else None
+        if not isinstance(access_encrypted, str) or not access_encrypted:
+            return instance
+        if not isinstance(refresh_encrypted, str) or not refresh_encrypted:
+            return instance
+        instance.morning_cfg.kakao_access_token = decrypt_secret(access_encrypted)
+        instance.morning_cfg.kakao_refresh_token = decrypt_secret(refresh_encrypted)
+        return instance
 
     def is_configured(self) -> bool:
         """카카오 API 키 또는 Access Token 설정 여부 확인"""
@@ -73,8 +103,28 @@ class KakaoService:
                     if new_refresh:
                         self.morning_cfg.kakao_refresh_token = new_refresh
                     
-                    # config.yaml 자동 업데이트
-                    save_config(self.config)
+                    credential_repo = getattr(self, "_credential_repo", None)
+                    if credential_repo is not None:
+                        existing = credential_repo.get_kakao_credential()
+                        now = datetime.now(timezone.utc)
+                        expires_in = int(result.get("expires_in", 0) or 0)
+                        refresh_expires_in = int(result.get("refresh_token_expires_in", 0) or 0)
+                        credential_repo.save_kakao_credential(
+                            access_token_encrypted=encrypt_secret(new_access),
+                            refresh_token_encrypted=encrypt_secret(new_refresh or refresh_token),
+                            access_token_expires_at=(
+                                now + timedelta(seconds=expires_in)
+                                if expires_in else getattr(existing, "access_token_expires_at", None)
+                            ),
+                            refresh_token_expires_at=(
+                                now + timedelta(seconds=refresh_expires_in)
+                                if new_refresh and refresh_expires_in
+                                else getattr(existing, "refresh_token_expires_at", None)
+                            ),
+                            scopes=getattr(existing, "scopes", "") or "",
+                        )
+                    else:
+                        save_config(self.config)
                     logger.info("카카오톡 Access Token 자동 갱신 성공")
                     return True, "토큰 갱신 성공"
                 else:
