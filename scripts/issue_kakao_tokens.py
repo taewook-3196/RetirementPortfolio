@@ -41,7 +41,7 @@ def main():
     )
 
     print("\n1. 브라우저에서 카카오 인증 페이지가 열립니다...")
-    print(f"   (열리지 않을 경우 수동 접속): {auth_url}")
+    print("   브라우저가 열리지 않으면 카카오 개발자 문서의 OAuth 인증 URL 형식을 확인해 주세요.")
     webbrowser.open(auth_url)
 
     print("\n2. 브라우저에서 '동의하고 계속하기'를 누르면 페이지가 이동합니다.")
