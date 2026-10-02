@@ -28,7 +28,7 @@ Windows PC에서 실행되는 **Portable(휴대용) 데스크톱 프로그램**�
 ```
 RetirementPortfolio/
 ├── RetirementPortfolio.exe   # 단일 실행 파일 (onedir 빌드 시)
-├── config.yaml               # 포트폴리오 설정 (원금, 기본매수, 목표비중 등)
+├── config.example.yaml       # 공개 가능한 설정 예제 (개인 config.yaml은 Git 제외)
 ├── portfolio.db              # SQLite 데이터베이스 파일
 ├── README.md                 # 프로그램 설명서
 ├── .env                      # KRX API 키 (보안 보관)
@@ -67,7 +67,17 @@ pytest -v tests/
    KRX_API_KEY=your_krx_api_key
    ```
 
-### 3.3 공개 Web 및 Morning Report URL 설정
+### 3.3 개인 설정 파일 준비
+
+저장소의 `config.example.yaml`을 복사해 로컬에서 `config.yaml`을 만든 뒤 개인 설정을 입력합니다.
+
+```bash
+cp config.example.yaml config.yaml
+```
+
+`config.yaml`은 Git 추적에서 제외됩니다. API 키, 토큰, 비밀번호 같은 비밀값은 저장소에 커밋하지 말고 환경변수 또는 GitHub Secrets를 사용하세요.
+
+### 3.4 공개 Web 및 Morning Report URL 설정
 
 배포 환경에서는 다음 환경변수(또는 GitHub Actions의 같은 이름인 Repository Variable)를 설정할 수 있습니다.
 
@@ -81,7 +91,7 @@ RETIREMENT_PORTFOLIO_REPORT_URL=https://retirementportfolio.onrender.com/?view=r
 - 두 값은 공개 `http`/`https` URL만 허용하며, 잘못된 scheme 또는 hostname 없는 값은 안전한 기본 URL로 대체됩니다.
 - override가 없으면 `RETIREMENT_PORTFOLIO_WEB_URL`의 `?view=report` 화면을 사용합니다. GitHub Pages fallback은 개인 금융정보 공개를 막기 위해 지원하지 않습니다.
 
-### 3.4 Mock 시뮬레이션 모드 (네트워크 없는 환경)
+### 3.5 Mock 시뮬레이션 모드 (네트워크 없는 환경)
 
 `config.yaml` 파일에서 `data_source`를 `mock`으로 변경하거나 GUI의 [환경 설정] 화면에서 변경할 수 있습니다:
 ```yaml
