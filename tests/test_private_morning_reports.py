@@ -149,3 +149,9 @@ def test_signed_report_route_requires_token(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         web_app.open_signed_morning_report("")
     assert exc_info.value.status_code == 400
+
+
+def test_kakao_report_generation_pins_live_render_host():
+    source = Path("services/daily_report_service.py").read_text(encoding="utf-8")
+    assert "https://retirementportfolio.onrender.com/report?token=" in source
+    assert 'get_web_app_url().rstrip("/")\n                    + "/report?token="' not in source
