@@ -447,6 +447,55 @@ def kakao_disconnect(authorization: str | None = Header(default=None)):
 # Request Models
 # =========================================================
 
+class MorningReportSettingsRequest(BaseModel):
+    morning_report_enabled: bool = True
+    morning_report_time: str = Field(default="07:30", pattern=r"^(?:[01]\\d|2[0-3]):[0-5]\\d$")
+    news_enabled: bool = True
+    ai_advice_enabled: bool = True
+
+
+@app.get("/api/morning-report/settings")
+def get_morning_report_settings(authorization: str | None = Header(default=None)):
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    settings = repo.get_user_settings()
+    if settings is None:
+        repo.ensure_user_initialized()
+        settings = repo.get_user_settings()
+    return {
+        "morning_report_enabled": bool(settings.morning_report_enabled),
+        "morning_report_time": settings.morning_report_time.strftime("%H:%M"),
+        "kakao_enabled": bool(settings.kakao_enabled),
+        "news_enabled": bool(settings.news_enabled),
+        "ai_advice_enabled": bool(settings.ai_advice_enabled),
+    }
+
+
+@app.put("/api/morning-report/settings")
+def update_morning_report_settings(
+    payload: MorningReportSettingsRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    current = repo.get_user_settings()
+    kakao_enabled = bool(current.kakao_enabled) if current is not None else False
+    saved = repo.save_user_settings(
+        morning_report_enabled=payload.morning_report_enabled,
+        morning_report_time=payload.morning_report_time,
+        kakao_enabled=kakao_enabled,
+        news_enabled=payload.news_enabled,
+        ai_advice_enabled=payload.ai_advice_enabled,
+    )
+    return {
+        "morning_report_enabled": bool(saved.morning_report_enabled),
+        "morning_report_time": saved.morning_report_time.strftime("%H:%M"),
+        "kakao_enabled": bool(saved.kakao_enabled),
+        "news_enabled": bool(saved.news_enabled),
+        "ai_advice_enabled": bool(saved.ai_advice_enabled),
+    }
+
+
 class AccountUpdateRequest(BaseModel):
     """계좌별 운용 및 자금 설정 수정 요청."""
 
@@ -3801,6 +3850,25 @@ button:disabled {
 </section>
 
 
+<section id="morning-report-settings-section" class="card">
+<h2>모닝 리포트 설정</h2>
+<p class="subtitle">사용자별 발송 여부와 기준 시간을 설정합니다. 실제 실행은 약 10분 간격 스케줄에 따라 지연될 수 있습니다.</p>
+<form id="morning-report-settings-form">
+<div class="checkbox-row">
+<input id="morning-report-enabled" type="checkbox">
+<label for="morning-report-enabled">모닝 리포트 사용</label>
+</div>
+<label for="morning-report-time">발송 기준 시간</label>
+<input id="morning-report-time" type="time" required>
+<div class="checkbox-row">
+<input id="morning-report-news-enabled" type="checkbox">
+<label for="morning-report-news-enabled">뉴스 포함</label>
+</div>
+<button type="submit">모닝 리포트 설정 저장</button>
+<div id="morning-report-settings-message" class="transaction-message"></div>
+</form>
+</section>
+
 <section id="kakao-settings-section" class="card">
 
 <h2>카카오톡 모닝 리포트</h2>
@@ -4035,6 +4103,49 @@ const accountsList =
     document.getElementById(
         "accounts-list"
     );
+
+const morningReportSettingsForm = document.getElementById("morning-report-settings-form");
+const morningReportEnabled = document.getElementById("morning-report-enabled");
+const morningReportTime = document.getElementById("morning-report-time");
+const morningReportNewsEnabled = document.getElementById("morning-report-news-enabled");
+const morningReportSettingsMessage = document.getElementById("morning-report-settings-message");
+
+async function loadMorningReportSettings(accessToken) {
+    const response = await fetch("/api/morning-report/settings", {
+        headers: {"Authorization": "Bearer " + accessToken},
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "모닝 리포트 설정을 불러오지 못했습니다.");
+    morningReportEnabled.checked = Boolean(data.morning_report_enabled);
+    morningReportTime.value = data.morning_report_time || "07:30";
+    morningReportNewsEnabled.checked = Boolean(data.news_enabled);
+}
+
+morningReportSettingsForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    if (!accessToken) return;
+    try {
+        const response = await fetch("/api/morning-report/settings", {
+            method: "PUT",
+            headers: {
+                "Authorization": "Bearer " + accessToken,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                morning_report_enabled: morningReportEnabled.checked,
+                morning_report_time: morningReportTime.value,
+                news_enabled: morningReportNewsEnabled.checked,
+                ai_advice_enabled: document.getElementById("ai-advice-enabled").checked,
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "모닝 리포트 설정을 저장하지 못했습니다.");
+        morningReportSettingsMessage.textContent = "저장되었습니다.";
+    } catch (error) {
+        morningReportSettingsMessage.textContent = error.message || "모닝 리포트 설정을 저장하지 못했습니다.";
+    }
+});
 
 const kakaoStatus = document.getElementById("kakao-status");
 const kakaoConnectButton = document.getElementById("kakao-connect-button");\nconst kakaoDisconnectButton = document.getElementById("kakao-disconnect-button");
