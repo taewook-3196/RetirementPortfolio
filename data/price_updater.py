@@ -160,7 +160,7 @@ def update_market_prices(
     # -------------------------------------------------------------
     # 1. 기본 설정 종목
     # -------------------------------------------------------------
-    for etf in cfg.etfs:
+    for etf in (cfg.etfs if not repository.user_id else []):
         add_target(
             ticker=etf.ticker,
             name=etf.name,
@@ -177,7 +177,7 @@ def update_market_prices(
         cfg,
         "watchlist",
         [],
-    ):
+    ) if not repository.user_id else []:
         add_target(
             ticker=watch.ticker,
             name=watch.name,

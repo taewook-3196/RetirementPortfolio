@@ -2118,11 +2118,25 @@ class DailyReportService:
                     )
 
                     if p_shares > 0:
+                        p_eval = float(
+                            p.get(
+                                "eval_amount",
+                                0.0,
+                            )
+                            or 0.0
+                        )
+                        formatted_eval = (
+                            self._format_money(
+                                p_eval,
+                                p_currency,
+                            )
+                        )
                         line = (
                             f"• {p_name}: "
                             f"{formatted_price} "
                             f"({p_sign}{p_pl:.1f}% | "
-                            f"비중 {p_cur_w:.1f}%)"
+                            f"비중 {p_cur_w:.1f}% | "
+                            f"평가금액 {formatted_eval})"
                         )
 
                     else:
@@ -2230,11 +2244,25 @@ class DailyReportService:
                 )
 
                 if p_shares > 0:
+                    p_eval = float(
+                        p.get(
+                            "eval_amount",
+                            0.0,
+                        )
+                        or 0.0
+                    )
+                    formatted_eval = (
+                        self._format_money(
+                            p_eval,
+                            p_currency,
+                        )
+                    )
                     line = (
                         f"• {p_name}: "
                         f"{formatted_price} "
                         f"({p_sign}{p_pl:.1f}% | "
-                        f"비중 {p_cur_w:.1f}%)"
+                        f"비중 {p_cur_w:.1f}% | "
+                        f"평가금액 {formatted_eval})"
                     )
 
                 else:

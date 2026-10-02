@@ -10,6 +10,7 @@ from core.config import (
     get_default_config,
     get_report_url,
     get_web_app_url,
+    validate_public_url,
 )
 from services.kakao_service import KakaoService
 from web.app import home
@@ -114,3 +115,8 @@ def test_web_html_does_not_expose_server_secrets(monkeypatch):
     html = home().body.decode("utf-8")
     for value in secrets.values():
         assert value not in html
+
+
+def test_validate_public_url_preserves_report_query():
+    url = "https://retirementportfolio.onrender.com/?view=report"
+    assert validate_public_url(url, DEFAULT_REPORT_URL) == url
