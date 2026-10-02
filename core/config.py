@@ -116,9 +116,9 @@ class MorningReportConfig:
 @dataclass
 class AppConfig:
     data_source: str = "krx"
-    initial_capital: int = 100000000
-    base_monthly: int = 10000000
-    max_additional_monthly: int = 15000000
+    initial_capital: int = 0
+    base_monthly: int = 0
+    max_additional_monthly: int = 0
     etfs: List[ETFConfig] = field(default_factory=list)
     watchlist: List[WatchlistConfig] = field(default_factory=list)
     drawdown_tiers: List[DrawdownTier] = field(default_factory=list)
@@ -163,23 +163,21 @@ def get_default_config() -> AppConfig:
     """기본 AppConfig 인스턴스를 반환합니다."""
     return AppConfig(
         data_source="krx",
-        initial_capital=100000000,
-        base_monthly=10000000,
-        max_additional_monthly=15000000,
+        initial_capital=0,
+        base_monthly=0,
+        max_additional_monthly=0,
         etfs=[
-            ETFConfig(ticker="442560", name="RISE TDF2040액티브", target_weight=0.60, dividend_yield=0.025),
-            ETFConfig(ticker="488500", name="TIGER 미국S&P500동일가중", target_weight=0.25, dividend_yield=0.015),
-            ETFConfig(ticker="494840", name="TIGER 미국나스닥TOP10", target_weight=0.15, dividend_yield=0.010),
+            ETFConfig(ticker="SAMPLE_ETF", name="Sample ETF", target_weight=1.0, dividend_yield=0.0),
         ],
         watchlist=[
-            WatchlistConfig(ticker="069500", name="KODEX 200"),
+            WatchlistConfig(ticker="SAMPLE_WATCH", name="Sample Watchlist Asset"),
         ],
         drawdown_tiers=[
             DrawdownTier(min_drawdown=0.00, max_drawdown=-0.05, additional_buy=0, score=0),
-            DrawdownTier(min_drawdown=-0.05, max_drawdown=-0.10, additional_buy=2000000, score=1),
-            DrawdownTier(min_drawdown=-0.10, max_drawdown=-0.15, additional_buy=5000000, score=2),
-            DrawdownTier(min_drawdown=-0.15, max_drawdown=-0.20, additional_buy=10000000, score=3),
-            DrawdownTier(min_drawdown=-0.20, max_drawdown=-1.00, additional_buy=15000000, score=4),
+            DrawdownTier(min_drawdown=-0.05, max_drawdown=-0.10, additional_buy=0, score=1),
+            DrawdownTier(min_drawdown=-0.10, max_drawdown=-0.15, additional_buy=0, score=2),
+            DrawdownTier(min_drawdown=-0.15, max_drawdown=-0.20, additional_buy=0, score=3),
+            DrawdownTier(min_drawdown=-0.20, max_drawdown=-1.00, additional_buy=0, score=4),
         ],
         priority_weights={"drawdown": 0.7, "weight_gap": 0.3},
         show_splash_screen=True,
@@ -266,9 +264,9 @@ def load_config(config_path: Path | None = None) -> AppConfig:
 
     cfg = AppConfig(
         data_source=data.get("data_source", "krx"),
-        initial_capital=int(data.get("initial_capital", 100000000)),
-        base_monthly=int(data.get("base_monthly", 10000000)),
-        max_additional_monthly=int(data.get("max_additional_monthly", 15000000)),
+        initial_capital=int(data.get("initial_capital", 0)),
+        base_monthly=int(data.get("base_monthly", 0)),
+        max_additional_monthly=int(data.get("max_additional_monthly", 0)),
         etfs=etfs,
         watchlist=watchlist,
         drawdown_tiers=drawdown_tiers,
