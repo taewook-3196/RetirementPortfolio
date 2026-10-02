@@ -22,4 +22,8 @@ jobs:
           pip install -r requirements.txt
           pip install pytest
       - name: Run tests
+        env:
+          # Non-production test-only value. Tests that instantiate the Kakao
+          # service need an encryption secret, but never use real OAuth tokens.
+          OAUTH_TOKEN_ENCRYPTION_KEY: ci-test-only-encryption-key
         run: pytest -q
