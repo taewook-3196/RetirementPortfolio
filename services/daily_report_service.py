@@ -1659,6 +1659,8 @@ class DailyReportService:
                     ok, msg = self.kakao_service.send_morning_report(summary_text, report_web_url)
                     if not ok:
                         return False, f"리포트 HTML은 생성되었으나 카카오톡 전송에 실패했습니다: {msg}", html_file
+                    if self.repo.user_id:
+                        self.repo.mark_morning_report_kakao_sent(datetime.date.today())
                     kakao_status = "카카오톡 발송 성공!"
                 else:
                     kakao_status = "카카오톡 미발송 (설정에서 모닝 리포트 발송 기능이 꺼져 있음)"
