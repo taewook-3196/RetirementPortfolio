@@ -16,7 +16,14 @@ from datetime import date
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
-from core.config import AppConfig, MorningReportConfig, ETFConfig, load_config
+from core.config import (
+    AppConfig,
+    MorningReportConfig,
+    ETFConfig,
+    get_report_url,
+    get_web_app_url,
+    load_config,
+)
 from core.paths import get_project_root, get_report_dir
 from database.connection import init_db
 from database.repository import Repository
@@ -70,6 +77,67 @@ class DailyReportService:
         self.gemini_service = GeminiService(self.config)
         self.macro_service = MacroIndicatorService()
 
+    def _attach_report_chart_data(
+        self,
+        account_groups: List[Dict[str, Any]],
+        price_limit: int = 260,
+    ) -> None:
+        """정적 보고서용 공개 가능 차트 데이터만 종목에 연결합니다."""
+        for group in account_groups:
+            account_id = group.get("account_id")
+            if account_id is None:
+                continue
+
+            for position in group.get("positions", []) or []:
+                ticker = str(position.get("ticker", "")).strip().upper()
+                position["chart_data"] = {"prices": [], "transactions": []}
+                if not ticker:
+                    continue
+
+                try:
+                    raw = self.repo.get_asset_chart_data(
+                        account_id=int(account_id),
+                        ticker=ticker,
+                        limit=price_limit,
+                    ) or {}
+
+                    prices = []
+                    for item in (raw.get("prices", []) or [])[-price_limit:]:
+                        prices.append({
+                            "date": str(item.get("date", "")),
+                            "open": float(item.get("open", 0) or 0),
+                            "high": float(item.get("high", 0) or 0),
+                            "low": float(item.get("low", 0) or 0),
+                            "close": float(item.get("close", 0) or 0),
+                        })
+
+                    first_date = prices[0]["date"] if prices else ""
+                    transactions = []
+                    for item in raw.get("transactions", []) or []:
+                        tx_date = str(item.get("date", ""))
+                        tx_type = str(item.get("type", "")).strip().upper()
+                        if tx_type not in ("BUY", "SELL"):
+                            continue
+                        if first_date and tx_date < first_date:
+                            continue
+                        transactions.append({
+                            "date": tx_date,
+                            "type": tx_type,
+                            "price": float(item.get("price", 0) or 0),
+                            "quantity": float(item.get("quantity", 0) or 0),
+                        })
+
+                    position["chart_data"] = {
+                        "prices": prices,
+                        "transactions": transactions[-200:],
+                    }
+                except Exception:
+                    logger.warning(
+                        "보고서 차트 데이터 준비 실패 (%s/%s)",
+                        account_id,
+                        ticker,
+                    )
+
     @staticmethod
     def _format_money(
         value: Any,
@@ -100,6 +168,48 @@ class DailyReportService:
             f"{amount:,.2f} "
             f"{currency_code}"
         )
+
+    def _build_overall_portfolio_summary(
+        self,
+        portfolio_summary,
+    ) -> Dict[str, float]:
+        """검증된 전체 PortfolioSummary를 보고서 필드로 변환합니다."""
+        stock_eval = float(portfolio_summary.total_current_value or 0)
+        cash_balance = float(portfolio_summary.remaining_cash or 0)
+        total_assets = stock_eval + cash_balance
+
+        return {
+            # total_eval은 기존 HTML/외부 소비자 호환 별칭입니다.
+            "total_eval": total_assets,
+            "total_assets": total_assets,
+            "stock_eval": stock_eval,
+            "cash_balance": cash_balance,
+            "total_cost": float(portfolio_summary.total_invested or 0),
+            "total_pl": float(portfolio_summary.total_pnl or 0),
+            "total_pl_pct": float(portfolio_summary.total_roi or 0) * 100.0,
+        }
+
+    def _generate_ai_analysis(
+        self,
+        context: Dict[str, Any],
+        enabled: bool,
+    ) -> Dict[str, Any]:
+        """AI 실패를 보고서 전체 실패와 격리합니다."""
+        if not enabled:
+            return {}
+
+        try:
+            return self.gemini_service.generate_macro_investment_guide(
+                context
+            )
+        except Exception as exc:
+            logger.warning(
+                "AI 분석을 생성하지 못해 대체 안내를 사용합니다: %s",
+                type(exc).__name__,
+            )
+            return self.gemini_service.build_fallback_response(
+                "AI 분석 생성 예외"
+            )
 
     def generate_and_send(
         self,
@@ -228,7 +338,7 @@ class DailyReportService:
                         0.0,
                     )
 
-                    # 평가손익
+                    # 총손익: 평가손익 + 실현손익 + 배당금
                     acc_pl = getattr(
                         acc_sum,
                         "total_pnl",
@@ -388,10 +498,22 @@ class DailyReportService:
                                     asset_currency,
                                 "shares":
                                     pos.quantity,
+                                "average_buy_price":
+                                    pos.average_buy_price,
+                                "total_buy_cost":
+                                    pos.total_buy_cost,
                                 "current_price":
                                     pos.current_price,
                                 "eval_amount":
                                     pos.current_value,
+                                "unrealized_pnl":
+                                    pos.unrealized_pnl,
+                                "realized_pnl":
+                                    pos.realized_pnl,
+                                "dividends":
+                                    pos.total_dividends,
+                                "total_pnl":
+                                    pos.total_pnl,
                                 "pl_pct":
                                     pos.unrealized_roi
                                     * 100.0,
@@ -1021,172 +1143,14 @@ class DailyReportService:
             # KRW로 환산하여 전체 총자산을 계산합니다.
             # ---------------------------------------------------------
 
-            total_assets_krw = 0.0
-            total_stock_eval_krw = 0.0
-            total_cash_krw = 0.0
-            total_cost_krw = 0.0
-            total_pl_krw = 0.0
-
-
-            for account_group in account_groups:
-
-                account_currency = str(
-                    account_group.get(
-                        "currency",
-                        "KRW",
-                    )
-                    or "KRW"
-                ).strip().upper()
-
-
-                stock_eval = float(
-                    account_group.get(
-                        "total_eval",
-                        0.0,
-                    )
-                    or 0.0
+            overall_portfolio_summary = (
+                self.portfolio_service.get_summary(
+                    account_id=None
                 )
-
-
-                cash_balance = float(
-                    account_group.get(
-                        "cash_balance",
-                        0.0,
-                    )
-                    or 0.0
-                )
-
-
-                total_cost = float(
-                    account_group.get(
-                        "total_cost",
-                        0.0,
-                    )
-                    or 0.0
-                )
-
-
-                total_pl = float(
-                    account_group.get(
-                        "total_pl",
-                        0.0,
-                    )
-                    or 0.0
-                )
-
-
-                stock_eval_krw = (
-                    self.portfolio_service
-                    .convert_amount(
-                        value=stock_eval,
-                        from_currency=(
-                            account_currency
-                        ),
-                        to_currency="KRW",
-                    )
-                )
-
-
-                cash_krw = (
-                    self.portfolio_service
-                    .convert_amount(
-                        value=cash_balance,
-                        from_currency=(
-                            account_currency
-                        ),
-                        to_currency="KRW",
-                    )
-                )
-
-
-                cost_krw = (
-                    self.portfolio_service
-                    .convert_amount(
-                        value=total_cost,
-                        from_currency=(
-                            account_currency
-                        ),
-                        to_currency="KRW",
-                    )
-                )
-
-
-                pl_krw = (
-                    self.portfolio_service
-                    .convert_amount(
-                        value=total_pl,
-                        from_currency=(
-                            account_currency
-                        ),
-                        to_currency="KRW",
-                    )
-                )
-
-
-                total_stock_eval_krw += (
-                    stock_eval_krw
-                )
-
-
-                total_cash_krw += (
-                    cash_krw
-                )
-
-
-                total_cost_krw += (
-                    cost_krw
-                )
-
-
-                total_pl_krw += (
-                    pl_krw
-                )
-
-
-            total_assets_krw = (
-                total_stock_eval_krw
-                + total_cash_krw
             )
-
-
-            if total_cost_krw > 0:
-
-                total_pl_pct = (
-                    total_pl_krw
-                    / total_cost_krw
-                    * 100.0
-                )
-
-            else:
-
-                total_pl_pct = 0.0
-
-
-            summary = {
-                # 전체 총자산:
-                # 주식 평가액 + 예수금
-                "total_eval":
-                    total_assets_krw,
-
-                # 전체 주식 평가액
-                "stock_eval":
-                    total_stock_eval_krw,
-
-                # 전체 예수금
-                "cash_balance":
-                    total_cash_krw,
-
-                # 전체 매수원가
-                "total_cost":
-                    total_cost_krw,
-
-                # 전체 평가손익
-                "total_pl":
-                    total_pl_krw,
-
-                "total_pl_pct":
-                    total_pl_pct,
-            }
+            summary = self._build_overall_portfolio_summary(
+                overall_portfolio_summary
+            )
 
             # 1-1. 전체 등록 종목 맵 구성
             #
@@ -1229,6 +1193,10 @@ class DailyReportService:
                     ] = e
 
             positions = []
+
+            # 정적 GitHub Pages에는 인증정보 없이 표시 가능한 가격/매매
+            # 데이터만 최대 260개 시점으로 제한하여 포함합니다.
+            self._attach_report_chart_data(account_groups)
 
             # ---------------------------------------------------------
             # 계좌별 포지션을 그대로 유지하면서
@@ -1543,7 +1511,31 @@ class DailyReportService:
                     e,
                 )
 
-            # 4. Google Gemini AI 매크로 투자 가이드 생성 (활성화된 경우)
+            # AI에 전달할 최근 거래와 관심종목은 조회 가능한 데이터만 사용합니다.
+            recent_transactions = []
+            watchlist = []
+
+            try:
+                for transaction in self.repo.get_transactions()[:20]:
+                    recent_transactions.append({
+                        "date": str(getattr(transaction, "transaction_date", "")),
+                        "account_id": getattr(transaction, "account_id", None),
+                        "ticker": getattr(transaction, "ticker", ""),
+                        "type": getattr(transaction, "transaction_type", ""),
+                        "quantity": float(getattr(transaction, "quantity", 0) or 0),
+                        "price": float(getattr(transaction, "price", 0) or 0),
+                        "fee": float(getattr(transaction, "fee", 0) or 0),
+                        "tax": float(getattr(transaction, "tax", 0) or 0),
+                    })
+            except Exception as exc:
+                logger.warning("AI 입력용 최근 거래 조회를 생략합니다: %s", type(exc).__name__)
+
+            try:
+                watchlist = self.repo.get_watchlist() or []
+            except Exception as exc:
+                logger.warning("AI 입력용 관심종목 조회를 생략합니다: %s", type(exc).__name__)
+
+            # 4. Google Gemini AI 투자 분석 생성 (실패해도 보고서는 계속 생성)
             gemini_analysis = {}
 
             ai_advice_enabled = bool(
@@ -1559,20 +1551,7 @@ class DailyReportService:
                 True,
             )
 
-            if (
-                gemini_enabled
-                and ai_advice_enabled
-                and self.gemini_service.is_configured()
-            ):
-                try:
-                    logger.info(
-                        "Google Gemini AI 매크로 투자 가이드 생성 요청 중..."
-                    )
-
-                    gemini_analysis = (
-                        self.gemini_service
-                        .generate_macro_investment_guide(
-                            {
+            ai_context = {
                                 "account_name":
                                     account_name,
 
@@ -1605,17 +1584,16 @@ class DailyReportService:
 
                                 "account_recommendations":
                                     account_recommendations,
+                                "recent_transactions": recent_transactions,
+                                "watchlist": watchlist,
                             }
-                        )
-                    )
 
-                except Exception as e:
-                    logger.warning(
-                        "Gemini AI 가이드 생성 중 오류 "
-                        f"(기본 룰로 대체): {e}"
-                    )
+            gemini_analysis = self._generate_ai_analysis(
+                ai_context,
+                enabled=(gemini_enabled and ai_advice_enabled),
+            )
 
-            elif not ai_advice_enabled:
+            if not ai_advice_enabled:
                 logger.info(
                     "사용자 설정에서 AI 투자 가이드가 "
                     "비활성화되어 Gemini 호출을 건너뜁니다."
@@ -1634,6 +1612,7 @@ class DailyReportService:
                 "macro_indicators": macro_data,
                 "investment_profile": investment_profile_data,
                 "gemini_analysis": gemini_analysis,
+                "portfolio_management_url": get_web_app_url(),
             }
 
             # 5. 모바일 반응형 HTML 생성
@@ -1641,20 +1620,7 @@ class DailyReportService:
             logger.info(f"모닝 리포트 HTML 생성 완료: {html_file}")
 
             # 웹 URL 결정 (카카오톡 버튼은 file:// 링크를 지원하지 않으며 반드시 http/https 여야 합니다)
-            pages_env = os.getenv("GITHUB_PAGES_BASE_URL", "").strip().rstrip("/")
-            gh_repo = getattr(self.config.morning_report, "github_repo", "").strip() or os.getenv("GITHUB_REPOSITORY", "").strip()
-            if "github.com/" in gh_repo:
-                gh_repo = gh_repo.split("github.com/")[1].strip("/").removesuffix(".git")
-
-            if pages_env:
-                report_web_url = f"{pages_env}/"
-            elif gh_repo and "/" in gh_repo:
-                parts = gh_repo.split("/")
-                owner, repo = parts[0].strip().lower(), parts[1].strip()
-                report_web_url = f"https://{owner}.github.io/{repo}/"
-            else:
-                # 기본 fallback 웹 URL (GitHub Pages)
-                report_web_url = "https://taewook-3196.github.io/RetirementPortfolio/"
+            report_web_url = get_report_url()
 
             summary_text = self._build_kakao_summary_text(
                 account_name=account_name,
@@ -1722,7 +1688,13 @@ class DailyReportService:
         date_str = now.strftime("%Y.%m.%d")
         weekday_kr = ["월", "화", "수", "목", "금", "토", "일"][now.weekday()]
 
-        total_eval = summary.get("total_eval", 0)
+        total_assets = summary.get(
+            "total_assets",
+            summary.get("total_eval", 0),
+        )
+        stock_eval = summary.get("stock_eval", 0)
+        cash_balance = summary.get("cash_balance", 0)
+        total_cost = summary.get("total_cost", 0)
         total_pl = summary.get("total_pl", 0)
         total_pl_pct = summary.get("total_pl_pct", 0.0)
         sign = "+" if total_pl > 0 else ""
@@ -1785,7 +1757,11 @@ class DailyReportService:
         lines = [
             f"🌅 [포트폴리오 모닝 리포트] {date_str} ({weekday_kr})",
             f"• 계좌: {account_name}",
-            f"• 총자산: {total_eval:,.0f}원 ({sign}{total_pl_pct:.2f}%)",
+            f"• 총자산: {total_assets:,.0f}원 ({sign}{total_pl_pct:.2f}%)",
+            f"• 주식평가액: {stock_eval:,.0f}원",
+            f"• 예수금: {cash_balance:,.0f}원",
+            f"• 주식 매수원가: {total_cost:,.0f}원",
+            f"• 총손익: {sign}{total_pl:,.0f}원",
         ]
 
         # 다중 계좌 등록 시 계좌별 요약 한 줄 표시
@@ -2000,6 +1976,16 @@ class DailyReportService:
                     lines.append(
                         f"• AI 요약: {ai_take}"
                     )
+
+        elif gemini_analysis:
+            fallback_text = str(
+                gemini_analysis.get(
+                    "one_line_summary",
+                    "AI 분석을 일시적으로 사용할 수 없습니다.",
+                )
+                or "AI 분석을 일시적으로 사용할 수 없습니다."
+            ).strip()
+            lines.append(f"\n🤖 AI 투자분석: {fallback_text}")
 
         # 등록 및 보유 종목 세부 현황
         # 개별 종목 가격은 계좌 통화가 아니라
@@ -2446,7 +2432,7 @@ class DailyReportService:
             import json
             data = json.loads(payload_cache.read_text(encoding="utf-8"))
             summary_text = data.get("summary_text", "")
-            report_web_url = data.get("report_web_url", "https://taewook-3196.github.io/RetirementPortfolio/")
+            report_web_url = data.get("report_web_url") or get_report_url()
             if not self.kakao_service.is_configured():
                 return False, "카카오톡 토큰이 설정되지 않았습니다."
             return self.kakao_service.send_morning_report(summary_text, report_web_url)

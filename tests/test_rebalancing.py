@@ -57,18 +57,17 @@ def test_rebalance_tiers_exact_rules():
     assert action == "HOLD"
     assert rate == 0.0
 
-    # 6. 5% 이상 증가 -> 증가 비율 * 0.5 익절
-    # 예: 10% 증가 시 5% 익절
+    # 6. 현재 정책은 20% 이하 상승은 유지하고,
+    # 20% 초과 상승만 증가 비율 * 0.5 익절
     action, label, rate = calculate_rebalance_tier(0.10)
-    assert action == "SELL"
-    assert "5.0% 익절 매도" in label
-    assert pytest.approx(rate, 0.001) == 0.05
+    assert action == "HOLD"
+    assert rate == 0.0
 
-    # 예: 20% 증가 시 10% 익절
-    action, label, rate = calculate_rebalance_tier(0.20)
+    # 예: 21% 증가 시 10.5% 익절
+    action, label, rate = calculate_rebalance_tier(0.21)
     assert action == "SELL"
-    assert "10.0% 익절 매도" in label
-    assert pytest.approx(rate, 0.001) == 0.10
+    assert "10.5% 익절 매도" in label
+    assert pytest.approx(rate, 0.001) == 0.105
 
 
 def test_generate_rebalancing_recommendations_flow():
@@ -85,20 +84,20 @@ def test_generate_rebalancing_recommendations_flow():
             holding_quantity=1000,
             current_asset_value=18000000.0,
         ),
-        # ETF 2: 10% 상승 (고점 10,000 -> 현재 11,000, +10% -> 5% 익절)
-        # 보유 2,000주 = 2,200만원 -> 5% 익절 = 110만원 (100주)
+        # ETF 2: 21% 상승 (고점 10,000 -> 현재 12,100, +21% -> 10.5% 익절)
+        # 보유 2,000주 = 2,420만원 -> 10.5% 익절 = 약 254만원
         ETFRebalanceInput(
             ticker="222222",
             name="ETF_상승",
             target_weight=0.5,
-            current_price=11000.0,
+            current_price=12100.0,
             recent_3m_high=10000.0,
             holding_quantity=2000,
-            current_asset_value=22000000.0,
+            current_asset_value=24200000.0,
         ),
     ]
 
-    res = generate_rebalancing_recommendations(inputs, total_portfolio_value=40000000.0)
+    res = generate_rebalancing_recommendations(inputs, total_portfolio_value=42200000.0)
     summary = res["summary"]
     recs = res["recommendations"]
 
@@ -114,11 +113,11 @@ def test_generate_rebalancing_recommendations_flow():
     # ETF 2: SELL
     r2 = recs[1]
     assert r2.action == "SELL"
-    assert pytest.approx(r2.action_rate, 0.001) == 0.05
-    assert r2.recommended_amount == 1100000
-    assert r2.recommended_shares == 100
+    assert pytest.approx(r2.action_rate, 0.001) == 0.105
+    assert r2.recommended_amount == 2540000
+    assert r2.recommended_shares == pytest.approx(209.917355, rel=1e-6)
 
     # Summary
     assert summary["total_buy_amount"] == 1800000
-    assert summary["total_sell_amount"] == 1100000
-    assert summary["net_cash_flow"] == 1100000 - 1800000  # -700,000원
+    assert summary["total_sell_amount"] == 2540000
+    assert summary["net_cash_flow"] == 2540000 - 1800000  # +740,000원

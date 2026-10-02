@@ -6,6 +6,7 @@ config.yaml 설정 파일을 로드하고 유효성을 검증하며, GUI 및 전
 from __future__ import annotations
 import os
 import yaml
+from urllib.parse import urlparse
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any
 from pathlib import Path
@@ -14,6 +15,47 @@ from core.paths import get_config_path
 
 # .env 환경변수 자동 로드
 load_dotenv()
+
+
+DEFAULT_WEB_APP_URL = "https://retirementportfolio.onrender.com/"
+DEFAULT_REPORT_URL = "https://taewook-3196.github.io/RetirementPortfolio/"
+
+
+def _get_public_url(value: str, default: str) -> str:
+    """Return a normalized public HTTP(S) URL or the known-safe default."""
+    value = value.strip() or default
+    parsed = urlparse(value)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        value = default
+    return value.rstrip("/") + "/"
+
+
+def get_web_app_url() -> str:
+    """보고서와 웹 deep link가 공유하는 공개 웹앱 URL을 반환합니다."""
+    value = os.getenv(
+        "RETIREMENT_PORTFOLIO_WEB_URL",
+        DEFAULT_WEB_APP_URL,
+    ).strip()
+    return _get_public_url(value, DEFAULT_WEB_APP_URL)
+
+
+def get_report_url() -> str:
+    """Return the public Morning Report URL used by Pages and Kakao.
+
+    ``GITHUB_PAGES_BASE_URL`` remains a compatibility alias for existing
+    deployments. New deployments should use ``RETIREMENT_PORTFOLIO_REPORT_URL``.
+    """
+    value = os.getenv("RETIREMENT_PORTFOLIO_REPORT_URL", "").strip()
+    if not value:
+        value = os.getenv("GITHUB_PAGES_BASE_URL", "").strip()
+    if not value:
+        repository = os.getenv("GITHUB_REPOSITORY", "").strip()
+        if "github.com/" in repository:
+            repository = repository.split("github.com/", 1)[1].strip("/").removesuffix(".git")
+        if "/" in repository:
+            owner, repo = repository.split("/", 1)
+            value = f"https://{owner.lower()}.github.io/{repo}/"
+    return _get_public_url(value, DEFAULT_REPORT_URL)
 
 
 @dataclass

@@ -20,7 +20,7 @@ strategy/recommendation.py
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from strategy.allocation import (
     calculate_weight_gap,
@@ -102,6 +102,7 @@ def generate_recommendations(
     cycle_desc: str = "",
     additional_budget_used: float = 0.0,
     currency: str = "KRW",
+    available_cash: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     종목별 매수 추천을 계산합니다.
@@ -122,6 +123,10 @@ def generate_recommendations(
 
     currency는 추천 금액을 설명 문구에 표시할 때
     사용하는 계좌 기준통화입니다.
+
+    available_cash는 실제 계좌에서 현재 사용할 수 있는
+    현금입니다. 전달되지 않은 기존 호출은 호환성을 위해
+    initial_capital - total_invested_so_far를 사용합니다.
     """
 
     currency = str(
@@ -184,11 +189,19 @@ def generate_recommendations(
         ),
     )
 
-    remaining_cash = max(
-        0.0,
-        initial_capital
-        - total_invested_so_far,
-    )
+    if available_cash is None:
+        remaining_cash = max(
+            0.0,
+            initial_capital
+            - total_invested_so_far,
+        )
+    else:
+        remaining_cash = max(
+            0.0,
+            float(
+                available_cash or 0
+            ),
+        )
 
     if not inputs:
         return {

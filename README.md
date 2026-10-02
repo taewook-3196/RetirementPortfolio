@@ -64,10 +64,19 @@ pytest -v tests/
 2. 서비스 목록에서 **증권상품 > ETF 일별매매정보** [API 이용신청] 완료
 3. 프로그램 루트 폴더의 `.env` 파일에 발급받은 키 입력:
    ```env
-   KRX_API_KEY=7F7C34EE6A27431AB57586C942FFBC357742CDAF
+   KRX_API_KEY=your_krx_api_key
    ```
 
-### 3.3 Mock 시뮬레이션 모드 (네트워크 없는 환경)
+### 3.3 공개 URL 환경변수
+
+- `RETIREMENT_PORTFOLIO_WEB_URL`: Render 웹앱 공개 URL (미설정 시 운영 기본 URL)
+- `RETIREMENT_PORTFOLIO_REPORT_URL`: GitHub Pages 아침 보고서 공개 URL (미설정 시 운영 기본 URL)
+
+기존 배포에서 사용하던 `GITHUB_PAGES_BASE_URL`도 호환되지만, 새 설정은
+`RETIREMENT_PORTFOLIO_REPORT_URL`을 사용합니다. 공개 URL은 GitHub Actions의
+**Variables**에, API 키·토큰·`DATABASE_URL`은 **Secrets**에 등록해야 합니다.
+
+### 3.4 Mock 시뮬레이션 모드 (네트워크 없는 환경)
 
 `config.yaml` 파일에서 `data_source`를 `mock`으로 변경하거나 GUI의 [환경 설정] 화면에서 변경할 수 있습니다:
 ```yaml

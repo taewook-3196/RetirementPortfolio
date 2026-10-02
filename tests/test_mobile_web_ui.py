@@ -1,0 +1,59 @@
+"""모바일 웹 핵심 DOM과 기존 기능 연결을 보호하는 회귀 테스트."""
+
+from web.app import home
+
+
+def _html(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "public-anon-key")
+    return home().body.decode("utf-8")
+
+
+def test_mobile_viewport_safe_area_and_primary_summary(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert "viewport-fit=cover" in html
+    assert "env(safe-area-inset-top)" in html
+    assert "env(safe-area-inset-bottom)" in html
+    assert '"account-summary-grid"' in html
+    assert '"총자산"' in html
+    assert '"주식평가액"' in html
+    assert '"예수금"' in html
+    assert '"총손익"' in html
+    assert 'id="portfolio-section"' in html
+
+
+def test_core_mobile_workflows_and_chart_features_remain(monkeypatch):
+    html = _html(monkeypatch)
+
+    # 인증 복구와 Safari의 localStorage 기반 세션 유지
+    assert "async function restoreLoginSession()" in html
+    assert 'localStorage.getItem("access_token")' in html
+    assert 'localStorage.getItem("refresh_token")' in html
+    assert 'id="boot-screen"' in html
+
+    # 계좌/보유종목/차트와 기간 선택
+    assert "async function loadAccounts(" in html
+    assert "function renderPositions(" in html
+    assert "function renderAssetChart(" in html
+    for period in ("1M", "3M", "6M", "1Y", "ALL"):
+        assert f'key: "{period}"' in html
+    assert "BUY ▲" in html
+    assert "SELL ▼" in html
+
+    # 거래, 입출금 및 수정/삭제 API 연결
+    assert ' + "/transactions"' in html
+    assert ' + "/cash-flows"' in html
+    assert 'method:\n                                    "DELETE"' in html
+
+
+def test_deep_link_and_accessible_position_interaction_remain(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert "function openLinkedAssetChart()" in html
+    assert 'params.get(\n                "account"' in html
+    assert 'params.get(\n                "ticker"' in html
+    assert "openLinkedAssetChart();" in html
+    assert 'row.setAttribute(\n            "role",\n            "button"' in html
+    assert 'event.key === "Enter"' in html
+    assert 'event.key === " "' in html

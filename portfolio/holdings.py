@@ -204,7 +204,7 @@ def calculate_etf_positions(
 
                 buy_amount = (
                     quantity * price
-                ) + fee
+                ) + fee + tax
 
                 new_quantity = (
                     current_quantity

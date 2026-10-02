@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
@@ -265,10 +266,7 @@ class InvestmentProfileRequest(BaseModel):
 class TransactionCreateRequest(BaseModel):
     """매수/매도 거래 등록 및 수정 요청."""
 
-    transaction_date: str = Field(
-        min_length=8,
-        max_length=10,
-    )
+    transaction_date: date
 
     ticker: str = Field(
         min_length=1,
@@ -281,7 +279,7 @@ class TransactionCreateRequest(BaseModel):
     )
 
     quantity: float = Field(gt=0)
-    price: float = Field(ge=0)
+    price: float = Field(gt=0)
     fee: float = Field(default=0, ge=0)
     tax: float = Field(default=0, ge=0)
 
@@ -291,11 +289,11 @@ class TransactionCreateRequest(BaseModel):
     )
 
 class CashFlowRequest(BaseModel):
-    flow_date: str
-    flow_type: str
+    flow_date: date
+    flow_type: str = Field(min_length=7, max_length=10)
     amount: float = Field(gt=0)
-    currency: str
-    memo: str = ""
+    currency: str = Field(min_length=3, max_length=3)
+    memo: str = Field(default="", max_length=1000)
     
 # =========================================================
 # 계좌 API
@@ -2662,7 +2660,7 @@ def home():
 
 <meta
     name="viewport"
-    content="width=device-width, initial-scale=1.0"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
 >
 
 <title>RetirementPortfolio</title>
@@ -2673,9 +2671,18 @@ def home():
     box-sizing: border-box;
 }
 
+html {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+}
+
 body {
     margin: 0;
-    padding: 20px 14px 50px;
+    padding:
+        max(14px, env(safe-area-inset-top))
+        max(12px, env(safe-area-inset-right))
+        max(56px, env(safe-area-inset-bottom))
+        max(12px, env(safe-area-inset-left));
     background: #f5f7fa;
     font-family:
         -apple-system,
@@ -2683,12 +2690,13 @@ body {
         "Segoe UI",
         sans-serif;
     color: #202124;
+    overflow-x: hidden;
 }
 
 .container {
     width: 100%;
-    max-width: 560px;
-    margin: 20px auto;
+    max-width: 920px;
+    margin: 8px auto 24px;
 }
 
 .card {
@@ -2698,6 +2706,8 @@ body {
     margin-bottom: 16px;
     box-shadow:
         0 2px 14px rgba(0,0,0,0.08);
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 h1 {
@@ -2733,6 +2743,16 @@ textarea {
     border-radius: 10px;
     background: white;
     font-size: 16px;
+    color: #202124;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+.position-row:focus-visible {
+    outline: 3px solid rgba(26, 115, 232, 0.32);
+    outline-offset: 2px;
 }
 
 textarea {
@@ -2751,10 +2771,12 @@ button {
     font-size: 15px;
     font-weight: 700;
     cursor: pointer;
+    touch-action: manipulation;
 }
 
 button:disabled {
     opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .secondary-button {
@@ -2799,6 +2821,35 @@ button:disabled {
 
 #app-area {
     display: none;
+    flex-direction: column;
+}
+
+#app-header { order: 0; }
+#portfolio-section { order: 1; }
+#investment-settings-section { order: 2; }
+#asset-search-section { order: 3; }
+
+#boot-screen {
+    display: none;
+    min-height: 55vh;
+    align-items: center;
+    justify-content: center;
+    color: #5f6368;
+    text-align: center;
+}
+
+.boot-spinner {
+    width: 30px;
+    height: 30px;
+    margin: 0 auto 12px;
+    border: 3px solid #dfe3e8;
+    border-top-color: #1a73e8;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 .status-box {
@@ -2826,6 +2877,42 @@ button:disabled {
     color: #555;
     font-size: 14px;
     line-height: 1.5;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.account-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 4px 0 10px;
+}
+
+.summary-kpi {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid #e7e9ed;
+    border-radius: 12px;
+    background: #f8fafc;
+}
+
+.summary-kpi-label {
+    color: #68707b;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.summary-kpi-value {
+    margin-top: 5px;
+    font-size: clamp(15px, 4.5vw, 21px);
+    font-weight: 800;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.account-summary-grid > .account-detail {
+    grid-column: 1 / -1;
+    margin-top: 0;
 }
 
 .section-title {
@@ -2890,6 +2977,21 @@ button:disabled {
     gap: 10px;
     font-size: 14px;
     font-weight: 600;
+    min-width: 0;
+}
+
+.position-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.position-value {
+    flex: 0 1 auto;
+    min-width: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
 }
 
 .transaction-detail {
@@ -2902,6 +3004,11 @@ button:disabled {
     display: flex;
     gap: 8px;
     margin-top: 9px;
+}
+
+.transaction-actions button {
+    flex: 1 1 0;
+    min-height: 44px;
 }
 
 .buy {
@@ -2955,6 +3062,9 @@ button:disabled {
     border-radius: 12px;
     transition:
         background 0.15s ease;
+    padding: 14px 10px;
+    border: 1px solid #edf0f3;
+    margin-bottom: 10px;
 }
 
 .position-row:active {
@@ -2973,6 +3083,8 @@ button:disabled {
     background: #f8f9fa;
     border: 1px solid #eceff3;
     border-radius: 14px;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .asset-chart-header {
@@ -3066,7 +3178,7 @@ button:disabled {
     display: block;
     width: 100%;
     height: 100%;
-    touch-action: manipulation;
+    touch-action: pan-y;
 }
 
 .asset-chart-empty {
@@ -3175,6 +3287,56 @@ button:disabled {
     }
 }
 
+@media (max-width: 600px) {
+    .card {
+        padding: 18px 14px;
+        border-radius: 15px;
+        margin-bottom: 12px;
+    }
+
+    .account-card {
+        padding: 14px;
+    }
+
+    .asset-chart-container,
+    .asset-chart-empty,
+    .asset-chart-loading {
+        height: 210px;
+    }
+
+    .asset-chart-header,
+    .asset-chart-summary {
+        flex-wrap: wrap;
+    }
+
+    .asset-chart-close {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .small-button {
+        min-height: 44px;
+    }
+}
+
+@media (min-width: 768px) {
+    .account-summary-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .form-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
 </style>
 
 </head>
@@ -3183,6 +3345,13 @@ button:disabled {
 <body>
 
 <main class="container">
+
+<section id="boot-screen" aria-live="polite" aria-busy="true">
+    <div>
+        <div class="boot-spinner" aria-hidden="true"></div>
+        로그인 상태를 확인하고 있습니다.
+    </div>
+</section>
 
 <section
     id="login-card"
@@ -3241,7 +3410,7 @@ button:disabled {
 
 <div id="app-area">
 
-<section class="card">
+<section id="app-header" class="card">
 
 <h1>RetirementPortfolio</h1>
 
@@ -3255,7 +3424,7 @@ button:disabled {
 </section>
 
 
-<section class="card">
+<section id="investment-settings-section" class="card">
 
 <h2>투자성향 / 투자전략</h2>
 
@@ -3359,7 +3528,7 @@ Gemini AI 투자 가이드 사용
 </section>
 
 
-<section class="card">
+<section id="asset-search-section" class="card">
 
 <h2>미국 종목 검색</h2>
 
@@ -3402,7 +3571,7 @@ Yahoo Finance에서 종목 정보를 확인합니다.
 </section>
 
 
-<section class="card">
+<section id="portfolio-section" class="card">
 
 <h2>내 계좌</h2>
 
@@ -3427,6 +3596,11 @@ const SUPABASE_KEY =
 const loginCard =
     document.getElementById(
         "login-card"
+    );
+
+const bootScreen =
+    document.getElementById(
+        "boot-screen"
     );
 
 const loginForm =
@@ -3458,6 +3632,22 @@ const accountsList =
     document.getElementById(
         "accounts-list"
     );
+
+let storedSessionDetected = false;
+
+try {
+    storedSessionDetected = Boolean(
+        localStorage.getItem("access_token")
+        || localStorage.getItem("refresh_token")
+    );
+} catch (error) {
+    storedSessionDetected = false;
+}
+
+if (storedSessionDetected) {
+    loginCard.style.display = "none";
+    bootScreen.style.display = "flex";
+}
 
 
 function formatMoney(
@@ -5165,7 +5355,7 @@ function renderAssetChart(
 
         buyLegend.innerHTML =
             '<span class="asset-chart-marker buy-marker"></span>'
-            + "매수";
+            + "매수 BUY ▲";
 
 
         const sellLegend =
@@ -5178,7 +5368,7 @@ function renderAssetChart(
 
         sellLegend.innerHTML =
             '<span class="asset-chart-marker sell-marker"></span>'
-            + "매도";
+            + "매도 SELL ▼";
 
 
         legend.appendChild(
@@ -5900,7 +6090,7 @@ function renderAccountSummary(
 
 
     container.className =
-        "transaction-row";
+        "account-summary-grid";
 
 
     const summaryCurrency =
@@ -5914,46 +6104,55 @@ function renderAccountSummary(
         .toUpperCase();
 
 
-    container.appendChild(
-        createDetail(
-            "총 매수원가: "
-            + formatMoney(
-                summary.total_invested,
-                summaryCurrency
-            )
+    function appendKpi(
+        label,
+        value,
+        tone = ""
+    ) {
+        const item =
+            document.createElement("div");
+        item.className =
+            "summary-kpi";
+
+        const itemLabel =
+            document.createElement("div");
+        itemLabel.className =
+            "summary-kpi-label";
+        itemLabel.textContent = label;
+
+        const itemValue =
+            document.createElement("div");
+        itemValue.className =
+            "summary-kpi-value"
+            + (tone ? " " + tone : "");
+        itemValue.textContent = value;
+
+        item.appendChild(itemLabel);
+        item.appendChild(itemValue);
+        container.appendChild(item);
+    }
+
+    appendKpi(
+        "총자산",
+        formatMoney(
+            summary.total_assets,
+            summaryCurrency
         )
     );
 
-
-    container.appendChild(
-        createDetail(
-            "주식 평가액: "
-            + formatMoney(
-                summary.total_current_value,
-                summaryCurrency
-            )
+    appendKpi(
+        "주식평가액",
+        formatMoney(
+            summary.total_current_value,
+            summaryCurrency
         )
     );
 
-
-    container.appendChild(
-        createDetail(
-            "현금잔고: "
-            + formatMoney(
-                summary.cash_balance,
-                summaryCurrency
-            )
-        )
-    );
-
-
-    container.appendChild(
-        createDetail(
-            "총자산: "
-            + formatMoney(
-                summary.total_assets,
-                summaryCurrency
-            )
+    appendKpi(
+        "예수금",
+        formatMoney(
+            summary.cash_balance,
+            summaryCurrency
         )
     );
 
@@ -6041,53 +6240,38 @@ function renderAccountSummary(
             || 0
         );
 
-
-    const totalPnlDetail =
-        createDetail(
-            "총손익: "
-            + (
-                totalPnl > 0
-                ? "+"
-                : ""
-            )
-            + formatMoney(
-                totalPnl,
-                summaryCurrency
-            )
-            + " ("
-            + (
-                Number(
-                    summary.total_roi
-                    || 0
-                ) > 0
-                ? "+"
-                : ""
-            )
-            + formatPercent(
-                summary.total_roi
-            )
-            + ")"
-        );
-
-
-    if (totalPnl > 0) {
-
-        totalPnlDetail.classList.add(
-            "sell"
-        );
-    }
-
-
-    if (totalPnl < 0) {
-
-        totalPnlDetail.classList.add(
-            "buy"
-        );
-    }
-
+    appendKpi(
+        "총손익",
+        (
+            totalPnl > 0
+            ? "+"
+            : ""
+        )
+        + formatMoney(
+            totalPnl,
+            summaryCurrency
+        )
+        + " ("
+        + (
+            Number(summary.total_roi || 0) > 0
+            ? "+"
+            : ""
+        )
+        + formatPercent(summary.total_roi)
+        + ")",
+        totalPnl > 0
+            ? "sell"
+            : (totalPnl < 0 ? "buy" : "")
+    );
 
     container.appendChild(
-        totalPnlDetail
+        createDetail(
+            "현재 보유분 매수원가: "
+            + formatMoney(
+                summary.total_invested,
+                summaryCurrency
+            )
+        )
     );
 
 
@@ -6255,6 +6439,17 @@ function renderPositions(
         row.className =
             "transaction-row position-row";
 
+        row.setAttribute(
+            "role",
+            "button"
+        );
+        row.tabIndex = 0;
+        row.setAttribute(
+            "aria-label",
+            (position.name || position.ticker)
+            + " 상세 가격 차트 열기"
+        );
+
         row.dataset.accountId =
             String(
                 account.id
@@ -6280,6 +6475,9 @@ function renderPositions(
                 "div"
             );
 
+        name.className =
+            "position-name";
+
         name.textContent =
             position.name
             || position.ticker;
@@ -6289,6 +6487,9 @@ function renderPositions(
             document.createElement(
                 "div"
             );
+
+        value.className =
+            "position-value";
 
         value.textContent =
             formatMoney(
@@ -6696,6 +6897,19 @@ function renderPositions(
 
                     chartLoading =
                         false;
+                }
+            }
+        );
+
+        row.addEventListener(
+            "keydown",
+            (event) => {
+                if (
+                    event.key === "Enter"
+                    || event.key === " "
+                ) {
+                    event.preventDefault();
+                    row.click();
                 }
             }
         );
@@ -8056,7 +8270,7 @@ async function showTransactionEditor(
         );
 
     priceInput.type = "number";
-    priceInput.min = "0";
+    priceInput.min = "0.000001";
     priceInput.step = "any";
     priceInput.required = true;
     priceInput.value =
@@ -9090,7 +9304,7 @@ function createTransactionForm(
         );
 
     priceInput.type = "number";
-    priceInput.min = "0";
+    priceInput.min = "0.000001";
     priceInput.step = "any";
     priceInput.required = true;
 
@@ -11360,6 +11574,29 @@ async function renderAccounts(
 
         card.appendChild(name);
 
+        const summaryTitle =
+            document.createElement(
+                "div"
+            );
+        summaryTitle.className =
+            "section-title account-summary-title";
+        summaryTitle.textContent =
+            "계좌 핵심 요약";
+
+        const summaryBox =
+            document.createElement(
+                "div"
+            );
+        summaryBox.dataset.role =
+            "account-summary";
+        summaryBox.className =
+            "loading";
+        summaryBox.textContent =
+            "총자산과 예수금을 불러오는 중...";
+
+        card.appendChild(summaryTitle);
+        card.appendChild(summaryBox);
+
 
         card.appendChild(
             createDetail(
@@ -11565,7 +11802,7 @@ async function renderAccounts(
                         "'"
                         + account.account_name
                         + "' 계좌를 정말 삭제하시겠습니까?\\n\\n"
-                        + "이 계좌의 거래내역, 배당내역, "
+                        + "이 계좌의 거래내역, 입출금내역, 배당내역, "
                         + "목표 포트폴리오도 함께 삭제됩니다.\\n\\n"
                         + "삭제 후에는 되돌릴 수 없습니다."
                     );        
@@ -11774,42 +12011,10 @@ async function renderAccounts(
                 계좌 요약
                 */
 
-                const summaryTitle =
-                    document.createElement(
-                        "div"
-                    );
-
-                summaryTitle.className =
-                    "section-title";
-
-                summaryTitle.textContent =
-                    "계좌 요약";
-
-
-                const summaryBox =
-                    document.createElement(
-                        "div"
-                    );
-
-                summaryBox.dataset.role =
-                    "account-summary";                
-
-
                 renderAccountSummary(
                     summaryBox,
                     summary,
                     account
-                );
-
-
-                card.insertBefore(
-                    summaryTitle,
-                    positionsTitle
-                );
-
-                card.insertBefore(
-                    summaryBox,
-                    positionsTitle
                 );
 
 
@@ -12670,7 +12875,7 @@ async function showAuthenticatedApp(
 
 
     appArea.style.display =
-        "block";
+        "flex";
 
 
     /*
@@ -13079,7 +13284,13 @@ loginForm.addEventListener(
 페이지를 새로 열었을 때
 저장된 Supabase 세션으로 자동 로그인합니다.
 */
-restoreLoginSession();
+restoreLoginSession().finally(() => {
+    bootScreen.style.display = "none";
+
+    if (appArea.style.display === "none" || !appArea.style.display) {
+        loginCard.style.display = "block";
+    }
+});
 
 </script>
 

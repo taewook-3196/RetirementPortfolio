@@ -9,6 +9,8 @@ tests/test_multi_account.py
 """
 
 import pytest
+pytestmark = pytest.mark.legacy_desktop
+
 from datetime import date
 from database.connection import init_db
 from database.repository import Repository
@@ -389,5 +391,4 @@ def test_recommendation_suppression_on_cycle_buy(clean_repo):
     rec_fresh = r_service.calculate_recommendations(account_id=acc_fresh.id, auto_save=False)
     sum_fresh = rec_fresh.get("summary", {})
     assert sum_fresh.get("already_invested_in_cycle") is False
-
 
