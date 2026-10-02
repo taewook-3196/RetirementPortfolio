@@ -167,7 +167,7 @@ def _valid_signup_invite_code(invite_code: str) -> bool:
 
 @app.post("/api/auth/signup", status_code=201)
 def signup_with_invite(request: SignupRequest):
-    """유효한 서버측 초대코드가 있을 때만 Supabase 회원가입을 허용합니다."""
+    """유효한 서버측 초대코드가 있을 때만 관리자 API로 사용자를 생성합니다."""
     if not _valid_signup_invite_code(
         request.invite_code
     ):
@@ -180,26 +180,37 @@ def signup_with_invite(request: SignupRequest):
         "SUPABASE_URL",
         "",
     ).strip()
-    supabase_key = os.getenv(
+    supabase_anon_key = os.getenv(
         "SUPABASE_ANON_KEY",
         "",
     ).strip()
+    supabase_service_key = os.getenv(
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "",
+    ).strip()
 
-    if not supabase_url or not supabase_key:
+    if (
+        not supabase_url
+        or not supabase_anon_key
+        or not supabase_service_key
+    ):
         raise HTTPException(
             status_code=500,
-            detail="Supabase 인증 설정이 없습니다.",
+            detail="Supabase 회원가입 설정이 없습니다.",
         )
 
+    email = request.email.strip()
+
     try:
-        supabase = create_client(
+        admin_client = create_client(
             supabase_url,
-            supabase_key,
+            supabase_service_key,
         )
-        response = supabase.auth.sign_up(
+        response = admin_client.auth.admin.create_user(
             {
-                "email": request.email.strip(),
+                "email": email,
                 "password": request.password,
+                "email_confirm": True,
             }
         )
 
@@ -209,13 +220,26 @@ def signup_with_invite(request: SignupRequest):
                 detail="회원가입을 완료하지 못했습니다.",
             )
 
-        session = response.session
+        # service_role 키는 브라우저에 절대 전달하지 않습니다.
+        # 가입 직후 로그인 세션은 공개 anon 키로 별도 생성합니다.
+        public_client = create_client(
+            supabase_url,
+            supabase_anon_key,
+        )
+        session_response = (
+            public_client.auth.sign_in_with_password(
+                {
+                    "email": email,
+                    "password": request.password,
+                }
+            )
+        )
+        session = session_response.session
 
         return {
             "created": True,
             "email": response.user.email,
-            "email_confirmation_required":
-                session is None,
+            "email_confirmation_required": False,
             "access_token":
                 session.access_token
                 if session
@@ -234,6 +258,7 @@ def signup_with_invite(request: SignupRequest):
         if (
             "already registered" in message
             or "already been registered" in message
+            or "already exists" in message
         ):
             raise HTTPException(
                 status_code=409,
