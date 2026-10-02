@@ -74,7 +74,7 @@ def main():
         payload_dict["client_secret"] = client_secret
     data = urllib.parse.urlencode(payload_dict).encode("utf-8")
 
-    ctx = ssl._create_unverified_context()
+    ctx = ssl.create_default_context()
     req = urllib.request.Request(
         token_url,
         data=data,
