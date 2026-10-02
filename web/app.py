@@ -325,18 +325,20 @@ def _morning_report_link_serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(secret, salt="morning-report-link-v1")
 
 
-@app.get("/report/{token}", response_class=HTMLResponse)
-def open_signed_morning_report(token: str):
+@app.get("/report", response_class=HTMLResponse)
+def open_signed_morning_report(token: str = ""):
     """Open a user's latest report from a short-lived signed Kakao link."""
+    if not token:
+        raise HTTPException(status_code=400, detail="상세 리포트 링크 토큰이 없습니다.")
     try:
         data = _morning_report_link_serializer().loads(token, max_age=86400)
     except SignatureExpired:
         raise HTTPException(status_code=410, detail="상세 리포트 링크가 만료되었습니다.")
     except BadSignature:
-        raise HTTPException(status_code=404, detail="유효하지 않은 상세 리포트 링크입니다.")
+        raise HTTPException(status_code=403, detail="상세 리포트 링크 서명 검증에 실패했습니다.")
 
     if data.get("purpose") != "morning-report" or not data.get("user_id"):
-        raise HTTPException(status_code=404, detail="유효하지 않은 상세 리포트 링크입니다.")
+        raise HTTPException(status_code=403, detail="상세 리포트 링크 내용이 올바르지 않습니다.")
 
     report = Repository(user_id=str(data["user_id"])).get_latest_morning_report()
     if report is None:
