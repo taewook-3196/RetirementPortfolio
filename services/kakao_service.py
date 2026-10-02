@@ -8,6 +8,7 @@ services/kakao_service.py
 """
 
 from __future__ import annotations
+import copy
 import json
 import logging
 import urllib.request
@@ -40,11 +41,19 @@ class KakaoService:
     @classmethod
     def for_user(cls, config: AppConfig, repo):
         """Build a Kakao client from this user's encrypted OAuth credentials."""
-        instance = cls(config)
+        # Never mutate the shared AppConfig used by the multi-user runner.
+        # Start every user with blank Kakao tokens so a user without a
+        # credential cannot inherit legacy/global or a previous user's token.
+        user_config = copy.deepcopy(config)
+        instance = cls(user_config)
+        instance.morning_cfg.kakao_rest_api_key = __import__("os").getenv("KAKAO_REST_API_KEY", "").strip()
+        instance.morning_cfg.kakao_access_token = ""
+        instance.morning_cfg.kakao_refresh_token = ""
+        instance._credential_repo = repo
+
         credential = repo.get_kakao_credential()
         if credential is None:
             return instance
-        instance.morning_cfg.kakao_rest_api_key = __import__("os").getenv("KAKAO_REST_API_KEY", "").strip()
         instance.morning_cfg.kakao_access_token = decrypt_secret(credential.access_token_encrypted)
         instance.morning_cfg.kakao_refresh_token = decrypt_secret(credential.refresh_token_encrypted)
         instance._credential_repo = repo
