@@ -2,6 +2,7 @@
 .env
 
 # Local portfolio data
+config.yaml
 *.db
 portfolio_data.json
 portfolio_data.yaml
