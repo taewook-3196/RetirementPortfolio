@@ -13487,6 +13487,12 @@ async function showAuthenticatedApp(
     );
 
     try {
+        await loadMorningReportSettings(accessToken);
+    } catch (error) {
+        morningReportSettingsMessage.textContent = error.message || "모닝 리포트 설정을 불러오지 못했습니다.";
+    }
+
+    try {
         await loadKakaoStatus(accessToken);
     } catch (error) {
         kakaoStatus.textContent = error.message || "카카오 연결 상태를 확인하지 못했습니다.";
