@@ -52,10 +52,16 @@ class KakaoService:
         instance._credential_repo = repo
 
         credential = repo.get_kakao_credential()
-        if credential is None or not getattr(credential, "access_token_encrypted", None):
+        # unittest.mock.Mock fabricates arbitrary attributes on access. Only
+        # accept the concrete string fields that a persisted credential has.
+        access_encrypted = getattr(credential, "access_token_encrypted", None) if credential is not None else None
+        refresh_encrypted = getattr(credential, "refresh_token_encrypted", None) if credential is not None else None
+        if not isinstance(access_encrypted, str) or not access_encrypted:
             return instance
-        instance.morning_cfg.kakao_access_token = decrypt_secret(credential.access_token_encrypted)
-        instance.morning_cfg.kakao_refresh_token = decrypt_secret(credential.refresh_token_encrypted)
+        if not isinstance(refresh_encrypted, str) or not refresh_encrypted:
+            return instance
+        instance.morning_cfg.kakao_access_token = decrypt_secret(access_encrypted)
+        instance.morning_cfg.kakao_refresh_token = decrypt_secret(refresh_encrypted)
         return instance
 
     def is_configured(self) -> bool:
