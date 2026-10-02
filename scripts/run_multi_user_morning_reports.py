@@ -37,8 +37,9 @@ def run_all_users() -> int:
         logger.info("사용자별 모닝 리포트 생성 시작: %s", user_id)
         service = DailyReportService(config=config, repo=repo)
         ok, message, _ = service.generate_and_send(
-            send_kakao=False,
+            send_kakao=bool(settings.kakao_enabled),
             update_prices=True,
+            force_kakao=bool(settings.kakao_enabled),
         )
         if ok:
             logger.info("사용자별 모닝 리포트 완료: %s", user_id)
