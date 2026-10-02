@@ -449,7 +449,7 @@ def kakao_disconnect(authorization: str | None = Header(default=None)):
 
 class MorningReportSettingsRequest(BaseModel):
     morning_report_enabled: bool = True
-    morning_report_time: str = Field(default="07:30", pattern=r"^(?:[01]\\d|2[0-3]):[0-5]\\d$")
+    morning_report_time: str = Field(default="07:30", min_length=5, max_length=5)
     news_enabled: bool = True
     ai_advice_enabled: bool = True
 
