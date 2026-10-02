@@ -3715,6 +3715,20 @@ class Repository:
     # 사용자 설정 (UserSetting) 관리
     # -------------------------------------------------------------
 
+    @staticmethod
+    def get_morning_report_user_ids() -> List[UUID]:
+        """Return users who opted in to scheduled morning reports."""
+        with get_db_session() as session:
+            return [
+                row[0]
+                for row in (
+                    session.query(UserSetting.user_id)
+                    .filter(UserSetting.morning_report_enabled.is_(True))
+                    .order_by(UserSetting.user_id.asc())
+                    .all()
+                )
+            ]
+
     def get_user_settings(
         self,
     ) -> Optional[UserSetting]:
