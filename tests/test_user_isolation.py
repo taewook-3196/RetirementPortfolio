@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from datetime import date
 from uuid import uuid4
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import database.repository as repository_module
@@ -30,20 +30,6 @@ def _isolated_db(monkeypatch):
         model.__table__.create(engine)
 
     factory = sessionmaker(bind=engine, expire_on_commit=False)
-    next_ids = {
-        Account: 1,
-        Transaction: 1,
-        InvestmentProfile: 1,
-        UserSetting: 1,
-    }
-
-    @event.listens_for(factory, "before_flush")
-    def assign_ids(session, *_):
-        for row in session.new:
-            model = type(row)
-            if model in next_ids and row.id is None:
-                row.id = next_ids[model]
-                next_ids[model] += 1
 
     @contextmanager
     def session_scope():
@@ -89,15 +75,21 @@ def test_account_read_update_delete_are_owner_scoped(monkeypatch):
     user_a, user_b = uuid4(), uuid4()
     repo_a, repo_b = Repository(user_id=user_a), Repository(user_id=user_b)
 
-    account_a = repo_a.create_account(account_name="A private account")
-    account_b = repo_b.create_account(account_name="B private account")
+    with db() as session:
+        account_a = Account(user_id=user_a, account_name="A private account", is_default=True)
+        account_b = Account(user_id=user_b, account_name="B private account", is_default=True)
+        session.add_all([account_a, account_b])
+        session.flush()
+        account_a_id, account_b_id = account_a_id, account_b.id
 
-    assert [row.id for row in repo_a.get_accounts()] == [account_a.id]
-    assert [row.id for row in repo_b.get_accounts()] == [account_b.id]
-    assert repo_b.get_account(account_a.id) is None
+    assert account_a_id != account_b_id
+
+    assert [row.id for row in repo_a.get_accounts()] == [account_a_id]
+    assert [row.id for row in repo_b.get_accounts()] == [account_b_id]
+    assert repo_b.get_account(account_a_id) is None
 
     assert repo_b.update_account(
-        account_a.id,
+        account_a_id,
         account_name="hijacked",
         account_number="",
         broker="",
@@ -116,16 +108,20 @@ def test_account_read_update_delete_are_owner_scoped(monkeypatch):
         is_default=0,
         memo="",
     ) is False
-    assert repo_b.delete_account(account_a.id) is False
-    assert repo_a.get_account(account_a.id).account_name == "A private account"
+    assert repo_b.delete_account(account_a_id) is False
+    assert repo_a.get_account(account_a_id).account_name == "A private account"
 
 
 def test_transaction_read_update_delete_are_owner_scoped(monkeypatch):
     db = _isolated_db(monkeypatch)
     user_a, user_b = uuid4(), uuid4()
     repo_a, repo_b = Repository(user_id=user_a), Repository(user_id=user_b)
-    account_a = repo_a.create_account(account_name="A")
-    repo_b.create_account(account_name="B")
+    with db() as session:
+        account_a = Account(user_id=user_a, account_name="A", is_default=True)
+        account_b = Account(user_id=user_b, account_name="B", is_default=True)
+        session.add_all([account_a, account_b])
+        session.flush()
+        account_a_id = account_a.id
 
     with db() as session:
         session.add(
@@ -144,10 +140,10 @@ def test_transaction_read_update_delete_are_owner_scoped(monkeypatch):
         transaction_type="BUY",
         quantity=1,
         price=100,
-        account_id=account_a.id,
+        account_id=account_a_id,
     )
 
-    assert repo_b.get_transactions(account_id=account_a.id) == []
+    assert repo_b.get_transactions(account_id=account_a_id) == []
     assert repo_b.update_transaction(
         tx.id,
         transaction_date=date(2026, 10, 2),
@@ -157,7 +153,7 @@ def test_transaction_read_update_delete_are_owner_scoped(monkeypatch):
         price=100,
     ) is False
     assert repo_b.delete_transaction(tx.id) is False
-    assert len(repo_a.get_transactions(account_id=account_a.id)) == 1
+    assert len(repo_a.get_transactions(account_id=account_a_id)) == 1
 
 
 def test_user_settings_are_independent(monkeypatch):
