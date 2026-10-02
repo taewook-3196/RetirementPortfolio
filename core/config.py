@@ -18,7 +18,7 @@ load_dotenv()
 
 
 DEFAULT_WEB_APP_URL = "https://retirementportfolio.onrender.com/"
-DEFAULT_REPORT_URL = "https://taewook-3196.github.io/RetirementPortfolio/"
+DEFAULT_REPORT_URL = DEFAULT_WEB_APP_URL + "?view=report"
 
 
 def validate_public_url(value: str | None, fallback: str) -> str:
@@ -39,27 +39,21 @@ def get_web_app_url() -> str:
 
 
 def get_report_url() -> str:
-    """Return the configured public Morning Report URL with legacy fallbacks."""
+    """Return the authenticated web-app report URL.
+
+    RETIREMENT_PORTFOLIO_REPORT_URL remains as an operational compatibility
+    override, but Pages-specific fallbacks are deliberately no longer used.
+    """
     explicit_url = os.getenv("RETIREMENT_PORTFOLIO_REPORT_URL")
     if explicit_url and explicit_url.strip():
-        return validate_public_url(explicit_url, DEFAULT_REPORT_URL)
-
-    legacy_url = os.getenv("GITHUB_PAGES_BASE_URL")
-    if legacy_url and legacy_url.strip():
-        return validate_public_url(legacy_url, DEFAULT_REPORT_URL)
-
-    repository = os.getenv("GITHUB_REPOSITORY", "").strip()
-    if "github.com/" in repository:
-        repository = repository.split("github.com/", 1)[1].strip("/").removesuffix(".git")
-    parts = repository.split("/", 2)
-    if len(parts) == 2 and all(part.strip() for part in parts):
-        owner, repo = (part.strip() for part in parts)
-        return validate_public_url(
-            f"https://{owner.lower()}.github.io/{repo}/",
-            DEFAULT_REPORT_URL,
-        )
-
-    return DEFAULT_REPORT_URL
+        candidate = explicit_url.strip()
+        parsed = urlparse(candidate)
+        if parsed.scheme.lower() in ("http", "https") and parsed.hostname:
+            if parsed.query or parsed.fragment:
+                return candidate
+            return validate_public_url(candidate, DEFAULT_REPORT_URL)
+        return DEFAULT_REPORT_URL
+    return get_web_app_url().rstrip("/") + "/?view=report"
 
 
 @dataclass

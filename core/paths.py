@@ -75,7 +75,8 @@ def get_export_dir() -> Path:
 
 def get_report_dir() -> Path:
     """모닝 모바일 웹 리포트가 저장되는 디렉터리 경로를 반환합니다."""
-    path = get_export_dir() / "reports"
+    configured = os.getenv("REPORT_OUTPUT_DIR", "").strip()
+    path = Path(configured) if configured else get_export_dir() / "reports"
     path.mkdir(parents=True, exist_ok=True)
     return path
 

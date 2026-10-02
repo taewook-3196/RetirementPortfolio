@@ -1620,6 +1620,15 @@ class DailyReportService:
             html_file = self.html_generator.generate_html(report_data)
             logger.info(f"모닝 리포트 HTML 생성 완료: {html_file}")
 
+            if self.repo.user_id:
+                self.repo.upsert_morning_report(
+                    datetime.date.today(),
+                    html_file.read_text(encoding="utf-8"),
+                )
+                logger.info("사용자별 모닝 리포트 DB 저장 완료")
+            else:
+                logger.warning("user_id가 없어 로컬 리포트를 DB에 저장하지 않았습니다.")
+
             report_web_url = get_report_url()
 
             summary_text = self._build_kakao_summary_text(
@@ -1636,7 +1645,7 @@ class DailyReportService:
                 account_recommendations=account_recommendations,
             )
 
-            # Pages 배포 후 카카오톡 분리 발송을 위해 페이로드 캐싱
+            # 생성/저장 후 카카오톡 분리 발송을 위한 임시 페이로드 캐싱
             try:
                 payload_cache = get_project_root() / "exports" / ".kakao_payload.json"
                 payload_cache.parent.mkdir(parents=True, exist_ok=True)

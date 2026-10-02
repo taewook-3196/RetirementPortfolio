@@ -29,7 +29,7 @@ class NaverFinanceClient:
     }
 
     def __init__(self):
-        self.ssl_context = ssl._create_unverified_context()
+        self.ssl_context = ssl.create_default_context()
 
     def fetch_historical_prices(
         self,

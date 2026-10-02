@@ -452,6 +452,25 @@ class UserSetting(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.now)
     updated_at = Column(DateTime(timezone=True), default=datetime.now)
 
+class MorningReport(Base):
+    """Server-generated private report, unique per owner and calendar date."""
+
+    __tablename__ = "morning_reports"
+
+    id = Column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    report_date = Column(Date, nullable=False, index=True)
+    html_content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.now)
+    updated_at = Column(DateTime(timezone=True), default=datetime.now)
+
+    __table_args__ = (UniqueConstraint("user_id", "report_date"),)
+
+
 class RecommendationLog(Base):
     __tablename__ = "recommendation_logs"
 
