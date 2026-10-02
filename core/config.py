@@ -27,6 +27,9 @@ def validate_public_url(value: str | None, fallback: str) -> str:
     parsed = urlparse(candidate)
     if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname:
         candidate = fallback
+    parsed = urlparse(candidate)
+    if parsed.query or parsed.fragment:
+        return candidate
     return candidate.rstrip("/") + "/"
 
 
