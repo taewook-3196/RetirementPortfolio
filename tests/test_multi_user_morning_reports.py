@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from datetime import time
 from uuid import uuid4
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 import database.repository as repository_module
@@ -16,6 +16,15 @@ def test_only_enabled_report_users_are_discovered(monkeypatch):
     engine = create_engine("sqlite:///:memory:")
     UserSetting.__table__.create(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
+    next_id = 1
+
+    @event.listens_for(factory, "before_flush")
+    def assign_ids(session, *_):
+        nonlocal next_id
+        for row in session.new:
+            if isinstance(row, UserSetting) and row.id is None:
+                row.id = next_id
+                next_id += 1
 
     @contextmanager
     def session_scope():
