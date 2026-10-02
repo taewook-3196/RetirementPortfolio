@@ -1,9 +1,9 @@
 name: Morning Portfolio Report & KakaoTalk Notification
 
 on:
-  # 매일 한국시간 05:34 (UTC 20:34) 정기 실행
+  # 10분마다 실행하고 사용자별 설정 시간 이후 최초 실행에서 1회 처리
   schedule:
-    - cron: '34 20 * * *'
+    - cron: '*/10 * * * *'
   # GitHub API 또는 데스크톱 앱에서 원격 수동 즉시 실행 지원
   workflow_dispatch:
 
@@ -47,5 +47,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           AI_INVESTMENT_STANCE: ${{ vars.AI_INVESTMENT_STANCE || '' }}
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          OAUTH_TOKEN_ENCRYPTION_KEY: ${{ secrets.OAUTH_TOKEN_ENCRYPTION_KEY }}
         run: |
           python -m scripts.run_multi_user_morning_reports
