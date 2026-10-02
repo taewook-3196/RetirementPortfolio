@@ -157,6 +157,17 @@ class Repository:
             session.flush()
             return report
 
+    def get_morning_report_for_date(self, report_date):
+        """Return this owner's report for one calendar date."""
+        if not self.user_id:
+            raise ValueError("모닝 리포트 조회에는 user_id가 필요합니다.")
+        parsed_date = self._parse_input_date(report_date, "report_date")
+        with get_db_session() as session:
+            return session.query(MorningReport).filter(
+                MorningReport.user_id == self.user_id,
+                MorningReport.report_date == parsed_date,
+            ).one_or_none()
+
     def get_latest_morning_report(self):
         """Return only the current owner's newest report."""
         if not self.user_id:
