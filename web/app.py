@@ -9,7 +9,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import secrets
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timezone, timedelta
@@ -20,6 +19,7 @@ from pydantic import BaseModel, Field
 from supabase import create_client
 from services.portfolio_service import PortfolioService
 from core.secret_crypto import encrypt_secret
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from database.connection import get_db_session
 from database.models import InviteCode
@@ -321,7 +321,11 @@ def get_latest_morning_report(
 # Kakao OAuth connection
 # =========================================================
 
-_KAKAO_OAUTH_STATES: dict[str, tuple[str, datetime]] = {}
+def _kakao_state_serializer() -> URLSafeTimedSerializer:
+    secret = os.getenv("OAUTH_TOKEN_ENCRYPTION_KEY", "").strip()
+    if not secret:
+        raise HTTPException(status_code=500, detail="OAuth 보안 키 설정이 없습니다.")
+    return URLSafeTimedSerializer(secret, salt="kakao-oauth-state-v1")
 
 
 def _kakao_redirect_uri() -> str:
@@ -339,11 +343,10 @@ def connect_kakao(authorization: str | None = Header(default=None)):
     if not client_id:
         raise HTTPException(status_code=500, detail="Kakao REST API 설정이 없습니다.")
 
-    state = secrets.token_urlsafe(32)
-    _KAKAO_OAUTH_STATES[state] = (
-        user_id,
-        datetime.now(timezone.utc) + timedelta(minutes=10),
-    )
+    state = _kakao_state_serializer().dumps({
+        "user_id": user_id,
+        "purpose": "kakao-connect",
+    })
     params = urllib.parse.urlencode({
         "client_id": client_id,
         "redirect_uri": _kakao_redirect_uri(),
@@ -357,16 +360,16 @@ def connect_kakao(authorization: str | None = Header(default=None)):
 @app.get("/api/kakao/callback")
 def kakao_callback(code: str = "", state: str = "", error: str = ""):
     """Exchange the one-time authorization code and store encrypted user tokens."""
-    state_data = _KAKAO_OAUTH_STATES.pop(state, None)
-    if (
-        not state_data
-        or state_data[1] < datetime.now(timezone.utc)
-        or error
-        or not code
-    ):
-        raise HTTPException(status_code=400, detail="카카오 연결 요청이 만료되었거나 취소되었습니다.")
+    if error or not code or not state:
+        raise HTTPException(status_code=400, detail="카카오 연결 요청이 취소되었거나 올바르지 않습니다.")
+    try:
+        state_data = _kakao_state_serializer().loads(state, max_age=600)
+    except (BadSignature, SignatureExpired):
+        raise HTTPException(status_code=400, detail="카카오 연결 요청이 만료되었거나 유효하지 않습니다.")
+    if state_data.get("purpose") != "kakao-connect" or not state_data.get("user_id"):
+        raise HTTPException(status_code=400, detail="유효하지 않은 카카오 연결 요청입니다.")
 
-    user_id = state_data[0]
+    user_id = state_data["user_id"]
     client_id = os.getenv("KAKAO_REST_API_KEY", "").strip()
     client_secret = os.getenv("KAKAO_CLIENT_SECRET", "").strip()
     form = {
