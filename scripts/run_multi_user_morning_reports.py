@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -25,7 +26,7 @@ def _is_due(settings, now: datetime) -> bool:
     )
 
 
-def run_all_users(now: datetime | None = None) -> int:
+def run_all_users(now: datetime | None = None, force: bool = False) -> int:
     init_db()
     config = load_config()
     current = now.astimezone(SEOUL) if now else datetime.now(SEOUL)
@@ -47,7 +48,7 @@ def run_all_users(now: datetime | None = None) -> int:
             # states. If Kakao failed after the report was saved, retry on the
             # next workflow run instead of suppressing delivery for the day.
             existing_report = repo.get_morning_report_for_date(current.date())
-            if existing_report is not None:
+            if existing_report is not None and not force:
                 if not settings.kakao_enabled:
                     logger.info("오늘 리포트가 이미 생성됨: %s", user_id)
                     continue
@@ -55,6 +56,9 @@ def run_all_users(now: datetime | None = None) -> int:
                     logger.info("오늘 카카오 리포트가 이미 발송됨: %s", user_id)
                     continue
                 logger.info("오늘 리포트는 생성됐지만 카카오 미발송 상태라 재시도: %s", user_id)
+
+            if force and existing_report is not None:
+                logger.info("수동 강제 재생성·재발송: %s", user_id)
 
             logger.info("사용자별 모닝 리포트 생성 시작: %s", user_id)
             service = DailyReportService(config=config, repo=repo)
@@ -80,7 +84,8 @@ def run_all_users(now: datetime | None = None) -> int:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    raise SystemExit(run_all_users())
+    force = os.getenv("FORCE_MORNING_REPORT", "").strip().lower() in {"1", "true", "yes"}
+    raise SystemExit(run_all_users(force=force))
 
 
 if __name__ == "__main__":
