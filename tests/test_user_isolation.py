@@ -4,7 +4,9 @@ from contextlib import contextmanager
 from datetime import date
 from uuid import uuid4
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import sessionmaker
 
 import database.repository as repository_module
@@ -16,6 +18,11 @@ from database.models import (
     UserSetting,
 )
 from database.repository import Repository
+
+
+@compiles(ARRAY, "sqlite")
+def compile_array_as_json(type_, compiler, **kw):
+    return "JSON"
 
 
 def _isolated_db(monkeypatch):
@@ -30,6 +37,15 @@ def _isolated_db(monkeypatch):
         model.__table__.create(engine)
 
     factory = sessionmaker(bind=engine, expire_on_commit=False)
+    next_ids = {Account: 1, Transaction: 1, InvestmentProfile: 1, UserSetting: 1}
+
+    @event.listens_for(factory, "before_flush")
+    def assign_ids(session, *_):
+        for row in session.new:
+            model = type(row)
+            if model in next_ids and row.id is None:
+                row.id = next_ids[model]
+                next_ids[model] += 1
 
     @contextmanager
     def session_scope():
