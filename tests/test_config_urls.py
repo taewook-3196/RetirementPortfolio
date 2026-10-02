@@ -10,6 +10,7 @@ from core.config import (
     get_default_config,
     get_report_url,
     get_web_app_url,
+    validate_public_url,
 )
 from services.kakao_service import KakaoService
 from web.app import home
