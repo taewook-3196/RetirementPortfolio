@@ -45,6 +45,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
      
+      - name: 실행 버전 확인
+        run: |
+          echo "REPORT_CODE_SHA=$(git rev-parse HEAD)"
+          git log -1 --oneline
+
       - name: 사용자별 모닝 리포트 생성 및 DB 저장
         env:
           KRX_API_KEY: ${{ secrets.KRX_API_KEY }}
