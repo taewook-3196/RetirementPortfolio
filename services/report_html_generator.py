@@ -78,6 +78,20 @@ class ReportHtmlGenerator:
         주어진 리포트 데이터(자산 요약, AI 추천, 종목, 뉴스, 지수)를 바탕으로
         모바일 반응형 웹 리포트 HTML 파일을 생성하여 저장하고 파일 경로를 반환합니다.
         """
+        # The document is trusted server output, but its source values are not.
+        # Escape all report strings before HTML or inline JSON interpolation.
+        def escape_report_value(value: Any) -> Any:
+            if isinstance(value, str):
+                return html.escape(value, quote=True)
+            if isinstance(value, dict):
+                return {key: escape_report_value(item) for key, item in value.items()}
+            if isinstance(value, list):
+                return [escape_report_value(item) for item in value]
+            if isinstance(value, tuple):
+                return tuple(escape_report_value(item) for item in value)
+            return value
+
+        report_data = escape_report_value(report_data)
         now = datetime.datetime.now()
         date_str = now.strftime("%Y-%m-%d")
         time_str = now.strftime("%H:%M")
@@ -1074,14 +1088,6 @@ class ReportHtmlGenerator:
 """
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(html_content)
-
-        # GitHub Pages 기본 엔드포인트 지원을 위해 index.html로도 함께 저장
-        try:
-            index_path = report_dir / "index.html"
-            with open(index_path, "w", encoding="utf-8") as f:
-                f.write(html_content)
-        except Exception as e:
-            logger.warning(f"index.html 저장 실패: {e}")
 
         return file_path
 
@@ -2587,6 +2593,9 @@ class ReportHtmlGenerator:
             media = n.get("media", "언론사")
             date_time = n.get("date", "")
             link = n.get("link", "#")
+            parsed_link = urlparse(html.unescape(str(link)))
+            if parsed_link.scheme not in ("http", "https"):
+                link = "#"
             tag = n.get("tag", "증시")
 
             items_html += f"""
