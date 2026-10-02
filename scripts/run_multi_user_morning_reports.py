@@ -43,12 +43,18 @@ def run_all_users(now: datetime | None = None) -> int:
             if not _is_due(settings, current):
                 continue
 
-            # The workflow runs repeatedly. A per-user/per-date DB row is the
-            # durable idempotency guard, so delayed GitHub schedules catch up
-            # without sending the same morning report again.
-            if repo.get_morning_report_for_date(current.date()) is not None:
-                logger.info("오늘 리포트가 이미 처리됨: %s", user_id)
-                continue
+            # A generated report and a delivered Kakao message are separate
+            # states. If Kakao failed after the report was saved, retry on the
+            # next workflow run instead of suppressing delivery for the day.
+            existing_report = repo.get_morning_report_for_date(current.date())
+            if existing_report is not None:
+                if not settings.kakao_enabled:
+                    logger.info("오늘 리포트가 이미 생성됨: %s", user_id)
+                    continue
+                if getattr(existing_report, "kakao_sent_at", None) is not None:
+                    logger.info("오늘 카카오 리포트가 이미 발송됨: %s", user_id)
+                    continue
+                logger.info("오늘 리포트는 생성됐지만 카카오 미발송 상태라 재시도: %s", user_id)
 
             logger.info("사용자별 모닝 리포트 생성 시작: %s", user_id)
             service = DailyReportService(config=config, repo=repo)
