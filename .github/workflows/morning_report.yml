@@ -24,7 +24,7 @@ jobs:
       BEA_API_KEY: ${{ secrets.BEA_API_KEY }}
       RETIREMENT_PORTFOLIO_WEB_URL: ${{ vars.RETIREMENT_PORTFOLIO_WEB_URL || 'https://retirementportfolio.onrender.com/' }}
       RETIREMENT_PORTFOLIO_REPORT_URL: ${{ vars.RETIREMENT_PORTFOLIO_REPORT_URL || 'https://retirementportfolio.onrender.com/?view=report' }}
-      REPORT_OUTPUT_DIR: ${{ runner.temp }}/morning-report
+      REPORT_OUTPUT_DIR: /tmp/morning-report
       
     steps:
       - name: 저장소 체크아웃
