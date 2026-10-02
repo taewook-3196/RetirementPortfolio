@@ -8,7 +8,6 @@ from unittest.mock import Mock
 from core.config import DEFAULT_WEB_APP_URL, MorningReportConfig, get_web_app_url
 from services.daily_report_service import DailyReportService
 from services.report_html_generator import ReportHtmlGenerator
-from scripts.verify_morning_report_artifact import verify_report_artifact
 
 
 def _chart_data():
@@ -204,7 +203,7 @@ def test_daily_report_sanitizes_and_limits_embedded_chart_data():
     assert "id" not in embedded["transactions"][0]
 
 
-def test_final_pages_index_matches_dated_report_and_passes_artifact_check(
+def test_private_report_generation_does_not_create_pages_index(
     monkeypatch,
     tmp_path,
 ):
@@ -227,12 +226,7 @@ def test_final_pages_index_matches_dated_report_and_passes_artifact_check(
         output_filename=f"morning_report_{date_key}.html",
     )
 
-    result = verify_report_artifact(tmp_path, date_key)
-    index_content = (tmp_path / "index.html").read_text(encoding="utf-8")
-
-    assert result["index_path"] == str(tmp_path / "index.html")
-    assert result["dated_path"] == str(
-        tmp_path / f"morning_report_{date_key}.html"
-    )
-    assert 'name="report-build" content="abcdef123456"' in index_content
-    assert "계좌 · 거래 관리 열기" in index_content
+    dated = tmp_path / f"morning_report_{date_key}.html"
+    assert dated.is_file()
+    assert 'name="report-build" content="abcdef123456"' in dated.read_text(encoding="utf-8")
+    assert not (tmp_path / "index.html").exists()

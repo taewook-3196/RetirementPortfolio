@@ -52,7 +52,7 @@ class NewsService:
 
     def __init__(self):
         # SSL 인증서 검증 컨텍스트
-        self.ssl_context = ssl._create_unverified_context()
+        self.ssl_context = ssl.create_default_context()
 
     def fetch_stock_news(self, ticker: str, stock_name: str = "") -> List[Dict[str, Any]]:
         """네이버 모바일 금융 API를 통해 종목코드 기반 뉴스를 수집합니다."""

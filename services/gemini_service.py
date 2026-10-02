@@ -10,7 +10,6 @@ Google Gemini 생성형 AI (기본 모델: gemini-3.8-flash) 연동 매크로 �
 from __future__ import annotations
 import os
 import re
-import ssl
 import json
 import logging
 import urllib.request
@@ -164,7 +163,6 @@ class GeminiService:
         if self.investment_stance not in INVESTMENT_STANCE_PROFILES:
             self.investment_stance = "balanced"
 
-        self.ssl_context = ssl._create_unverified_context()
 
     def is_configured(self) -> bool:
         """Gemini API 키가 정상적으로 설정되어 있는지 확인"""
@@ -199,7 +197,7 @@ class GeminiService:
         try:
             url = "https://open.er-api.com/v6/latest/USD"
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, context=self.ssl_context, timeout=4) as res:
+            with urllib.request.urlopen(req, timeout=4) as res:
                 data = json.loads(res.read().decode("utf-8"))
                 krw = data.get("rates", {}).get("KRW")
                 if krw:
@@ -419,7 +417,7 @@ class GeminiService:
             )
 
             try:
-                with urllib.request.urlopen(req, context=self.ssl_context, timeout=20) as resp:
+                with urllib.request.urlopen(req, timeout=20) as resp:
                     resp_bytes = resp.read()
                     data = json.loads(resp_bytes.decode("utf-8"))
                     candidates = data.get("candidates", [])
@@ -454,7 +452,7 @@ class GeminiService:
                             headers={"Content-Type": "application/json", "User-Agent": "PortfolioManager/1.0"},
                             method="POST",
                         )
-                        with urllib.request.urlopen(req_fb, context=self.ssl_context, timeout=20) as resp:
+                        with urllib.request.urlopen(req_fb, timeout=20) as resp:
                             data = json.loads(resp.read().decode("utf-8"))
                             candidates = data.get("candidates", [])
                             if candidates:
