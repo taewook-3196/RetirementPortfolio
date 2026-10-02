@@ -13,6 +13,7 @@ import logging
 import urllib.request
 import urllib.parse
 from typing import Dict, Any, Optional, Tuple
+from core.secret_crypto import decrypt_secret, encrypt_secret
 from core.config import (
     AppConfig,
     MorningReportConfig,
@@ -33,6 +34,20 @@ class KakaoService:
     def __init__(self, config: AppConfig):
         self.config = config
         self.morning_cfg: MorningReportConfig = getattr(config, "morning_report", MorningReportConfig())
+
+
+    @classmethod
+    def for_user(cls, config: AppConfig, repo):
+        """Build a Kakao client from this user's encrypted OAuth credentials."""
+        instance = cls(config)
+        credential = repo.get_kakao_credential()
+        if credential is None:
+            return instance
+        instance.morning_cfg.kakao_rest_api_key = __import__("os").getenv("KAKAO_REST_API_KEY", "").strip()
+        instance.morning_cfg.kakao_access_token = decrypt_secret(credential.access_token_encrypted)
+        instance.morning_cfg.kakao_refresh_token = decrypt_secret(credential.refresh_token_encrypted)
+        instance._credential_repo = repo
+        return instance
 
     def is_configured(self) -> bool:
         """카카오 API 키 또는 Access Token 설정 여부 확인"""
@@ -73,8 +88,18 @@ class KakaoService:
                     if new_refresh:
                         self.morning_cfg.kakao_refresh_token = new_refresh
                     
-                    # config.yaml 자동 업데이트
-                    save_config(self.config)
+                    credential_repo = getattr(self, "_credential_repo", None)
+                    if credential_repo is not None:
+                        existing = credential_repo.get_kakao_credential()
+                        credential_repo.save_kakao_credential(
+                            access_token_encrypted=encrypt_secret(new_access),
+                            refresh_token_encrypted=encrypt_secret(new_refresh or refresh_token),
+                            access_token_expires_at=getattr(existing, "access_token_expires_at", None),
+                            refresh_token_expires_at=getattr(existing, "refresh_token_expires_at", None),
+                            scopes=getattr(existing, "scopes", "") or "",
+                        )
+                    else:
+                        save_config(self.config)
                     logger.info("카카오톡 Access Token 자동 갱신 성공")
                     return True, "토큰 갱신 성공"
                 else:
