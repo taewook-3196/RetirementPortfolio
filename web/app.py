@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 from datetime import date
 
 from fastapi import FastAPI, Header, HTTPException
@@ -120,6 +121,129 @@ def get_verified_user_id(
     )
 
     return user["user_id"]
+
+
+class SignupRequest(BaseModel):
+    """초대코드 전용 회원가입 요청."""
+
+    email: str = Field(
+        min_length=3,
+        max_length=320,
+    )
+    password: str = Field(
+        min_length=8,
+        max_length=128,
+    )
+    invite_code: str = Field(
+        min_length=1,
+        max_length=200,
+    )
+
+
+def _valid_signup_invite_code(invite_code: str) -> bool:
+    """환경변수에 등록된 초대코드 중 하나와 안전하게 비교합니다."""
+    configured_codes = [
+        value.strip()
+        for value in os.getenv(
+            "SIGNUP_INVITE_CODES",
+            "",
+        ).split(",")
+        if value.strip()
+    ]
+
+    candidate = str(invite_code or "").strip()
+
+    if not configured_codes or not candidate:
+        return False
+
+    return any(
+        secrets.compare_digest(
+            candidate,
+            configured,
+        )
+        for configured in configured_codes
+    )
+
+
+@app.post("/api/auth/signup", status_code=201)
+def signup_with_invite(request: SignupRequest):
+    """유효한 서버측 초대코드가 있을 때만 Supabase 회원가입을 허용합니다."""
+    if not _valid_signup_invite_code(
+        request.invite_code
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="유효하지 않은 초대코드입니다.",
+        )
+
+    supabase_url = os.getenv(
+        "SUPABASE_URL",
+        "",
+    ).strip()
+    supabase_key = os.getenv(
+        "SUPABASE_ANON_KEY",
+        "",
+    ).strip()
+
+    if not supabase_url or not supabase_key:
+        raise HTTPException(
+            status_code=500,
+            detail="Supabase 인증 설정이 없습니다.",
+        )
+
+    try:
+        supabase = create_client(
+            supabase_url,
+            supabase_key,
+        )
+        response = supabase.auth.sign_up(
+            {
+                "email": request.email.strip(),
+                "password": request.password,
+            }
+        )
+
+        if response.user is None:
+            raise HTTPException(
+                status_code=400,
+                detail="회원가입을 완료하지 못했습니다.",
+            )
+
+        session = response.session
+
+        return {
+            "created": True,
+            "email": response.user.email,
+            "email_confirmation_required":
+                session is None,
+            "access_token":
+                session.access_token
+                if session
+                else None,
+            "refresh_token":
+                session.refresh_token
+                if session
+                else None,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        message = str(exc).lower()
+
+        if (
+            "already registered" in message
+            or "already been registered" in message
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="이미 가입된 이메일입니다.",
+            )
+
+        raise HTTPException(
+            status_code=400,
+            detail="회원가입을 완료하지 못했습니다.",
+        )
 
 
 @app.get("/api/reports/latest", response_class=HTMLResponse)
@@ -3420,6 +3544,57 @@ button:disabled {
 
 </form>
 
+<button
+    id="show-signup-button"
+    type="button"
+    class="secondary-button"
+>
+초대코드로 회원가입
+</button>
+
+<form
+    id="signup-form"
+    style="display:none;margin-top:18px;"
+>
+<label for="signup-email">
+이메일
+</label>
+<input
+    id="signup-email"
+    type="email"
+    autocomplete="email"
+    required
+>
+
+<label for="signup-password">
+비밀번호 (8자 이상)
+</label>
+<input
+    id="signup-password"
+    type="password"
+    minlength="8"
+    autocomplete="new-password"
+    required
+>
+
+<label for="invite-code">
+초대코드
+</label>
+<input
+    id="invite-code"
+    type="password"
+    autocomplete="off"
+    required
+>
+
+<button
+    id="signup-button"
+    type="submit"
+>
+회원가입
+</button>
+</form>
+
 <div id="message"></div>
 
 <div class="security">
@@ -3639,6 +3814,21 @@ const loginForm =
 const loginButton =
     document.getElementById(
         "login-button"
+    );
+
+const showSignupButton =
+    document.getElementById(
+        "show-signup-button"
+    );
+
+const signupForm =
+    document.getElementById(
+        "signup-form"
+    );
+
+const signupButton =
+    document.getElementById(
+        "signup-button"
     );
 
 const message =
@@ -13217,6 +13407,128 @@ async function restoreLoginSession() {
             "error";
     }
 }
+
+
+showSignupButton.addEventListener(
+    "click",
+    () => {
+        const opening =
+            signupForm.style.display === "none";
+
+        signupForm.style.display =
+            opening ? "block" : "none";
+
+        showSignupButton.textContent =
+            opening
+                ? "회원가입 닫기"
+                : "초대코드로 회원가입";
+
+        message.textContent = "";
+        message.className = "";
+    }
+);
+
+
+signupForm.addEventListener(
+    "submit",
+    async (event) => {
+        event.preventDefault();
+
+        message.textContent = "";
+        message.className = "";
+        signupButton.disabled = true;
+        signupButton.textContent = "가입 중...";
+
+        const email =
+            document.getElementById(
+                "signup-email"
+            ).value.trim();
+
+        const password =
+            document.getElementById(
+                "signup-password"
+            ).value;
+
+        const inviteCode =
+            document.getElementById(
+                "invite-code"
+            ).value.trim();
+
+        try {
+            const response =
+                await fetch(
+                    "/api/auth/signup",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+                        },
+                        body: JSON.stringify({
+                            email: email,
+                            password: password,
+                            invite_code:
+                                inviteCode,
+                        }),
+                    }
+                );
+
+            const data =
+                await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.detail
+                    || "회원가입에 실패했습니다."
+                );
+            }
+
+            if (data.access_token) {
+                saveAuthTokens(
+                    data.access_token,
+                    data.refresh_token || ""
+                );
+
+                await showAuthenticatedApp(
+                    data.access_token
+                );
+
+                message.textContent = "";
+                return;
+            }
+
+            document.getElementById(
+                "email"
+            ).value = email;
+
+            signupForm.style.display =
+                "none";
+
+            showSignupButton.textContent =
+                "초대코드로 회원가입";
+
+            message.textContent =
+                "회원가입이 완료되었습니다. "
+                + "이메일 인증 후 로그인해주세요.";
+
+            message.className =
+                "success";
+
+        } catch (error) {
+            message.textContent =
+                error.message
+                || "회원가입에 실패했습니다.";
+
+            message.className =
+                "error";
+
+        } finally {
+            signupButton.disabled = false;
+            signupButton.textContent =
+                "회원가입";
+        }
+    }
+);
 
 
 loginForm.addEventListener(
