@@ -38,6 +38,21 @@ class Profile(Base):
     updated_at = Column(DateTime(timezone=True), default=datetime.now)
 
 
+class InviteCode(Base):
+    """One-time signup invitation. Only a SHA-256 digest of the secret is stored."""
+
+    __tablename__ = "invite_codes"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    code_hash = Column(String(64), nullable=False, unique=True, index=True)
+    label = Column(Text, nullable=True)
+    intended_email = Column(Text, nullable=True, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    used_by = Column(UUID(as_uuid=True), nullable=True, unique=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.now)
+
+
 class Account(Base):
     __tablename__ = "accounts"
 
