@@ -425,6 +425,24 @@ def kakao_status(authorization: str | None = Header(default=None)):
     return {"connected": connected}
 
 
+@app.delete("/api/kakao/disconnect")
+def kakao_disconnect(authorization: str | None = Header(default=None)):
+    """Remove this user's Kakao OAuth credential and disable Kakao delivery."""
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    repo.delete_kakao_credential()
+    settings = repo.get_user_settings()
+    if settings is not None:
+        repo.save_user_settings(
+            morning_report_enabled=settings.morning_report_enabled,
+            morning_report_time=settings.morning_report_time.strftime("%H:%M"),
+            kakao_enabled=False,
+            news_enabled=settings.news_enabled,
+            ai_advice_enabled=settings.ai_advice_enabled,
+        )
+    return {"connected": False}
+
+
 # =========================================================
 # Request Models
 # =========================================================
@@ -3790,7 +3808,7 @@ button:disabled {
 토큰을 직접 입력할 필요 없이 카카오 계정을 한 번 연결하면 됩니다.
 </p>
 <div id="kakao-status" class="status-box">연결 상태 확인 중...</div>
-<button id="kakao-connect-button" type="button">카카오톡 연결</button>
+<button id="kakao-connect-button" type="button">카카오톡 연결</button>\n<button id="kakao-disconnect-button" type="button" style="display:none;">카카오톡 연결 해제</button>
 
 </section>
 
@@ -4019,7 +4037,7 @@ const accountsList =
     );
 
 const kakaoStatus = document.getElementById("kakao-status");
-const kakaoConnectButton = document.getElementById("kakao-connect-button");
+const kakaoConnectButton = document.getElementById("kakao-connect-button");\nconst kakaoDisconnectButton = document.getElementById("kakao-disconnect-button");
 
 async function loadKakaoStatus(accessToken) {
     const response = await fetch("/api/kakao/status", {
@@ -4033,7 +4051,28 @@ async function loadKakaoStatus(accessToken) {
     kakaoConnectButton.textContent = data.connected
         ? "카카오톡 다시 연결"
         : "카카오톡 연결";
+    kakaoDisconnectButton.style.display = data.connected ? "block" : "none";
 }
+
+kakaoDisconnectButton.addEventListener("click", async () => {
+    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    if (!accessToken) return;
+    kakaoDisconnectButton.disabled = true;
+    try {
+        const response = await fetch("/api/kakao/disconnect", {
+            method: "DELETE",
+            headers: {"Authorization": "Bearer " + accessToken},
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "카카오 연결을 해제하지 못했습니다.");
+        await loadKakaoStatus(accessToken);
+    } catch (error) {
+        kakaoStatus.textContent = error.message || "카카오 연결을 해제하지 못했습니다.";
+        kakaoStatus.className = "status-box error";
+    } finally {
+        kakaoDisconnectButton.disabled = false;
+    }
+});
 
 kakaoConnectButton.addEventListener("click", async () => {
     const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
