@@ -74,7 +74,7 @@ class DailyReportService:
         self.recommendation_service = RecommendationService(self.repo, self.config, portfolio_service=self.portfolio_service)
         self.news_service = NewsService()
         self.html_generator = ReportHtmlGenerator(self.config.morning_report)
-        self.kakao_service = KakaoService(self.config)
+        self.kakao_service = KakaoService.for_user(self.config, self.repo)
         self.gemini_service = GeminiService(self.config)
         self.macro_service = MacroIndicatorService()
 
