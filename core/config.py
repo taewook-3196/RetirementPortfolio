@@ -46,9 +46,12 @@ def get_report_url() -> str:
     """
     explicit_url = os.getenv("RETIREMENT_PORTFOLIO_REPORT_URL")
     if explicit_url and explicit_url.strip():
-        parsed = urlparse(explicit_url.strip())
+        candidate = explicit_url.strip()
+        parsed = urlparse(candidate)
         if parsed.scheme.lower() in ("http", "https") and parsed.hostname:
-            return validate_public_url(explicit_url, DEFAULT_REPORT_URL)
+            if parsed.query or parsed.fragment:
+                return candidate
+            return validate_public_url(candidate, DEFAULT_REPORT_URL)
         return DEFAULT_REPORT_URL
     return get_web_app_url().rstrip("/") + "/?view=report"
 
