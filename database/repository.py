@@ -157,6 +157,23 @@ class Repository:
             session.flush()
             return report
 
+    def mark_morning_report_kakao_sent(self, report_date):
+        """Mark this owner's dated report as successfully delivered to Kakao."""
+        if not self.user_id:
+            raise ValueError("카카오 발송 완료 처리에는 user_id가 필요합니다.")
+        parsed_date = self._parse_input_date(report_date, "report_date")
+        with get_db_session() as session:
+            report = session.query(MorningReport).filter(
+                MorningReport.user_id == self.user_id,
+                MorningReport.report_date == parsed_date,
+            ).one_or_none()
+            if report is None:
+                return False
+            report.kakao_sent_at = datetime.now()
+            report.updated_at = datetime.now()
+            session.flush()
+            return True
+
     def get_morning_report_for_date(self, report_date):
         """Return this owner's report for one calendar date."""
         if not self.user_id:
