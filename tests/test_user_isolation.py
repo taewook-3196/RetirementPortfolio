@@ -71,7 +71,7 @@ def test_two_users_receive_independent_bootstrap_rows(monkeypatch):
 
 
 def test_account_read_update_delete_are_owner_scoped(monkeypatch):
-    _isolated_db(monkeypatch)
+    db = _isolated_db(monkeypatch)
     user_a, user_b = uuid4(), uuid4()
     repo_a, repo_b = Repository(user_id=user_a), Repository(user_id=user_b)
 
@@ -80,7 +80,7 @@ def test_account_read_update_delete_are_owner_scoped(monkeypatch):
         account_b = Account(user_id=user_b, account_name="B private account", is_default=True)
         session.add_all([account_a, account_b])
         session.flush()
-        account_a_id, account_b_id = account_a_id, account_b.id
+        account_a_id, account_b_id = account_a.id, account_b.id
 
     assert account_a_id != account_b_id
 
