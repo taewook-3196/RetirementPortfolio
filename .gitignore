@@ -1,9 +1,10 @@
 # Environment variables
 .env
 
-# Database (portfolio.db is synchronized to GitHub for PC-off cloud reports)
-# *.db
-# portfolio.db
+# Local portfolio data
+*.db
+portfolio_data.json
+portfolio_data.yaml
 
 # Python
 __pycache__/
