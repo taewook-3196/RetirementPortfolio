@@ -12,6 +12,7 @@ import json
 import logging
 import urllib.request
 import urllib.parse
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, Tuple
 from core.secret_crypto import decrypt_secret, encrypt_secret
 from core.config import (
@@ -91,11 +92,21 @@ class KakaoService:
                     credential_repo = getattr(self, "_credential_repo", None)
                     if credential_repo is not None:
                         existing = credential_repo.get_kakao_credential()
+                        now = datetime.now(timezone.utc)
+                        expires_in = int(result.get("expires_in", 0) or 0)
+                        refresh_expires_in = int(result.get("refresh_token_expires_in", 0) or 0)
                         credential_repo.save_kakao_credential(
                             access_token_encrypted=encrypt_secret(new_access),
                             refresh_token_encrypted=encrypt_secret(new_refresh or refresh_token),
-                            access_token_expires_at=getattr(existing, "access_token_expires_at", None),
-                            refresh_token_expires_at=getattr(existing, "refresh_token_expires_at", None),
+                            access_token_expires_at=(
+                                now + timedelta(seconds=expires_in)
+                                if expires_in else getattr(existing, "access_token_expires_at", None)
+                            ),
+                            refresh_token_expires_at=(
+                                now + timedelta(seconds=refresh_expires_in)
+                                if new_refresh and refresh_expires_in
+                                else getattr(existing, "refresh_token_expires_at", None)
+                            ),
                             scopes=getattr(existing, "scopes", "") or "",
                         )
                     else:
