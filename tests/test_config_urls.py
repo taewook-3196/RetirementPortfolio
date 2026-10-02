@@ -50,6 +50,15 @@ def test_report_url_override(monkeypatch):
     assert get_report_url() == "https://reports.example/latest/"
 
 
+def test_report_url_override_preserves_report_view_query(monkeypatch):
+    _clear_report_environment(monkeypatch)
+    monkeypatch.setenv(
+        "RETIREMENT_PORTFOLIO_REPORT_URL",
+        "https://retirementportfolio.onrender.com/?view=report",
+    )
+    assert get_report_url() == "https://retirementportfolio.onrender.com/?view=report"
+
+
 def test_invalid_report_url_scheme_falls_back(monkeypatch):
     _clear_report_environment(monkeypatch)
     monkeypatch.setenv("RETIREMENT_PORTFOLIO_REPORT_URL", "data:text/html,unsafe")
