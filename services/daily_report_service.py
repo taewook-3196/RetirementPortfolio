@@ -1647,7 +1647,12 @@ class DailyReportService:
                     + token
                 )
 
-            from urllib.parse import urlparse\n            logger.info(\n                "카카오 상세 리포트 목적지 확인: host=%s path=%s",\n                urlparse(report_web_url).hostname,\n                urlparse(report_web_url).path,\n            )
+            from urllib.parse import urlparse
+            logger.info(
+                "카카오 상세 리포트 목적지 확인: host=%s path=%s",
+                urlparse(report_web_url).hostname,
+                urlparse(report_web_url).path,
+            )
 
             summary_text = self._build_kakao_summary_text(
                 account_name=account_name,
