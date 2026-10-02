@@ -1,14 +1,10 @@
-"""Generate private morning reports for every opted-in user.
-
-This runner deliberately has no REPORT_USER_ID. The enabled users are read from
-user_settings and every DailyReportService receives an explicitly scoped
-Repository. One user's failure does not stop reports for the remaining users.
-"""
+"""Generate due morning reports for opted-in users in Asia/Seoul."""
 
 from __future__ import annotations
 
 import logging
-import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from core.config import load_config
 from database.connection import init_db
@@ -16,11 +12,23 @@ from database.repository import Repository
 from services.daily_report_service import DailyReportService
 
 logger = logging.getLogger("RetirementPortfolio.MultiUserMorningReports")
+SEOUL = ZoneInfo("Asia/Seoul")
 
 
-def run_all_users() -> int:
+def _is_due(settings, now: datetime) -> bool:
+    report_time = getattr(settings, "morning_report_time", None)
+    return bool(
+        settings
+        and settings.morning_report_enabled
+        and report_time
+        and now.time().replace(tzinfo=None) >= report_time
+    )
+
+
+def run_all_users(now: datetime | None = None) -> int:
     init_db()
     config = load_config()
+    current = now.astimezone(SEOUL) if now else datetime.now(SEOUL)
     user_ids = Repository.get_morning_report_user_ids()
 
     if not user_ids:
@@ -29,23 +37,34 @@ def run_all_users() -> int:
 
     failures = 0
     for user_id in user_ids:
-        repo = Repository(user_id=user_id)
-        settings = repo.get_user_settings()
-        if settings is None or not settings.morning_report_enabled:
-            continue
+        try:
+            repo = Repository(user_id=user_id)
+            settings = repo.get_user_settings()
+            if not _is_due(settings, current):
+                continue
 
-        logger.info("사용자별 모닝 리포트 생성 시작: %s", user_id)
-        service = DailyReportService(config=config, repo=repo)
-        ok, message, _ = service.generate_and_send(
-            send_kakao=bool(settings.kakao_enabled),
-            update_prices=True,
-            force_kakao=bool(settings.kakao_enabled),
-        )
-        if ok:
-            logger.info("사용자별 모닝 리포트 완료: %s", user_id)
-        else:
+            # The workflow runs repeatedly. A per-user/per-date DB row is the
+            # durable idempotency guard, so delayed GitHub schedules catch up
+            # without sending the same morning report again.
+            if repo.get_morning_report_for_date(current.date()) is not None:
+                logger.info("오늘 리포트가 이미 처리됨: %s", user_id)
+                continue
+
+            logger.info("사용자별 모닝 리포트 생성 시작: %s", user_id)
+            service = DailyReportService(config=config, repo=repo)
+            ok, message, _ = service.generate_and_send(
+                send_kakao=bool(settings.kakao_enabled),
+                update_prices=True,
+                force_kakao=bool(settings.kakao_enabled),
+            )
+            if ok:
+                logger.info("사용자별 모닝 리포트 완료: %s", user_id)
+            else:
+                failures += 1
+                logger.error("사용자별 모닝 리포트 실패: %s / %s", user_id, message)
+        except Exception:
             failures += 1
-            logger.error("사용자별 모닝 리포트 실패: %s / %s", user_id, message)
+            logger.exception("사용자별 모닝 리포트 예외: %s", user_id)
 
     if failures:
         logger.error("모닝 리포트 실패 사용자 수: %d", failures)
@@ -54,10 +73,7 @@ def run_all_users() -> int:
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     raise SystemExit(run_all_users())
 
 
