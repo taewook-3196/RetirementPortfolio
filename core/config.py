@@ -189,13 +189,13 @@ def get_default_config() -> AppConfig:
 def load_config(config_path: Path | None = None) -> AppConfig:
     """config.yaml 파일을 읽어 AppConfig 객체로 변환 및 검증합니다."""
     path = config_path or get_config_path()
-    if not path.exists():
-        cfg = get_default_config()
-        save_config(cfg, path)
-        return cfg
-
-    with open(path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    else:
+        # 서버/클라우드 환경에서는 개인 config.yaml을 만들지 않고
+        # 안전한 기본값을 메모리에서 사용한 뒤 환경변수 override를 적용합니다.
+        data = asdict(get_default_config())
 
     etfs = [
         ETFConfig(
