@@ -73,13 +73,13 @@ pytest -v tests/
 
 ```env
 RETIREMENT_PORTFOLIO_WEB_URL=https://retirementportfolio.onrender.com/
-RETIREMENT_PORTFOLIO_REPORT_URL=https://taewook-3196.github.io/RetirementPortfolio/
+RETIREMENT_PORTFOLIO_REPORT_URL=https://retirementportfolio.onrender.com/?view=report
 ```
 
 - `RETIREMENT_PORTFOLIO_WEB_URL`은 포트폴리오 관리 deep link에 사용됩니다.
-- `RETIREMENT_PORTFOLIO_REPORT_URL`은 Morning Report와 카카오톡 리포트 버튼에 공통으로 사용됩니다.
+- `RETIREMENT_PORTFOLIO_REPORT_URL`은 호환용 override이며 반드시 인증된 Render 리포트 화면을 가리켜야 합니다.
 - 두 값은 공개 `http`/`https` URL만 허용하며, 잘못된 scheme 또는 hostname 없는 값은 안전한 기본 URL로 대체됩니다.
-- 기존 `GITHUB_PAGES_BASE_URL`도 Report URL의 호환용 fallback으로 계속 지원됩니다. 우선순위는 `RETIREMENT_PORTFOLIO_REPORT_URL` → `GITHUB_PAGES_BASE_URL` → `GITHUB_REPOSITORY` 기반 Pages URL → 기본값입니다.
+- override가 없으면 `RETIREMENT_PORTFOLIO_WEB_URL`의 `?view=report` 화면을 사용합니다. GitHub Pages fallback은 개인 금융정보 공개를 막기 위해 지원하지 않습니다.
 
 ### 3.4 Mock 시뮬레이션 모드 (네트워크 없는 환경)
 
