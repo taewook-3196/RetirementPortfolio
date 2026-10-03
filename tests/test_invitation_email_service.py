@@ -43,3 +43,34 @@ def test_invitation_email_payload_does_not_log_or_persist_secret(monkeypatch):
     assert message_id == "email-test-id"
     assert captured["authorization"] == "Bearer server-only-test-key"
     assert "one-time-secret" in captured["body"]
+
+
+def test_invitation_email_surfaces_safe_provider_http_error(monkeypatch):
+    import io
+    import urllib.error
+
+    monkeypatch.setenv("RESEND_API_KEY", "secret-key-that-must-not-leak")
+    monkeypatch.setenv("INVITE_EMAIL_FROM", "RetirementPortfolio <onboarding@resend.dev>")
+
+    def fake_urlopen(request, timeout=0):
+        raise urllib.error.HTTPError(
+            request.full_url,
+            403,
+            "Forbidden",
+            {},
+            io.BytesIO(b'{"message":"You can only send testing emails to your own email address."}'),
+        )
+
+    monkeypatch.setattr(email_service.urllib.request, "urlopen", fake_urlopen)
+    try:
+        email_service.send_invitation_email(
+            recipient="other@example.com",
+            invite_url="https://retirementportfolio.onrender.com/#invite=test",
+            expires_at="2026-10-10T00:00:00+00:00",
+        )
+        assert False, "expected provider error"
+    except email_service.InvitationEmailError as exc:
+        message = str(exc)
+        assert "Resend HTTP 403" in message
+        assert "testing emails" in message
+        assert "secret-key-that-must-not-leak" not in message

@@ -56,8 +56,25 @@ def send_invitation_email(*, recipient: str, invite_url: str, expires_at: str) -
     try:
         with urllib.request.urlopen(request, timeout=12) as response:
             data = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, ValueError) as exc:
-        raise InvitationEmailError("초대 이메일을 발송하지 못했습니다.") from exc
+    except urllib.error.HTTPError as exc:
+        # Provider validation errors (for example sender/domain restrictions)
+        # happen before a message is accepted, so they may not appear in the
+        # Resend message log. Return only the provider's public error message;
+        # never include request headers or the API credential.
+        provider_message = ""
+        try:
+            error_data = json.loads(exc.read().decode("utf-8"))
+            provider_message = str(error_data.get("message") or "").strip()
+        except (ValueError, UnicodeDecodeError):
+            pass
+        detail = f"Resend HTTP {exc.code}"
+        if provider_message:
+            detail += f": {provider_message}"
+        raise InvitationEmailError(detail) from exc
+    except urllib.error.URLError as exc:
+        raise InvitationEmailError("Resend에 연결하지 못했습니다.") from exc
+    except ValueError as exc:
+        raise InvitationEmailError("Resend 응답을 해석하지 못했습니다.") from exc
 
     message_id = str(data.get("id") or "").strip()
     if not message_id:
