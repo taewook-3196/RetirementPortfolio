@@ -247,3 +247,59 @@ def test_admin_status_accepts_admin(monkeypatch, invite_db):
     result = web_app.get_admin_status("Bearer valid")
     assert result["is_admin"] is True
     assert result["user_id"] == str(user_id)
+
+
+def test_admin_invite_api_requires_admin(monkeypatch):
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: (_ for _ in ()).throw(
+            HTTPException(status_code=403, detail="관리자 권한이 필요합니다.")
+        ),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        web_app.create_admin_invite(
+            web_app.AdminInviteCreateRequest(email="person@example.com"),
+            "Bearer member",
+        )
+    assert exc_info.value.status_code == 403
+
+
+def test_admin_creates_invite_without_storing_plaintext(monkeypatch, invite_db):
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: {
+            "user_id": str(uuid4()),
+            "email": "admin@example.com",
+        },
+    )
+    result = web_app.create_admin_invite(
+        web_app.AdminInviteCreateRequest(
+            email="Person@Example.com",
+            label="Family",
+            days=3,
+        ),
+        "Bearer admin",
+    )
+    assert result["email"] == "person@example.com"
+    assert result["invite_code"]
+    assert "비밀번호" in result["privacy_notice"]
+
+    with invite_db() as session:
+        row = session.query(InviteCode).one()
+        assert row.code_hash == web_app._invite_code_hash(result["invite_code"])
+        assert row.code_hash != result["invite_code"]
+        assert row.intended_email == "person@example.com"
+
+
+def test_admin_can_cancel_unused_invite(monkeypatch, invite_db):
+    monkeypatch.setattr(web_app, "require_admin", lambda authorization=None: {})
+    _insert_invite(invite_db, "cancel-me")
+    with invite_db() as session:
+        invite_id = session.query(InviteCode).one().id
+
+    result = web_app.cancel_admin_invite(invite_id, "Bearer admin")
+    assert result["cancelled"] is True
+    with invite_db() as session:
+        assert session.query(InviteCode).count() == 0
