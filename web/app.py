@@ -20,6 +20,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from supabase import create_client
 from services.portfolio_service import PortfolioService
+from services.invitation_email_service import (
+    InvitationEmailError,
+    invitation_email_configured,
+    send_invitation_email,
+)
 from core.secret_crypto import encrypt_secret
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
@@ -318,6 +323,54 @@ def create_admin_invite(
             "비밀번호, 인증번호, API 비밀키 등 민감한 정보는 입력하지 마세요."
         ),
     }
+
+
+class AdminInviteEmailRequest(BaseModel):
+    invite_url: str = Field(min_length=20, max_length=2000)
+
+
+@app.get("/api/admin/email-status")
+def get_admin_email_status(
+    authorization: str | None = Header(default=None),
+):
+    require_admin(authorization)
+    return {"configured": invitation_email_configured()}
+
+
+@app.post("/api/admin/invites/{invite_id}/send-email")
+def send_admin_invite_email(
+    invite_id: int,
+    payload: AdminInviteEmailRequest,
+    authorization: str | None = Header(default=None),
+):
+    require_admin(authorization)
+    expected_prefix = "https://retirementportfolio.onrender.com/#invite="
+    if not payload.invite_url.startswith(expected_prefix):
+        raise HTTPException(status_code=400, detail="올바른 초대 링크가 아닙니다.")
+
+    with get_db_session() as db:
+        invite = db.query(InviteCode).filter(InviteCode.id == invite_id).one_or_none()
+        if invite is None:
+            raise HTTPException(status_code=404, detail="초대를 찾을 수 없습니다.")
+        if invite.used_at is not None:
+            raise HTTPException(status_code=409, detail="이미 사용된 초대입니다.")
+        if invite.expires_at <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=409, detail="만료된 초대입니다.")
+        recipient = (invite.intended_email or "").strip()
+        expires_at = invite.expires_at.isoformat()
+
+    if not recipient:
+        raise HTTPException(status_code=400, detail="초대 이메일 주소가 없습니다.")
+    try:
+        message_id = send_invitation_email(
+            recipient=recipient,
+            invite_url=payload.invite_url,
+            expires_at=expires_at,
+        )
+    except InvitationEmailError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    return {"sent": True, "message_id": message_id}
 
 
 @app.delete("/api/admin/invites/{invite_id}")
@@ -4461,7 +4514,35 @@ adminInviteForm.addEventListener("submit", async (event) => {
         adminInviteResult.textContent = data.detail || "초대 생성에 실패했습니다.";
         return;
     }
-    adminInviteResult.textContent = "초대가 생성되었습니다. 이메일 발송 기능 연결 전에는 초대코드를 외부에 노출하지 마세요.";
+    let resultText = "초대가 생성되었습니다.";
+    try {
+        const emailStatusResponse = await fetch("/api/admin/email-status", {
+            headers: {"Authorization": "Bearer " + accessToken},
+        });
+        const emailStatus = await emailStatusResponse.json();
+        if (emailStatusResponse.ok && emailStatus.configured) {
+            const sendResponse = await fetch(
+                "/api/admin/invites/" + encodeURIComponent(data.id) + "/send-email",
+                {
+                    method: "POST",
+                    headers: {
+                        "Authorization": "Bearer " + accessToken,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({invite_url: data.invite_url}),
+                }
+            );
+            const sendData = await sendResponse.json();
+            resultText = sendResponse.ok
+                ? "초대 이메일을 발송했습니다."
+                : "초대는 생성됐지만 이메일 발송에 실패했습니다: " + (sendData.detail || "발송 오류");
+        } else {
+            resultText += " 이메일 발송 설정이 아직 없어 자동 발송하지 않았습니다.";
+        }
+    } catch (error) {
+        resultText += " 이메일 발송 상태를 확인하지 못했습니다.";
+    }
+    adminInviteResult.textContent = resultText;
     adminInviteForm.reset();
     document.getElementById("admin-invite-days").value = "7";
     await loadAdminPanel(accessToken);
