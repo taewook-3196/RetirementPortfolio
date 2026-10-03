@@ -24,7 +24,7 @@ from core.secret_crypto import encrypt_secret
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from database.connection import get_db_session
-from database.models import InviteCode, Profile
+from database.models import InviteCode, Profile, KakaoCredential, UserSetting
 from database.repository import Repository
 from portfolio.holdings import calculate_etf_positions
 from data.yfinance_client import YFinanceClient
@@ -164,6 +164,75 @@ def get_admin_status(
         "is_admin": True,
         "user_id": user["user_id"],
         "email": user["email"],
+    }
+
+
+def _get_supabase_admin_client():
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not supabase_url or not service_key:
+        raise HTTPException(
+            status_code=500,
+            detail="Supabase 관리자 설정이 없습니다.",
+        )
+    return create_client(supabase_url, service_key)
+
+
+@app.get("/api/admin/members")
+def list_admin_members(
+    authorization: str | None = Header(default=None),
+):
+    """List operational membership status without exposing portfolio data."""
+    require_admin(authorization)
+    admin_client = _get_supabase_admin_client()
+
+    try:
+        response = admin_client.auth.admin.list_users()
+        auth_users = getattr(response, "users", response)
+        auth_users = list(auth_users or [])
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="회원 목록을 불러오지 못했습니다.",
+        )
+
+    with get_db_session() as db:
+        profiles = {str(p.id): p for p in db.query(Profile).all()}
+        kakao_ids = {
+            str(row.user_id)
+            for row in db.query(KakaoCredential.user_id).all()
+        }
+        settings = {
+            str(row.user_id): row
+            for row in db.query(UserSetting).all()
+        }
+
+    members = []
+    for user in auth_users:
+        user_id = str(getattr(user, "id", "") or "")
+        profile = profiles.get(user_id)
+        setting = settings.get(user_id)
+        members.append({
+            "user_id": user_id,
+            "email": getattr(user, "email", None),
+            "created_at": (
+                getattr(user, "created_at", None).isoformat()
+                if hasattr(getattr(user, "created_at", None), "isoformat")
+                else str(getattr(user, "created_at", "") or "") or None
+            ),
+            "is_admin": bool(profile and profile.is_admin),
+            "kakao_connected": user_id in kakao_ids,
+            "morning_report_enabled": (
+                bool(setting.morning_report_enabled) if setting else False
+            ),
+        })
+
+    return {
+        "members": members,
+        "privacy_scope": (
+            "관리자에게는 회원 운영 상태만 제공되며 보유종목, 수량, 평가금액, "
+            "거래내역, 현금잔고, 투자성향, 모닝리포트 내용은 제공되지 않습니다."
+        ),
     }
 
 
