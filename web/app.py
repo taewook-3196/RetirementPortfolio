@@ -307,6 +307,10 @@ def create_admin_invite(
         "id": invite_id,
         "email": email,
         "invite_code": secret,
+        # Keep the one-time secret in the URL fragment so browsers do not send it
+        # to the server in HTTP request lines, access logs, or Referer headers.
+        "invite_url": "https://retirementportfolio.onrender.com/#invite="
+        + urllib.parse.quote(secret, safe=""),
         "expires_at": expires_at.isoformat(),
         "privacy_notice": (
             "관리자 화면에서는 회원의 보유종목, 투자금액, 매매내역 등 "
@@ -4315,6 +4319,22 @@ const SUPABASE_URL =
 
 const SUPABASE_KEY =
     __SUPABASE_KEY_JSON__;
+
+
+function applyInviteFromFragment() {
+    const hash = window.location.hash || "";
+    if (!hash.startsWith("#invite=")) return;
+    const inviteSecret = decodeURIComponent(hash.slice("#invite=".length));
+    if (!inviteSecret) return;
+    const inviteInput = document.getElementById("invite-code");
+    if (inviteInput) inviteInput.value = inviteSecret;
+    signupForm.style.display = "block";
+    showSignupButton.textContent = "회원가입 닫기";
+    // Remove the secret from the visible address/history after copying it into
+    // the form. It is never sent as a query string.
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+}
+
 
 
 const loginCard =
@@ -14168,6 +14188,8 @@ async function restoreLoginSession() {
     }
 }
 
+
+applyInviteFromFragment();
 
 showSignupButton.addEventListener(
     "click",
