@@ -348,7 +348,9 @@ def test_admin_member_response_has_only_operational_fields(monkeypatch, invite_d
     assert "보유종목" in result["privacy_scope"]
 
 
-def test_home_contains_admin_panel_without_portfolio_admin_controls():
+def test_home_contains_admin_panel_without_portfolio_admin_controls(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "public-test-key")
     response = web_app.home()
     html = response.body.decode("utf-8")
     assert 'id="admin-section"' in html
