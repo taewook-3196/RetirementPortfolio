@@ -362,3 +362,24 @@ def test_home_contains_admin_panel_without_portfolio_admin_controls(monkeypatch)
     assert "증권사 비밀번호" in html
     assert "API 비밀키" in html
     assert "투자 데이터는 이 화면에서 열람할 수 없습니다" in html
+
+
+def test_admin_invite_returns_fragment_link(monkeypatch, invite_db):
+    monkeypatch.setattr(web_app, "require_admin", lambda authorization=None: {})
+    result = web_app.create_admin_invite(
+        web_app.AdminInviteCreateRequest(email="invitee@example.com"),
+        "admin-session",
+    )
+    assert result["invite_url"].startswith(
+        "https://retirementportfolio.onrender.com/#invite="
+    )
+    assert "?invite=" not in result["invite_url"]
+
+
+def test_home_prefills_fragment_invite_without_query_secret(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "public-test-key")
+    html = web_app.home().body.decode("utf-8")
+    assert 'hash.startsWith("#invite=")' in html
+    assert "history.replaceState" in html
+    assert "?invite=" not in html
