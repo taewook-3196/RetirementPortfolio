@@ -12,6 +12,7 @@ import os
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timezone, timedelta
+from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -138,7 +139,7 @@ def require_admin(
     with get_db_session() as db:
         profile = (
             db.query(Profile)
-            .filter(Profile.id == user["user_id"])
+            .filter(Profile.id == UUID(str(user["user_id"])))
             .one_or_none()
         )
 
