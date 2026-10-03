@@ -303,3 +303,46 @@ def test_admin_can_cancel_unused_invite(monkeypatch, invite_db):
     assert result["cancelled"] is True
     with invite_db() as session:
         assert session.query(InviteCode).count() == 0
+
+
+def test_admin_member_list_requires_admin(monkeypatch):
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: (_ for _ in ()).throw(
+            HTTPException(status_code=403, detail="관리자 권한이 필요합니다.")
+        ),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        web_app.list_admin_members("member-session")
+    assert exc_info.value.status_code == 403
+
+
+def test_admin_member_response_has_only_operational_fields(monkeypatch, invite_db):
+    class FakeUser:
+        id = uuid4()
+        email = "member@example.com"
+        created_at = None
+
+    class FakeAdminAuth:
+        def list_users(self):
+            return type("UsersResponse", (), {"users": [FakeUser()]})()
+
+    class FakeClient:
+        auth = type("Auth", (), {"admin": FakeAdminAuth()})()
+
+    monkeypatch.setattr(web_app, "require_admin", lambda authorization=None: {})
+    monkeypatch.setattr(web_app, "_get_supabase_admin_client", lambda: FakeClient())
+
+    with invite_db() as session:
+        web_app.Profile.__table__.create(session.get_bind(), checkfirst=True)
+        web_app.KakaoCredential.__table__.create(session.get_bind(), checkfirst=True)
+        web_app.UserSetting.__table__.create(session.get_bind(), checkfirst=True)
+
+    result = web_app.list_admin_members("admin-session")
+    member = result["members"][0]
+    assert set(member) == {
+        "user_id", "email", "created_at", "is_admin",
+        "kakao_connected", "morning_report_enabled",
+    }
+    assert "보유종목" in result["privacy_scope"]
