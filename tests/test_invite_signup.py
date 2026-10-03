@@ -346,3 +346,19 @@ def test_admin_member_response_has_only_operational_fields(monkeypatch, invite_d
         "kakao_connected", "morning_report_enabled",
     }
     assert "보유종목" in result["privacy_scope"]
+
+
+def test_home_contains_admin_panel_without_portfolio_admin_controls(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "public-test-key")
+    response = web_app.home()
+    html = response.body.decode("utf-8")
+    assert 'id="admin-section"' in html
+    assert 'id="admin-invite-form"' in html
+    assert 'id="admin-members"' in html
+    assert 'id="admin-invites"' in html
+    assert '"/api/admin/members"' in html
+    assert '"/api/admin/invites"' in html
+    assert "증권사 비밀번호" in html
+    assert "API 비밀키" in html
+    assert "투자 데이터는 이 화면에서 열람할 수 없습니다" in html

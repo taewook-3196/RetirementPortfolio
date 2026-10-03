@@ -4095,6 +4095,29 @@ button:disabled {
 </section>
 
 
+<section id="admin-section" class="card" style="display:none;">
+<h2>관리자 · 회원 관리</h2>
+<p class="subtitle">회원 운영정보와 초대를 관리합니다. 다른 회원의 보유종목, 투자금액, 매매내역 등 투자 데이터는 이 화면에서 열람할 수 없습니다.</p>
+<div class="security">실제 계좌번호 전체, 증권사 비밀번호, 인증번호, API 비밀키 등 민감한 정보는 RetirementPortfolio에 입력하지 마세요.</div>
+
+<h3>새 회원 초대</h3>
+<form id="admin-invite-form">
+<label for="admin-invite-email">초대할 이메일</label>
+<input id="admin-invite-email" type="email" autocomplete="email" required>
+<label for="admin-invite-label">이름/메모 (선택)</label>
+<input id="admin-invite-label" type="text" maxlength="200">
+<label for="admin-invite-days">유효기간 (일)</label>
+<input id="admin-invite-days" type="number" min="1" max="365" value="7" required>
+<button type="submit">초대 생성</button>
+<div id="admin-invite-result" class="transaction-message"></div>
+</form>
+
+<h3>회원</h3>
+<div id="admin-members">불러오는 중...</div>
+<h3>초대 현황</h3>
+<div id="admin-invites">불러오는 중...</div>
+</section>
+
 <section id="morning-report-settings-section" class="card">
 <h2>모닝 리포트 설정</h2>
 <p class="subtitle">사용자별 발송 여부와 기준 시간을 설정합니다. 실제 실행은 약 10분 간격 스케줄에 따라 지연될 수 있습니다.</p>
@@ -4348,6 +4371,93 @@ const accountsList =
     document.getElementById(
         "accounts-list"
     );
+
+const adminSection = document.getElementById("admin-section");
+const adminInviteForm = document.getElementById("admin-invite-form");
+const adminInviteResult = document.getElementById("admin-invite-result");
+const adminMembers = document.getElementById("admin-members");
+const adminInvites = document.getElementById("admin-invites");
+
+function escapeAdminText(value) {
+    const node = document.createElement("div");
+    node.textContent = String(value ?? "");
+    return node.innerHTML;
+}
+
+async function loadAdminPanel(accessToken) {
+    const statusResponse = await fetch("/api/admin/me", {
+        headers: {"Authorization": "Bearer " + accessToken},
+    });
+    if (statusResponse.status === 403) {
+        adminSection.style.display = "none";
+        return;
+    }
+    if (!statusResponse.ok) return;
+
+    adminSection.style.display = "block";
+    const [membersResponse, invitesResponse] = await Promise.all([
+        fetch("/api/admin/members", {headers: {"Authorization": "Bearer " + accessToken}}),
+        fetch("/api/admin/invites", {headers: {"Authorization": "Bearer " + accessToken}}),
+    ]);
+    const membersData = await membersResponse.json();
+    const invitesData = await invitesResponse.json();
+
+    if (membersResponse.ok) {
+        adminMembers.innerHTML = (membersData.members || []).map((m) =>
+            "<div class='status-box'><strong>" + escapeAdminText(m.email || "이메일 없음") + "</strong><br>"
+            + "가입: " + escapeAdminText(m.created_at || "-") + " · "
+            + (m.is_admin ? "관리자" : "일반회원") + " · 카카오 "
+            + (m.kakao_connected ? "연결" : "미연결") + " · 리포트 "
+            + (m.morning_report_enabled ? "사용" : "미사용") + "</div>"
+        ).join("") || "등록된 회원이 없습니다.";
+    }
+
+    if (invitesResponse.ok) {
+        adminInvites.innerHTML = (invitesData.invites || []).map((inv) =>
+            "<div class='status-box'><strong>" + escapeAdminText(inv.intended_email || "-") + "</strong><br>"
+            + "상태: " + escapeAdminText(inv.status) + " · 만료: " + escapeAdminText(inv.expires_at || "-")
+            + (inv.status === "pending" ? "<br><button type='button' class='small-button admin-cancel-invite' data-id='" + Number(inv.id) + "'>초대 취소</button>" : "")
+            + "</div>"
+        ).join("") || "초대 내역이 없습니다.";
+    }
+}
+
+adminInviteForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    if (!accessToken) return;
+    adminInviteResult.textContent = "초대를 생성하고 있습니다.";
+    const response = await fetch("/api/admin/invites", {
+        method: "POST",
+        headers: {"Authorization": "Bearer " + accessToken, "Content-Type": "application/json"},
+        body: JSON.stringify({
+            email: document.getElementById("admin-invite-email").value.trim(),
+            label: document.getElementById("admin-invite-label").value.trim(),
+            days: Number(document.getElementById("admin-invite-days").value || 7),
+        }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        adminInviteResult.textContent = data.detail || "초대 생성에 실패했습니다.";
+        return;
+    }
+    adminInviteResult.textContent = "초대가 생성되었습니다. 이메일 발송 기능 연결 전에는 초대코드를 외부에 노출하지 마세요.";
+    adminInviteForm.reset();
+    document.getElementById("admin-invite-days").value = "7";
+    await loadAdminPanel(accessToken);
+});
+
+adminInvites.addEventListener("click", async (event) => {
+    const button = event.target.closest(".admin-cancel-invite");
+    if (!button) return;
+    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    if (!accessToken) return;
+    await fetch("/api/admin/invites/" + encodeURIComponent(button.dataset.id), {
+        method: "DELETE",
+        headers: {"Authorization": "Bearer " + accessToken},
+    });
+    await loadAdminPanel(accessToken);
+});
 
 const morningReportSettingsForm = document.getElementById("morning-report-settings-form");
 const morningReportEnabled = document.getElementById("morning-report-enabled");
@@ -13730,6 +13840,13 @@ async function showAuthenticatedApp(
         accounts,
         accessToken
     );
+
+    try {
+        await loadAdminPanel(accessToken);
+    } catch (error) {
+        console.error("관리자 화면 로딩 오류:", error);
+        adminSection.style.display = "none";
+    }
 
     try {
         await loadMorningReportSettings(accessToken);
