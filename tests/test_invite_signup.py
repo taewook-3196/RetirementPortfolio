@@ -203,3 +203,47 @@ def test_signup_requires_service_role_key(monkeypatch):
         )
 
     assert exc_info.value.status_code == 500
+
+
+def test_admin_status_rejects_regular_user(monkeypatch, invite_db):
+    user_id = uuid4()
+    with invite_db() as session:
+        # The invite-only fixture creates only invite_codes, so create profiles
+        # explicitly for the authorization tests.
+        web_app.Profile.__table__.create(session.get_bind(), checkfirst=True)
+        session.add(web_app.Profile(id=user_id, is_admin=False))
+
+    monkeypatch.setattr(
+        web_app,
+        "get_current_user",
+        lambda authorization=None: {
+            "authenticated": True,
+            "user_id": str(user_id),
+            "email": "member@example.com",
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        web_app.get_admin_status("Bearer valid")
+    assert exc_info.value.status_code == 403
+
+
+def test_admin_status_accepts_admin(monkeypatch, invite_db):
+    user_id = uuid4()
+    with invite_db() as session:
+        web_app.Profile.__table__.create(session.get_bind(), checkfirst=True)
+        session.add(web_app.Profile(id=user_id, is_admin=True))
+
+    monkeypatch.setattr(
+        web_app,
+        "get_current_user",
+        lambda authorization=None: {
+            "authenticated": True,
+            "user_id": str(user_id),
+            "email": "admin@example.com",
+        },
+    )
+
+    result = web_app.get_admin_status("Bearer valid")
+    assert result["is_admin"] is True
+    assert result["user_id"] == str(user_id)
