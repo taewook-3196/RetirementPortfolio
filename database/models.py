@@ -36,6 +36,9 @@ class Profile(Base):
     display_name = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.now)
     updated_at = Column(DateTime(timezone=True), default=datetime.now)
+    # Application authorization. Admins manage membership/invitations only;
+    # this role does not grant cross-user portfolio access.
+    is_admin = Column(Boolean, nullable=False, default=False)
 
 
 class InviteCode(Base):

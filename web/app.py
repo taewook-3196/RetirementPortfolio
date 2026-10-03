@@ -12,6 +12,7 @@ import os
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timezone, timedelta
+from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -22,7 +23,7 @@ from core.secret_crypto import encrypt_secret
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from database.connection import get_db_session
-from database.models import InviteCode
+from database.models import InviteCode, Profile
 from database.repository import Repository
 from portfolio.holdings import calculate_etf_positions
 from data.yfinance_client import YFinanceClient
@@ -127,6 +128,42 @@ def get_verified_user_id(
     )
 
     return user["user_id"]
+
+
+def require_admin(
+    authorization: str | None,
+) -> dict:
+    """Require application admin membership without granting portfolio access."""
+    user = get_current_user(authorization=authorization)
+
+    with get_db_session() as db:
+        profile = (
+            db.query(Profile)
+            .filter(Profile.id == UUID(str(user["user_id"])))
+            .one_or_none()
+        )
+
+        if profile is None or not bool(profile.is_admin):
+            raise HTTPException(
+                status_code=403,
+                detail="관리자 권한이 필요합니다.",
+            )
+
+    return user
+
+
+@app.get("/api/admin/me")
+def get_admin_status(
+    authorization: str | None = Header(default=None),
+):
+    """Return admin status only after server-side authorization."""
+    user = require_admin(authorization)
+    return {
+        "authenticated": True,
+        "is_admin": True,
+        "user_id": user["user_id"],
+        "email": user["email"],
+    }
 
 
 class SignupRequest(BaseModel):
