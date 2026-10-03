@@ -2378,8 +2378,7 @@ class ReportHtmlGenerator:
             else:
                 chart_url = web_app_url
 
-            safe_name = html.escape(str(name))
-            safe_ticker = html.escape(str(ticker))
+            # report_data strings are already escaped once at generate_html() entry.\n            # Escaping them again here turns an ETF name such as "S&P500" into\n            # visible "S&amp;P500" text in the rendered report.\n            safe_name = str(name)\n            safe_ticker = str(ticker)
             chart_key = f"{account_id}:{ticker}" if account_id is not None else f"none:{ticker}"
             safe_chart_key = html.escape(chart_key, quote=True)
             name_html = (
