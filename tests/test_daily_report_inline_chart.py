@@ -230,3 +230,24 @@ def test_private_report_generation_does_not_create_pages_index(
     assert dated.is_file()
     assert 'name="report-build" content="abcdef123456"' in dated.read_text(encoding="utf-8")
     assert not (tmp_path / "index.html").exists()
+
+
+def test_position_name_ampersand_is_not_double_escaped(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "services.report_html_generator.get_report_dir",
+        lambda: tmp_path,
+    )
+    report = _report_data(_chart_data())
+    report["account_groups"][0]["positions"][0]["name"] = "TIGER 미국S&P500동일가중"
+    generator = ReportHtmlGenerator(
+        MorningReportConfig(
+            include_summary=False,
+            include_ai_briefing=False,
+            include_news=False,
+            include_market_indices=False,
+        )
+    )
+    path = generator.generate_html(report, output_filename="ampersand-report.html")
+    content = path.read_text(encoding="utf-8")
+    assert "TIGER 미국S&amp;P500동일가중" in content
+    assert "TIGER 미국S&amp;amp;P500동일가중" not in content
