@@ -4515,9 +4515,7 @@ async function loadAdminPanel(accessToken) {
     }
 }
 
-document.getElementById("admin-email-test-button").addEventListener("click", async () => {
-    const button = document.getElementById("admin-email-test-button");
-    const result = document.getElementById("admin-email-test-result");
+async function runAdminEmailDiagnostic(button, result) {
     const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
     if (!accessToken) {
         result.textContent = "로그인이 필요합니다.";
@@ -4539,7 +4537,7 @@ document.getElementById("admin-email-test-button").addEventListener("click", asy
     } finally {
         button.disabled = false;
     }
-});
+}
 
 adminInviteForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -13830,6 +13828,15 @@ investmentProfileForm.addEventListener(
 /*
 로그인 및 로그인 상태 유지
 */
+
+const adminEmailTestButton = document.getElementById("admin-email-test-button");
+const adminEmailTestResult = document.getElementById("admin-email-test-result");
+if (adminEmailTestButton && adminEmailTestResult) {
+    adminEmailTestButton.addEventListener("click", () =>
+        runAdminEmailDiagnostic(adminEmailTestButton, adminEmailTestResult)
+    );
+}
+
 
 function saveAuthTokens(
     accessToken,
