@@ -383,3 +383,12 @@ def test_home_prefills_fragment_invite_without_query_secret(monkeypatch):
     assert 'hash.startsWith("#invite=")' in html
     assert "history.replaceState" in html
     assert "?invite=" not in html
+
+
+def test_home_contains_admin_email_diagnostic_button(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "public-test-key")
+    html = web_app.home().body.decode("utf-8")
+    assert 'id="admin-email-test-button"' in html
+    assert '"/api/admin/email-diagnostic"' in html
+    assert "Resend가 테스트 메일을 접수했습니다." in html
