@@ -80,3 +80,45 @@ def send_invitation_email(*, recipient: str, invite_url: str, expires_at: str) -
     if not message_id:
         raise InvitationEmailError("초대 이메일 발송 결과를 확인하지 못했습니다.")
     return message_id
+
+
+def send_resend_diagnostic_email() -> str:
+    """Send only to Resend's official delivered test recipient."""
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    sender = os.getenv("INVITE_EMAIL_FROM", "").strip()
+    if not api_key or not sender:
+        raise InvitationEmailError("초대 이메일 발송 설정이 완료되지 않았습니다.")
+    payload = json.dumps({
+        "from": sender,
+        "to": ["delivered@resend.dev"],
+        "subject": "RetirementPortfolio Resend diagnostic",
+        "text": "RetirementPortfolio email delivery configuration test.",
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=12) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        provider_message = ""
+        try:
+            error_data = json.loads(exc.read().decode("utf-8"))
+            provider_message = str(error_data.get("message") or "").strip()
+        except (ValueError, UnicodeDecodeError):
+            pass
+        detail = f"Resend HTTP {exc.code}"
+        if provider_message:
+            detail += f": {provider_message}"
+        raise InvitationEmailError(detail) from exc
+    except urllib.error.URLError as exc:
+        raise InvitationEmailError("Resend에 연결하지 못했습니다.") from exc
+    except ValueError as exc:
+        raise InvitationEmailError("Resend 응답을 해석하지 못했습니다.") from exc
+    message_id = str(data.get("id") or "").strip()
+    if not message_id:
+        raise InvitationEmailError("Resend 진단 결과를 확인하지 못했습니다.")
+    return message_id
