@@ -74,3 +74,22 @@ def test_invitation_email_surfaces_safe_provider_http_error(monkeypatch):
         assert "Resend HTTP 403" in message
         assert "testing emails" in message
         assert "secret-key-that-must-not-leak" not in message
+
+
+def test_resend_diagnostic_uses_only_official_delivered_recipient(monkeypatch):
+    monkeypatch.setenv("RESEND_API_KEY", "server-test-key")
+    monkeypatch.setenv("INVITE_EMAIL_FROM", "RetirementPortfolio <onboarding@resend.dev>")
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self): return b'{"id":"diag-id"}'
+
+    def fake_urlopen(request, timeout=0):
+        captured["body"] = request.data.decode("utf-8")
+        return FakeResponse()
+
+    monkeypatch.setattr(email_service.urllib.request, "urlopen", fake_urlopen)
+    assert email_service.send_resend_diagnostic_email() == "diag-id"
+    assert '"to": ["delivered@resend.dev"]' in captured["body"]
