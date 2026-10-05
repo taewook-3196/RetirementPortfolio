@@ -4170,6 +4170,13 @@ button:disabled {
 <p class="subtitle">회원 운영정보와 초대를 관리합니다. 다른 회원의 보유종목, 투자금액, 매매내역 등 투자 데이터는 이 화면에서 열람할 수 없습니다.</p>
 <div class="security">실제 계좌번호 전체, 증권사 비밀번호, 인증번호, API 비밀키 등 민감한 정보는 RetirementPortfolio에 입력하지 마세요.</div>
 
+<div id="admin-email-diagnostic" style="margin-bottom:24px;">
+<h3>이메일 발송 진단</h3>
+<p>실제 회원에게 보내지 않고 Resend 공식 테스트 수신자로 발송 설정만 확인합니다.</p>
+<button id="admin-email-test-button" type="button">이메일 발송 테스트</button>
+<p id="admin-email-test-result" aria-live="polite"></p>
+</div>
+
 <h3>새 회원 초대</h3>
 <form id="admin-invite-form">
 <label for="admin-invite-email">초대할 이메일</label>
@@ -4507,6 +4514,33 @@ async function loadAdminPanel(accessToken) {
         ).join("") || "초대 내역이 없습니다.";
     }
 }
+
+document.getElementById("admin-email-test-button").addEventListener("click", async () => {
+    const button = document.getElementById("admin-email-test-button");
+    const result = document.getElementById("admin-email-test-result");
+    const session = await getStoredSession();
+    const accessToken = session && session.access_token;
+    if (!accessToken) {
+        result.textContent = "로그인이 필요합니다.";
+        return;
+    }
+    button.disabled = true;
+    result.textContent = "진단 메일을 발송하는 중입니다...";
+    try {
+        const response = await fetch("/api/admin/email-diagnostic", {
+            method: "POST",
+            headers: {"Authorization": "Bearer " + accessToken},
+        });
+        const data = await response.json();
+        result.textContent = response.ok
+            ? "정상: Resend가 테스트 메일을 접수했습니다."
+            : "실패: " + (data.detail || "진단 요청 오류");
+    } catch (error) {
+        result.textContent = "실패: 진단 요청에 연결하지 못했습니다.";
+    } finally {
+        button.disabled = false;
+    }
+});
 
 adminInviteForm.addEventListener("submit", async (event) => {
     event.preventDefault();
