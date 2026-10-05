@@ -403,3 +403,12 @@ def test_admin_email_diagnostic_uses_existing_token_storage(monkeypatch):
     assert 'localStorage.getItem("access_token")' in block
     assert 'sessionStorage.getItem("access_token")' in block
     assert "getStoredSession" not in block
+
+
+def test_admin_email_diagnostic_listener_is_attached_in_late_app_setup(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "public-test-key")
+    html = web_app.home().body.decode("utf-8")
+    assert "async function runAdminEmailDiagnostic" in html
+    assert 'const adminEmailTestButton = document.getElementById("admin-email-test-button")' in html
+    assert html.index("async function runAdminEmailDiagnostic") < html.index("function saveAuthTokens")
