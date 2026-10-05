@@ -4518,8 +4518,7 @@ async function loadAdminPanel(accessToken) {
 document.getElementById("admin-email-test-button").addEventListener("click", async () => {
     const button = document.getElementById("admin-email-test-button");
     const result = document.getElementById("admin-email-test-result");
-    const session = await getStoredSession();
-    const accessToken = session && session.access_token;
+    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
     if (!accessToken) {
         result.textContent = "로그인이 필요합니다.";
         return;
