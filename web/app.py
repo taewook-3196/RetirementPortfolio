@@ -24,6 +24,7 @@ from services.invitation_email_service import (
     InvitationEmailError,
     invitation_email_configured,
     send_invitation_email,
+    send_resend_diagnostic_email,
 )
 from core.secret_crypto import encrypt_secret
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -335,6 +336,18 @@ def get_admin_email_status(
 ):
     require_admin(authorization)
     return {"configured": invitation_email_configured()}
+
+
+@app.post("/api/admin/email-diagnostic")
+def run_admin_email_diagnostic(
+    authorization: str | None = Header(default=None),
+):
+    require_admin(authorization)
+    try:
+        message_id = send_resend_diagnostic_email()
+    except InvitationEmailError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return {"ok": True, "message_id": message_id}
 
 
 @app.post("/api/admin/invites/{invite_id}/send-email")
