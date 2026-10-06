@@ -161,3 +161,15 @@ def test_transactions_tab_has_expandable_entry_panel(monkeypatch):
     assert 'transactionEntryPanel.hidden = false;' in html
     assert 'typeof options.onSaved === "function"' in html
     assert "await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);" in html
+
+
+
+def test_transactions_tab_supports_edit_and_delete(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert "function showTransactionEditor(" in html
+    assert "options = {}" in html
+    assert 'editButton.textContent = "수정";' in html
+    assert 'deleteButton.textContent = "삭제";' in html
+    assert "onCancel: () => renderTransactionTab()" in html
+    assert 'await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);' in html
