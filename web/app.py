@@ -4069,7 +4069,7 @@ button:disabled {
     type="button"
     class="secondary-button"
 >
-초대코드로 회원가입
+회원가입
 </button>
 
 <form
@@ -4094,16 +4094,6 @@ button:disabled {
     type="password"
     minlength="8"
     autocomplete="new-password"
-    required
->
-
-<label for="invite-code">
-초대코드
-</label>
-<input
-    id="invite-code"
-    type="password"
-    autocomplete="off"
     required
 >
 
@@ -4152,29 +4142,17 @@ button:disabled {
 <p class="subtitle">회원 운영정보와 초대를 관리합니다. 다른 회원의 보유종목, 투자금액, 매매내역 등 투자 데이터는 이 화면에서 열람할 수 없습니다.</p>
 <div class="security">실제 계좌번호 전체, 증권사 비밀번호, 인증번호, API 비밀키 등 민감한 정보는 RetirementPortfolio에 입력하지 마세요.</div>
 
-<div id="admin-email-diagnostic" style="margin-bottom:24px;">
-<h3>이메일 발송 진단</h3>
-<p>실제 회원에게 보내지 않고 Resend 공식 테스트 수신자로 발송 설정만 확인합니다.</p>
-<button id="admin-email-test-button" type="button">이메일 발송 테스트</button>
-<p id="admin-email-test-result" aria-live="polite"></p>
+<div class="status-box" style="margin-bottom:18px;">
+<strong>신규 회원가입</strong><br>
+<label class="checkbox-row" style="margin-top:10px;">
+<input id="admin-signup-enabled" type="checkbox">
+<span>회원가입 허용</span>
+</label>
+<p id="admin-signup-status" aria-live="polite"></p>
 </div>
-
-<h3>새 회원 초대</h3>
-<form id="admin-invite-form">
-<label for="admin-invite-email">초대할 이메일</label>
-<input id="admin-invite-email" type="email" autocomplete="email" required>
-<label for="admin-invite-label">이름/메모 (선택)</label>
-<input id="admin-invite-label" type="text" maxlength="200">
-<label for="admin-invite-days">유효기간 (일)</label>
-<input id="admin-invite-days" type="number" min="1" max="365" value="7" required>
-<button type="submit">초대 생성</button>
-<div id="admin-invite-result" class="transaction-message"></div>
-</form>
 
 <h3>회원</h3>
 <div id="admin-members">불러오는 중...</div>
-<h3>초대 현황</h3>
-<div id="admin-invites">불러오는 중...</div>
 </section>
 
 <section id="morning-report-settings-section" class="card">
@@ -4374,21 +4352,6 @@ const SUPABASE_URL =
 
 const SUPABASE_KEY =
     __SUPABASE_KEY_JSON__;
-
-
-function applyInviteFromFragment() {
-    const hash = window.location.hash || "";
-    if (!hash.startsWith("#invite=")) return;
-    const inviteSecret = decodeURIComponent(hash.slice("#invite=".length));
-    if (!inviteSecret) return;
-    const inviteInput = document.getElementById("invite-code");
-    if (inviteInput) inviteInput.value = inviteSecret;
-    signupForm.style.display = "block";
-    showSignupButton.textContent = "회원가입 닫기";
-    // Remove the secret from the visible address/history after copying it into
-    // the form. It is never sent as a query string.
-    history.replaceState(null, "", window.location.pathname + window.location.search);
-}
 
 
 
@@ -14303,9 +14266,6 @@ async function restoreLoginSession() {
             "error";
     }
 }
-
-
-applyInviteFromFragment();
 
 showSignupButton.addEventListener(
     "click",
