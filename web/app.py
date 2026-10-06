@@ -4395,6 +4395,15 @@ Yahoo Finance에서 종목 정보를 확인합니다.
 <input id="transaction-search-filter" type="search" placeholder="종목명 또는 티커 검색" aria-label="종목 검색">
 </div>
 <div id="all-transactions-list" class="loading">거래 내역을 불러오는 중...</div>
+<div class="section-title">입금 / 출금</div>
+<button id="open-cash-flow-entry" type="button" class="transaction-add-button">＋ 입출금 추가</button>
+<div id="cash-flow-entry-panel" class="transaction-entry-panel" hidden>
+<div class="transaction-entry-header"><strong>새 입출금 입력</strong><button id="close-cash-flow-entry" type="button" class="small-button secondary-button">닫기</button></div>
+<label for="cash-flow-entry-account">계좌</label>
+<select id="cash-flow-entry-account"><option value="">계좌를 선택하세요</option></select>
+<div id="cash-flow-entry-form"></div>
+</div>
+<div id="all-cash-flows-list" class="loading">입출금 내역을 불러오는 중...</div>
 </section>
 
 <section id="portfolio-section" class="card">
@@ -4563,6 +4572,72 @@ closeTransactionEntry.addEventListener("click", () => {
 });
 transactionEntryAccount.addEventListener("change", showTransactionEntryForm);
 
+const openCashFlowEntry = document.getElementById("open-cash-flow-entry");
+const closeCashFlowEntry = document.getElementById("close-cash-flow-entry");
+const cashFlowEntryPanel = document.getElementById("cash-flow-entry-panel");
+const cashFlowEntryAccount = document.getElementById("cash-flow-entry-account");
+const cashFlowEntryForm = document.getElementById("cash-flow-entry-form");
+const allCashFlowsList = document.getElementById("all-cash-flows-list");
+
+async function loadCashFlowTab(accounts, accessToken) {
+    cashFlowEntryAccount.innerHTML = '<option value="">계좌를 선택하세요</option>';
+    const groups = await Promise.all(accounts.map(async (account) => ({
+        account,
+        cashFlows: await loadCashFlows(accessToken, account.id),
+    })));
+    allCashFlowsList.innerHTML = "";
+    let count = 0;
+    for (const group of groups) {
+        const option = document.createElement("option");
+        option.value = String(group.account.id);
+        option.textContent = group.account.name;
+        cashFlowEntryAccount.appendChild(option);
+        if (!group.cashFlows.length) continue;
+        const heading = document.createElement("div");
+        heading.className = "section-title";
+        heading.textContent = group.account.name;
+        allCashFlowsList.appendChild(heading);
+        const list = document.createElement("div");
+        renderCashFlows(list, group.cashFlows, group.account, accessToken, {
+            onChanged: async () => {
+                await loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken);
+                await refreshPortfolioAfterTransactionChange();
+            },
+        });
+        allCashFlowsList.appendChild(list);
+        count += group.cashFlows.length;
+    }
+    allCashFlowsList.className = "";
+    if (!count) allCashFlowsList.innerHTML = '<div class="empty">아직 등록된 입출금 내역이 없습니다.</div>';
+}
+
+async function showCashFlowEntryForm() {
+    cashFlowEntryForm.innerHTML = "";
+    const account = transactionTabAccounts.find((item) => String(item.id) === cashFlowEntryAccount.value);
+    if (!account) return;
+    const form = createCashFlowForm(account, transactionTabAccessToken, allCashFlowsList, {
+        onSaved: async () => {
+            await loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken);
+            await refreshPortfolioAfterTransactionChange();
+            cashFlowEntryPanel.hidden = true;
+            cashFlowEntryAccount.value = "";
+            cashFlowEntryForm.innerHTML = "";
+        },
+    });
+    cashFlowEntryForm.appendChild(form);
+}
+
+openCashFlowEntry.addEventListener("click", () => {
+    cashFlowEntryPanel.hidden = false;
+    cashFlowEntryPanel.scrollIntoView({behavior: "smooth", block: "start"});
+});
+closeCashFlowEntry.addEventListener("click", () => {
+    cashFlowEntryPanel.hidden = true;
+    cashFlowEntryAccount.value = "";
+    cashFlowEntryForm.innerHTML = "";
+});
+cashFlowEntryAccount.addEventListener("change", showCashFlowEntryForm);
+
 const transactionAccountFilter = document.getElementById("transaction-account-filter");
 const transactionTypeFilter = document.getElementById("transaction-type-filter");
 const transactionSearchFilter = document.getElementById("transaction-search-filter");
@@ -4697,6 +4772,7 @@ async function loadTransactionTab(accounts, accessToken) {
     transactionTabRows = rows.flat().sort((a, b) => String(b.transaction.transaction_date).localeCompare(String(a.transaction.transaction_date)) || Number(b.transaction.id || 0) - Number(a.transaction.id || 0));
     transactionTabVisibleCount = 20;
     renderTransactionTab();
+    await loadCashFlowTab(accounts, accessToken);
 }
 
 for (const control of [transactionAccountFilter, transactionTypeFilter]) {
@@ -8618,7 +8694,8 @@ function renderCashFlows(
     container,
     cashFlows,
     account,
-    accessToken
+    accessToken,
+    options = {}
 ) {
     container.innerHTML = "";
 
@@ -9200,11 +9277,15 @@ function renderCashFlows(
                             );
 
 
-                            await refreshCashFlowData(
-                                account,
-                                accessToken,
-                                container
-                            );
+                            if (typeof options.onChanged === "function") {
+                                await options.onChanged();
+                            } else {
+                                await refreshCashFlowData(
+                                    account,
+                                    accessToken,
+                                    container
+                                );
+                            }
 
 
                         } catch (error) {
@@ -9279,11 +9360,15 @@ function renderCashFlows(
                     );
 
 
-                    await refreshCashFlowData(
-                        account,
-                        accessToken,
-                        container
-                    );
+                    if (typeof options.onChanged === "function") {
+                        await options.onChanged();
+                    } else {
+                        await refreshCashFlowData(
+                            account,
+                            accessToken,
+                            container
+                        );
+                    }
 
 
                 } catch (error) {
@@ -11060,7 +11145,8 @@ async function refreshCashFlowData(
 function createCashFlowForm(
     account,
     accessToken,
-    cashFlowsList
+    cashFlowsList,
+    options = {}
 ) {
     const form =
         document.createElement(
@@ -11357,11 +11443,15 @@ function createCashFlowForm(
                 계좌 요약을 함께 새로고침
                 */
 
-                await refreshCashFlowData(
-                    account,
-                    accessToken,
-                    cashFlowsList
-                );
+                if (typeof options.onSaved === "function") {
+                    await options.onSaved();
+                } else {
+                    await refreshCashFlowData(
+                        account,
+                        accessToken,
+                        cashFlowsList
+                    );
+                }
 
 
             } catch (error) {
@@ -13451,107 +13541,8 @@ async function renderAccounts(
             */
 
             /*
-            현금 입출금 입력
+            입금 / 출금 관리는 하단 "거래" 탭에서 통합 관리합니다.
             */
-
-            const cashFlowFormTitle =
-                document.createElement(
-                    "div"
-                );
-
-            cashFlowFormTitle.className =
-                "section-title";
-
-            cashFlowFormTitle.textContent =
-                "입금 / 출금 입력";
-
-            card.appendChild(
-                cashFlowFormTitle
-            );
-
-
-            /*
-            현금 입출금 내역
-            */
-
-            const cashFlowsTitle =
-                document.createElement(
-                    "div"
-                );
-
-            cashFlowsTitle.className =
-                "section-title";
-
-            cashFlowsTitle.textContent =
-                "입금 / 출금 내역";
-
-
-            const cashFlowsList =
-                document.createElement(
-                    "div"
-                );
-
-            cashFlowsList.className =
-                "loading";
-
-            cashFlowsList.textContent =
-                "입출금 내역을 불러오는 중...";
-
-
-            /*
-            입력 폼
-
-            cashFlowsList를 전달하여
-            저장 직후 내역을 바로 갱신합니다.
-            */
-
-            const cashFlowForm =
-                createCashFlowForm(
-                    account,
-                    accessToken,
-                    cashFlowsList
-                );
-
-
-            card.appendChild(
-                cashFlowForm
-            );
-
-            card.appendChild(
-                cashFlowsTitle
-            );
-
-            card.appendChild(
-                cashFlowsList
-            );
-
-
-            try {
-
-                const cashFlows =
-                    await loadCashFlows(
-                        accessToken,
-                        account.id
-                    );
-
-
-                renderCashFlows(
-                    cashFlowsList,
-                    cashFlows,
-                    account,
-                    accessToken
-                );
-
-
-            } catch (error) {
-
-                cashFlowsList.className =
-                    "error";
-
-                cashFlowsList.textContent =
-                    error.message
-                    || "입출금 내역을 불러오지 못했습니다.";
-            }
             
         } catch (error) {
 
