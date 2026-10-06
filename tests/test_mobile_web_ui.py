@@ -122,3 +122,14 @@ def test_mobile_app_has_bottom_navigation_shell(monkeypatch):
     assert 'function setAppTab(tabName, options = {})' in html
     assert 'setAppTab("home", {scroll: false});' in html
     assert '.app-bottom-nav { display: grid; }' in html
+
+
+
+def test_transaction_history_is_incrementally_revealed(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert "const pageSize = 20;" in html
+    assert "newestFirst.slice(0, visibleCount)" in html
+    assert '"20건 더 보기"' in html
+    assert '"최근 "' in html
+    assert "visibleCount + pageSize" in html
