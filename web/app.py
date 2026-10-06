@@ -30,7 +30,7 @@ from core.secret_crypto import encrypt_secret
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from database.connection import get_db_session
-from database.models import InviteCode, Profile, KakaoCredential, UserSetting
+from database.models import InviteCode, Profile, AppSetting, KakaoCredential, UserSetting
 from database.repository import Repository
 from portfolio.holdings import calculate_etf_positions
 from data.yfinance_client import YFinanceClient
@@ -171,6 +171,41 @@ def get_admin_status(
         "user_id": user["user_id"],
         "email": user["email"],
     }
+
+
+SIGNUP_ENABLED_KEY = "signup_enabled"
+
+
+def _signup_enabled() -> bool:
+    with get_db_session() as db:
+        row = db.query(AppSetting).filter(AppSetting.key == SIGNUP_ENABLED_KEY).one_or_none()
+        return bool(row and str(row.value).strip().lower() == "true")
+
+
+class SignupControlRequest(BaseModel):
+    enabled: bool
+
+
+@app.get("/api/signup-status")
+def get_signup_status():
+    return {"signup_enabled": _signup_enabled()}
+
+
+@app.put("/api/admin/signup-status")
+def set_signup_status(
+    request: SignupControlRequest,
+    authorization: str | None = Header(default=None),
+):
+    require_admin(authorization)
+    with get_db_session() as db:
+        row = db.query(AppSetting).filter(AppSetting.key == SIGNUP_ENABLED_KEY).one_or_none()
+        value = "true" if request.enabled else "false"
+        if row is None:
+            db.add(AppSetting(key=SIGNUP_ENABLED_KEY, value=value))
+        else:
+            row.value = value
+            row.updated_at = datetime.now(timezone.utc)
+    return {"signup_enabled": request.enabled}
 
 
 def _get_supabase_admin_client():
