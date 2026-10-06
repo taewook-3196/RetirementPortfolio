@@ -3792,6 +3792,14 @@ class Repository:
             session.delete(row)
             return True
 
+    def is_active_member(self) -> bool:
+        """Return True only while this repository owner has active membership."""
+        if not self.user_id:
+            return False
+        with get_db_session() as session:
+            profile = session.query(Profile).filter(Profile.id == self.user_id).one_or_none()
+            return bool(profile is not None and profile.is_active)
+
     @staticmethod
     def get_morning_report_user_ids() -> List[UUID]:
         """Return users who opted in to scheduled morning reports."""
