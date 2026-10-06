@@ -41,7 +41,7 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
         try:
             repo = Repository(user_id=user_id)
             settings = repo.get_user_settings()
-            if not _is_due(settings, current):
+            if not force and not _is_due(settings, current):
                 continue
 
             # A generated report and a delivered Kakao message are separate
