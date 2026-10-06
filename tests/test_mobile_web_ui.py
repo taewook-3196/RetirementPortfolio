@@ -261,3 +261,14 @@ def test_admin_has_separate_member_management_tab(monkeypatch):
     assert "memberManagementTabButton.hidden = false;" in html
     assert "memberManagementTabButton.hidden = true;" in html
     assert "repeat(auto-fit, minmax(64px, 1fr))" in html
+
+
+
+def test_member_management_tab_fails_closed_when_admin_check_fails(monkeypatch):
+    html = _html(monkeypatch)
+
+    admin_loader = html[html.index("async function loadAdminPanel(accessToken)"):html.index("adminSignupEnabled.addEventListener")]
+    assert "if (!statusResponse.ok)" in admin_loader
+    assert "memberManagementTabButton.hidden = true;" in admin_loader
+    assert "adminSection.hidden = true;" in admin_loader
+    assert 'if (activeAppTab === "members") setAppTab("home", {scroll: false});' in admin_loader
