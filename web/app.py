@@ -4817,13 +4817,12 @@ function escapeAdminText(value) {
 async function loadAdminPanel(accessToken) {
     const headers = {"Authorization": "Bearer " + accessToken};
     const statusResponse = await fetch("/api/admin/me", {headers});
-    if (statusResponse.status === 403) {
+    if (!statusResponse.ok) {
         memberManagementTabButton.hidden = true;
         adminSection.hidden = true;
         if (activeAppTab === "members") setAppTab("home", {scroll: false});
         return;
     }
-    if (!statusResponse.ok) return;
     memberManagementTabButton.hidden = false;
     adminSection.style.display = "";
     adminSection.hidden = activeAppTab !== "members";
