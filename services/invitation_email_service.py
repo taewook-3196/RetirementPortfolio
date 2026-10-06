@@ -5,7 +5,6 @@ returned to the browser or written to application logs.
 """
 from __future__ import annotations
 
-import json
 import os
 import requests
 
