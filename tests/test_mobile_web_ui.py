@@ -57,3 +57,15 @@ def test_deep_link_and_accessible_position_interaction_remain(monkeypatch):
     assert 'row.setAttribute(\n            "role",\n            "button"' in html
     assert 'event.key === "Enter"' in html
     assert 'event.key === " "' in html
+
+
+
+def test_login_script_has_no_literal_newline_escape_between_statements(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert (
+        'const kakaoConnectButton = document.getElementById("kakao-connect-button");\\nconst'
+        not in html
+    )
+    assert 'loginForm.addEventListener(' in html
+    assert 'event.preventDefault();' in html
