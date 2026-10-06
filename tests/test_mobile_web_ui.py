@@ -44,7 +44,7 @@ def test_core_mobile_workflows_and_chart_features_remain(monkeypatch):
     # 거래, 입출금 및 수정/삭제 API 연결
     assert ' + "/transactions"' in html
     assert ' + "/cash-flows"' in html
-    assert 'method:\n                                    "DELETE"' in html
+    assert 'method: "DELETE"' in html or 'method:\n                                    "DELETE"' in html
 
 
 def test_deep_link_and_accessible_position_interaction_remain(monkeypatch):
@@ -217,4 +217,20 @@ def test_app_navigation_remains_available_above_phone_width(monkeypatch):
     assert "display: none;" not in nav_css
     assert 'portfolio: ["portfolio-section", "asset-search-section"]' in html
     assert 'transactions: ["transactions-section"]' in html
-    assert 'settings: ["morning-report-settings-section"' in html
+    assert 'settings: ["account-management-section", "morning-report-settings-section"' in html
+
+
+
+def test_account_settings_and_deletion_live_in_settings_tab(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'id="account-management-section"' in html
+    assert 'id="account-management-list"' in html
+    assert 'settings: ["account-management-section"' in html
+    assert "async function renderAccountManagement(accounts, accessToken)" in html
+
+    render_accounts = html[html.index("async function renderAccounts("):]
+    assert 'card.appendChild(\n            createAccountEditor(' not in render_accounts
+    assert 'deleteAccountButton.textContent' not in render_accounts
+    assert 'card.appendChild(createAccountEditor(account, accessToken));' in html
+    assert 'deleteButton.textContent = "계좌 삭제";' in html

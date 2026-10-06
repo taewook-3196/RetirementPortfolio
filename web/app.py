@@ -4414,6 +4414,12 @@ Yahoo Finance에서 종목 정보를 확인합니다.
 
 </section>
 
+<section id="account-management-section" class="card" hidden>
+<h2>계좌 관리</h2>
+<p class="subtitle">계좌 정보 변경과 계좌 삭제를 관리합니다. 계좌 삭제는 관련 거래·입출금·배당·목표 포트폴리오도 함께 삭제합니다.</p>
+<div id="account-management-list"></div>
+</section>
+
 
 <nav id="app-bottom-nav" class="app-bottom-nav" aria-label="주요 메뉴">
 <button type="button" data-app-tab="home" class="active" aria-current="page">홈</button>
@@ -4488,7 +4494,7 @@ const appTabSections = {
     home: ["app-header", "report-section"],
     portfolio: ["portfolio-section", "asset-search-section"],
     transactions: ["transactions-section"],
-    settings: ["morning-report-settings-section", "kakao-settings-section", "investment-settings-section", "admin-section"],
+    settings: ["account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section", "admin-section"],
 };
 let activeAppTab = "home";
 
@@ -4784,6 +4790,8 @@ const loginStatus =
     document.getElementById(
         "login-status"
     );
+
+const accountManagementList = document.getElementById("account-management-list");
 
 const accountsList =
     document.getElementById(
@@ -12176,6 +12184,56 @@ function createAccountEditor(
 }
 
 
+async function renderAccountManagement(accounts, accessToken) {
+    accountManagementList.innerHTML = "";
+    if (!accounts.length) {
+        accountManagementList.innerHTML = '<div class="empty">등록된 계좌가 없습니다.</div>';
+        return;
+    }
+    for (const account of accounts) {
+        const card = document.createElement("div");
+        card.className = "account-card";
+        const name = document.createElement("div");
+        name.className = "account-name";
+        name.textContent = account.account_name + (account.is_default ? " · 기본 계좌" : "");
+        card.appendChild(name);
+        card.appendChild(createDetail((account.broker || "-") + " · " + accountTypeText(account.account_type) + " · " + getAccountCurrency(account)));
+        card.appendChild(createAccountEditor(account, accessToken));
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "delete-button";
+        deleteButton.textContent = "계좌 삭제";
+        const message = document.createElement("div");
+        message.className = "transaction-message";
+        deleteButton.addEventListener("click", async () => {
+            const confirmed = window.confirm(
+                "'" + account.account_name + "' 계좌를 정말 삭제하시겠습니까?\\n\\n"
+                + "이 계좌의 거래내역, 입출금내역, 배당내역, 목표 포트폴리오도 함께 삭제됩니다.\\n\\n"
+                + "삭제 후에는 되돌릴 수 없습니다."
+            );
+            if (!confirmed) return;
+            deleteButton.disabled = true;
+            deleteButton.textContent = "삭제 중...";
+            try {
+                const response = await apiRequest("/api/accounts/" + account.id, accessToken, {method: "DELETE"});
+                if (!response.deleted) throw new Error("계좌 삭제 결과를 확인할 수 없습니다.");
+                const refreshed = await loadAccounts(accessToken);
+                await renderAccounts(refreshed, accessToken);
+                await renderAccountManagement(refreshed, accessToken);
+                await loadTransactionTab(refreshed, accessToken);
+            } catch (error) {
+                message.textContent = error.message || "계좌 삭제에 실패했습니다.";
+                message.className = "transaction-message error";
+                deleteButton.disabled = false;
+                deleteButton.textContent = "계좌 삭제";
+            }
+        });
+        card.append(deleteButton, message);
+        accountManagementList.appendChild(card);
+    }
+}
+
 async function renderAccounts(
     accounts,
     accessToken
@@ -13241,149 +13299,6 @@ async function renderAccounts(
             createDetail(
                 cycleText
             )
-        );
-
-
-        /*
-        계좌 설정
-        */
-
-        card.appendChild(
-            createAccountEditor(
-                account,
-                accessToken
-            )
-        );
-
-        /*
-        계좌 삭제
-        */
-        
-        const deleteAccountButton =
-            document.createElement(
-                "button"
-            );
-        
-        deleteAccountButton.type =
-            "button";
-        
-        deleteAccountButton.textContent =
-            "계좌 삭제";
-        
-        
-        const deleteAccountMessage =
-            document.createElement(
-                "div"
-            );
-        
-        deleteAccountMessage.className =
-            "transaction-message";
-        
-        
-        deleteAccountButton.addEventListener(
-            "click",
-            async () => {
-        
-                const confirmed =
-                    window.confirm(
-                        "'"
-                        + account.account_name
-                        + "' 계좌를 정말 삭제하시겠습니까?\\n\\n"
-                        + "이 계좌의 거래내역, 입출금내역, 배당내역, "
-                        + "목표 포트폴리오도 함께 삭제됩니다.\\n\\n"
-                        + "삭제 후에는 되돌릴 수 없습니다."
-                    );        
-        
-                if (!confirmed) {
-                    return;
-                }
-        
-        
-                deleteAccountButton.disabled =
-                    true;
-        
-                deleteAccountButton.textContent =
-                    "삭제 중...";
-        
-                deleteAccountMessage.textContent =
-                    "";
-        
-        
-                try {
-        
-                    const response =
-                        await apiRequest(
-                            "/api/accounts/"
-                            + account.id,
-                            accessToken,
-                            {
-                                method:
-                                    "DELETE"
-                            }
-                        );
-        
-        
-                    if (!response.deleted) {
-                        throw new Error(
-                            "계좌 삭제 결과를 확인할 수 없습니다."
-                        );
-                    }
-        
-        
-                    /*
-                    삭제 후 서버에서 최신 계좌 목록을
-                    다시 가져옵니다.
-                    */
-        
-                    const refreshed =
-                        await apiRequest(
-                            "/api/accounts",
-                            accessToken
-                        );
-        
-        
-                    const refreshedAccounts =
-                        Array.isArray(
-                            refreshed
-                        )
-                        ? refreshed
-                        : (
-                            refreshed.accounts
-                            || []
-                        );
-        
-        
-                    await renderAccounts(
-                        refreshedAccounts,
-                        accessToken
-                    );
-        
-        
-                } catch (error) {
-        
-                    deleteAccountMessage.textContent =
-                        error.message
-                        || "계좌 삭제에 실패했습니다.";
-        
-                    deleteAccountMessage.className =
-                        "transaction-message error";
-        
-                    deleteAccountButton.disabled =
-                        false;
-        
-                    deleteAccountButton.textContent =
-                        "계좌 삭제";
-                }
-            }
-        );
-        
-        
-        card.appendChild(
-            deleteAccountButton
-        );
-        
-        card.appendChild(
-            deleteAccountMessage
         );
 
 
