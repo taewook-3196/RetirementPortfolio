@@ -108,3 +108,17 @@ def test_mobile_layout_stacks_forms_and_keeps_touch_targets(monkeypatch):
     assert ".small-button,\n    .asset-chart-period-button {\n        min-height: 44px;" in html
     assert ".transaction-actions {\n        flex-wrap: wrap;" in html
     assert ".transaction-actions button {\n        flex: 1 1 120px;" in html
+
+
+
+def test_mobile_app_has_bottom_navigation_shell(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'id="app-bottom-nav"' in html
+    assert 'data-app-tab="home"' in html
+    assert 'data-app-tab="portfolio"' in html
+    assert 'data-app-tab="transactions"' in html
+    assert 'data-app-tab="settings"' in html
+    assert 'function setAppTab(tabName, options = {})' in html
+    assert 'setAppTab("home", {scroll: false});' in html
+    assert '.app-bottom-nav { display: grid; }' in html

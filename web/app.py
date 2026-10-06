@@ -3884,7 +3884,44 @@ button:disabled {
     font-size: 13px;
 }
 
+
+.app-bottom-nav {
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    z-index: 1000;
+    display: none;
+    width: min(920px, 100%);
+    transform: translateX(-50%);
+    grid-template-columns: repeat(4, 1fr);
+    padding: 7px max(8px, env(safe-area-inset-right)) max(7px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    border-top: 1px solid #e1e4e8;
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(12px);
+}
+
+.app-bottom-nav button {
+    min-height: 48px;
+    margin: 0;
+    padding: 5px 2px;
+    border-radius: 10px;
+    background: transparent;
+    color: #68707b;
+    font-size: 12px;
+}
+
+.app-bottom-nav button.active {
+    background: #eef3f8;
+    color: #202124;
+}
+
+.app-tab-section[hidden] {
+    display: none !important;
+}
+
 @media (max-width: 600px) {
+    body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
+    .app-bottom-nav { display: grid; }
     .form-row {
         grid-template-columns: 1fr;
         gap: 0;
@@ -4288,6 +4325,14 @@ Yahoo Finance에서 종목 정보를 확인합니다.
 
 </section>
 
+
+<nav id="app-bottom-nav" class="app-bottom-nav" aria-label="주요 메뉴">
+<button type="button" data-app-tab="home" class="active" aria-current="page">홈</button>
+<button type="button" data-app-tab="portfolio">포트폴리오</button>
+<button type="button" data-app-tab="transactions">거래</button>
+<button type="button" data-app-tab="settings">설정</button>
+</nav>
+
 </div>
 
 </main>
@@ -4347,6 +4392,40 @@ const appArea =
     document.getElementById(
         "app-area"
     );
+
+
+const appBottomNav = document.getElementById("app-bottom-nav");
+const appTabSections = {
+    home: ["app-header", "report-section"],
+    portfolio: ["portfolio-section", "asset-search-section"],
+    transactions: ["portfolio-section"],
+    settings: ["morning-report-settings-section", "kakao-settings-section", "investment-settings-section", "admin-section"],
+};
+let activeAppTab = "home";
+
+function setAppTab(tabName, options = {}) {
+    const nextTab = appTabSections[tabName] ? tabName : "home";
+    activeAppTab = nextTab;
+    const allIds = new Set(Object.values(appTabSections).flat());
+    for (const id of allIds) {
+        const section = document.getElementById(id);
+        if (!section) continue;
+        section.hidden = !appTabSections[nextTab].includes(id);
+    }
+    for (const button of appBottomNav.querySelectorAll("[data-app-tab]")) {
+        const active = button.dataset.appTab === nextTab;
+        button.classList.toggle("active", active);
+        if (active) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+    }
+    if (options.scroll !== false) window.scrollTo({top: 0, behavior: "smooth"});
+}
+
+appBottomNav.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-app-tab]");
+    if (!button) return;
+    setAppTab(button.dataset.appTab);
+});
 
 const loginStatus =
     document.getElementById(
@@ -13905,6 +13984,10 @@ async function showAuthenticatedApp(
 
     appArea.style.display =
         "flex";
+
+    if (!reportRequested) {
+        setAppTab("home", {scroll: false});
+    }
 
     if (reportRequested) {
         document.getElementById("kakao-settings-section").style.display = "none";
