@@ -299,3 +299,68 @@ def test_active_membership_recheck_fails_closed(monkeypatch):
     assert Repository(user_id=active_user).is_active_member() is True
     assert Repository(user_id=suspended_user).is_active_member() is False
     assert Repository(user_id=missing_user).is_active_member() is False
+
+
+
+def test_new_member_bootstrap_cannot_inherit_existing_member_private_data(monkeypatch):
+    db = _isolated_db(monkeypatch)
+    existing_user, new_user = uuid4(), uuid4()
+    existing_repo = Repository(user_id=existing_user)
+    new_repo = Repository(user_id=new_user)
+
+    existing_repo.ensure_user_initialized()
+    with db() as session:
+        account = Account(
+            user_id=existing_user,
+            account_name="Existing private account",
+            is_default=True,
+        )
+        session.add(account)
+        session.add(
+            AssetMaster(
+                ticker="SECRET",
+                name="Existing Private Asset",
+                market="US",
+                asset_type="STOCK",
+                currency="USD",
+                is_active=True,
+            )
+        )
+        session.flush()
+        account_id = account.id
+
+    existing_repo.add_transaction(
+        transaction_date=date(2026, 10, 6),
+        ticker="SECRET",
+        transaction_type="BUY",
+        quantity=3,
+        price=123,
+        account_id=account_id,
+    )
+    existing_repo.add_watchlist("SECRET", memo="existing user only")
+    existing_repo.upsert_morning_report("2026-10-06", "<p>existing private report</p>")
+    existing_repo.save_kakao_credential("existing-access", "existing-refresh", scopes="talk_message")
+
+    assert new_repo.ensure_user_initialized() == {
+        "investment_profile_created": True,
+        "user_settings_created": True,
+    }
+
+    assert new_repo.get_accounts() == []
+    assert new_repo.get_transactions() == []
+    assert new_repo.get_watchlist() == []
+    assert new_repo.get_latest_morning_report() is None
+    assert new_repo.get_kakao_credential() is None
+
+    new_settings = new_repo.get_user_settings()
+    assert new_settings.morning_report_enabled is True
+    assert new_settings.morning_report_time.strftime("%H:%M") == "07:00"
+    assert new_settings.kakao_enabled is False
+
+    assert [row.account_name for row in existing_repo.get_accounts()] == [
+        "Existing private account"
+    ]
+    assert [row.ticker for row in existing_repo.get_transactions()] == ["SECRET"]
+    assert [row["ticker"] for row in existing_repo.get_watchlist()] == ["SECRET"]
+    assert existing_repo.get_latest_morning_report().html_content == "<p>existing private report</p>"
+    assert existing_repo.get_kakao_credential().access_token_encrypted == "existing-access"
