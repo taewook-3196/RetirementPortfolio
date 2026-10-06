@@ -4393,7 +4393,7 @@ adminMembers.addEventListener("click", async (event) => {
     if (!accessToken) return;
     if (button.classList.contains("admin-delete-member")) {
         const email = button.dataset.email || "이 회원";
-        if (!window.confirm(email + " 회원의 로그인 계정을 삭제하시겠습니까?\n\n앱 로그인과 서비스 이용은 즉시 차단됩니다.\n투자 데이터와 기존 리포트는 서버에 보존되지만, 새 계정을 만들어도 자동으로 연결되지는 않습니다.")) return;
+        if (!window.confirm(email + " 회원의 로그인 계정을 삭제하시겠습니까?\\n\\n앱 로그인과 서비스 이용은 즉시 차단됩니다.\\n투자 데이터와 기존 리포트는 서버에 보존되지만, 새 계정을 만들어도 자동으로 연결되지는 않습니다.")) return;
         button.disabled = true;
         const response = await fetch("/api/admin/members/" + encodeURIComponent(button.dataset.id), {
             method: "DELETE", headers: {"Authorization": "Bearer " + accessToken},

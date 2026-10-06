@@ -79,3 +79,11 @@ def test_generated_browser_script_has_no_statement_newline_escapes(monkeypatch):
     # Literal backslash-n is valid inside JS strings, but not between statements.
     assert "{\\n            const detail" not in script
     assert ";\\nconst " not in script
+
+
+
+def test_generated_admin_confirm_keeps_newlines_inside_js_string(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert "로그인 계정을 삭제하시겠습니까?\\n\\n앱 로그인" in html
+    assert "삭제하시겠습니까?\n\n앱 로그인" not in html
