@@ -295,3 +295,14 @@ def test_chart_offsets_overlapping_transaction_markers(monkeypatch):
     assert "const markerOffsetStep = 11;" in chart
     assert "Math.ceil(markerGroupIndex / 2)" in chart
     assert "baseX + markerOffsetDirection * markerOffsetLevel * markerOffsetStep" in chart
+
+
+
+def test_account_edit_refreshes_all_account_dependent_tabs(monkeypatch):
+    html = _html(monkeypatch)
+
+    editor = html[html.index("function createAccountEditor("):html.index("async function renderAccountManagement")]
+    assert "await renderAccounts(" in editor
+    assert "await renderAccountCreator(" in editor
+    assert "await renderAccountManagement(" in editor
+    assert "await loadTransactionTab(" in editor
