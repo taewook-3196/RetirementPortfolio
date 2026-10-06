@@ -195,3 +195,60 @@ def test_force_resend_bypasses_scheduled_time(monkeypatch):
     ) == 0
     assert calls and calls[0][0] == user_id
     assert calls[0][1]["force_kakao"] is True
+
+
+
+def test_due_users_share_one_market_price_sync(monkeypatch):
+    first, second = uuid4(), uuid4()
+    sync_calls = []
+    report_calls = []
+
+    class FakeRepo:
+        def __init__(self, user_id):
+            self.user_id = user_id
+        @staticmethod
+        def get_morning_report_user_ids():
+            return [first, second]
+        def get_user_settings(self):
+            return SimpleNamespace(
+                morning_report_enabled=True,
+                morning_report_time=time(7, 0),
+                kakao_enabled=False,
+            )
+        def get_morning_report_for_date(self, report_date):
+            return None
+        def get_account_targets(self, account_id=None):
+            return [SimpleNamespace(ticker=str(self.user_id), name="target")]
+        def get_transactions(self):
+            return []
+        def get_etf_master(self, ticker):
+            return None
+        def save_etf_master(self, items):
+            return len(items)
+        def upsert_prices(self, items):
+            return len(items)
+
+    class FakeService:
+        def __init__(self, config, repo):
+            self.repo = repo
+        def generate_and_send(self, **kwargs):
+            report_calls.append((self.repo.user_id, kwargs))
+            return True, "ok", None
+
+    def fake_update_market_prices(**kwargs):
+        repo = kwargs["repo"]
+        sync_calls.append([item.ticker for item in repo.get_account_targets()])
+        return {"saved": 0}
+
+    monkeypatch.setattr(runner, "init_db", lambda: None)
+    monkeypatch.setattr(runner, "load_config", lambda: object())
+    monkeypatch.setattr(runner, "Repository", FakeRepo)
+    monkeypatch.setattr(runner, "DailyReportService", FakeService)
+    monkeypatch.setattr(runner, "update_market_prices", fake_update_market_prices)
+
+    assert runner.run_all_users(
+        datetime(2026, 10, 2, 8, 0, tzinfo=SEOUL)
+    ) == 0
+    assert sync_calls == [[str(first), str(second)]]
+    assert [user_id for user_id, _ in report_calls] == [first, second]
+    assert all(kwargs["update_prices"] is False for _, kwargs in report_calls)
