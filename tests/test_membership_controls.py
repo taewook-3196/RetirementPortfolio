@@ -429,3 +429,34 @@ def test_signup_remains_successful_when_auto_login_fails(monkeypatch, membership
         profile = db.query(Profile).filter(Profile.id == user_id).one_or_none()
         assert profile is not None
         assert profile.is_active is True
+
+
+
+def test_member_delete_auth_failure_leaves_profile_suspended(monkeypatch, membership_db):
+    admin_id, member_id = uuid4(), uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=member_id, is_admin=False, is_active=True))
+
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: {"user_id": str(admin_id)},
+    )
+
+    def fail_delete(user_id):
+        raise RuntimeError("auth unavailable")
+
+    admin_api = SimpleNamespace(delete_user=fail_delete)
+    monkeypatch.setattr(
+        web_app,
+        "_get_supabase_admin_client",
+        lambda: SimpleNamespace(auth=SimpleNamespace(admin=admin_api)),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.delete_member(member_id, "Bearer admin")
+
+    assert exc.value.status_code == 502
+    with membership_db() as db:
+        profile = db.query(Profile).filter(Profile.id == member_id).one()
+        assert profile.is_active is False
