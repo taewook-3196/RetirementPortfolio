@@ -14,6 +14,7 @@ import logging
 import datetime
 from datetime import date
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from itsdangerous import URLSafeTimedSerializer
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -39,6 +40,7 @@ from services.macro_indicator_service import MacroIndicatorService
 from strategy.cycle_helper import calculate_next_investment_date
 
 logger = logging.getLogger("RetirementPortfolio.DailyReportService")
+SEOUL = ZoneInfo("Asia/Seoul")
 
 
 class DailyReportService:
@@ -228,6 +230,8 @@ class DailyReportService:
         반환값: (성공 여부, 결과 메시지, 생성된 HTML 파일 경로)
         """
         try:
+            report_date = datetime.datetime.now(SEOUL).date()
+
             # 0-0. 포트폴리오 계산 전에 최신 USD/KRW 환율 동기화
             #
             # 혼합통화 계좌의 평가액/비중 계산에서
@@ -274,7 +278,7 @@ class DailyReportService:
 
                     if usd_krw_rate > 0:
                         self.repo.save_exchange_rate(
-                            rate_date=date.today(),
+                            rate_date=report_date,
                             from_currency="USD",
                             to_currency="KRW",
                             rate=usd_krw_rate,
@@ -1623,7 +1627,7 @@ class DailyReportService:
 
             if self.repo.user_id:
                 self.repo.upsert_morning_report(
-                    datetime.date.today(),
+                    report_date,
                     html_file.read_text(encoding="utf-8"),
                 )
                 logger.info("사용자별 모닝 리포트 DB 저장 완료")
@@ -1685,7 +1689,7 @@ class DailyReportService:
                     if not ok:
                         return False, f"리포트 HTML은 생성되었으나 카카오톡 전송에 실패했습니다: {msg}", html_file
                     if self.repo.user_id:
-                        self.repo.mark_morning_report_kakao_sent(datetime.date.today())
+                        self.repo.mark_morning_report_kakao_sent(report_date)
                     kakao_status = "카카오톡 발송 성공!"
                 else:
                     kakao_status = "카카오톡 미발송 (설정에서 모닝 리포트 발송 기능이 꺼져 있음)"
