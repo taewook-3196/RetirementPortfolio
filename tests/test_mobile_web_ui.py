@@ -217,7 +217,7 @@ def test_app_navigation_remains_available_above_phone_width(monkeypatch):
     assert "display: none;" not in nav_css
     assert 'portfolio: ["portfolio-section", "asset-search-section"]' in html
     assert 'transactions: ["transactions-section"]' in html
-    assert 'settings: ["account-management-section", "morning-report-settings-section"' in html
+    assert 'settings: ["settings-navigation-section", "account-management-section", "morning-report-settings-section"' in html
 
 
 
@@ -226,7 +226,7 @@ def test_account_settings_and_deletion_live_in_settings_tab(monkeypatch):
 
     assert 'id="account-management-section"' in html
     assert 'id="account-management-list"' in html
-    assert 'settings: ["account-management-section"' in html
+    assert 'settings: ["settings-navigation-section", "account-management-section"' in html
     assert "async function renderAccountManagement(accounts, accessToken)" in html
 
     render_accounts = html[html.index("async function renderAccounts("):]
@@ -257,7 +257,7 @@ def test_admin_has_separate_member_management_tab(monkeypatch):
     assert 'id="member-management-tab-button"' in html
     assert 'data-app-tab="members" hidden>회원관리</button>' in html
     assert 'members: ["admin-section"]' in html
-    assert 'settings: ["account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section"]' in html
+    assert 'settings: ["settings-navigation-section", "account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section"]' in html
     assert "memberManagementTabButton.hidden = false;" in html
     assert "memberManagementTabButton.hidden = true;" in html
     assert "repeat(auto-fit, minmax(64px, 1fr))" in html
@@ -306,3 +306,17 @@ def test_account_edit_refreshes_all_account_dependent_tabs(monkeypatch):
     assert "await renderAccountCreator(" in editor
     assert "await renderAccountManagement(" in editor
     assert "await loadTransactionTab(" in editor
+
+
+
+def test_settings_tab_uses_compact_subnavigation(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'id="settings-navigation-section"' in html
+    assert 'id="settings-subnav"' in html
+    for panel in ("accounts", "report", "kakao", "strategy"):
+        assert f'data-settings-panel="{panel}"' in html
+    assert 'function setSettingsPanel(panelName, options = {})' in html
+    assert 'function applySettingsPanel()' in html
+    assert 'section.hidden = !settingsActive || panelName !== activeSettingsPanel;' in html
+    assert '.settings-subnav {\n        grid-template-columns: repeat(2, minmax(0, 1fr));' in html
