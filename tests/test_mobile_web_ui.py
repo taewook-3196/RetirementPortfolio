@@ -104,7 +104,7 @@ def test_mobile_layout_stacks_forms_and_keeps_touch_targets(monkeypatch):
     html = _html(monkeypatch)
 
     assert "@media (max-width: 600px)" in html
-    assert ".form-row {\n        grid-template-columns: 1fr;" in html
+    assert ".form-row,\n    .transaction-filter-grid {\n        grid-template-columns: 1fr;" in html
     assert ".small-button,\n    .asset-chart-period-button {\n        min-height: 44px;" in html
     assert ".transaction-actions {\n        flex-wrap: wrap;" in html
     assert ".transaction-actions button {\n        flex: 1 1 120px;" in html
@@ -133,3 +133,17 @@ def test_transaction_history_is_incrementally_revealed(monkeypatch):
     assert '"20건 더 보기"' in html
     assert '"최근 "' in html
     assert "visibleCount + pageSize" in html
+
+
+
+def test_transactions_tab_is_independent_and_filterable(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'id="transactions-section"' in html
+    assert 'transactions: ["transactions-section"]' in html
+    assert 'id="transaction-account-filter"' in html
+    assert 'id="transaction-type-filter"' in html
+    assert 'id="transaction-search-filter"' in html
+    assert "async function loadTransactionTab(accounts, accessToken)" in html
+    assert "transactionTabVisibleCount = 20;" in html
+    assert '"20건 더 보기"' in html
