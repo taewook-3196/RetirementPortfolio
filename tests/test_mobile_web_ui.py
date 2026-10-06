@@ -272,3 +272,14 @@ def test_member_management_tab_fails_closed_when_admin_check_fails(monkeypatch):
     assert "memberManagementTabButton.hidden = true;" in admin_loader
     assert "adminSection.hidden = true;" in admin_loader
     assert 'if (activeAppTab === "members") setAppTab("home", {scroll: false});' in admin_loader
+
+
+
+def test_transaction_entry_error_state_resets_before_reuse(monkeypatch):
+    html = _html(monkeypatch)
+
+    entry = html[html.index("async function showTransactionEntryForm()"):html.index("const openCashFlowEntry")]
+    assert 'transactionEntryForm.className = "";' in entry
+    assert 'transactionEntryForm.className = "error";' in entry
+    close_handler = entry[entry.index('closeTransactionEntry.addEventListener("click"'):]
+    assert 'transactionEntryForm.className = "";' in close_handler
