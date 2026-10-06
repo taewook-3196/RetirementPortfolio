@@ -39,6 +39,17 @@ class Profile(Base):
     # Application authorization. Admins manage membership/invitations only;
     # this role does not grant cross-user portfolio access.
     is_admin = Column(Boolean, nullable=False, default=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+
+class AppSetting(Base):
+    """Server-managed application settings."""
+
+    __tablename__ = "app_settings"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.now)
 
 
 class InviteCode(Base):
