@@ -129,7 +129,7 @@ def test_home_has_signup_gate_and_no_invitation_ui(monkeypatch):
     assert 'email-diagnostic' not in html
     assert 'body: JSON.stringify({email, password})' in html
     assert '로그인 계정 삭제' in html
-    assert '투자 데이터와 기존 리포트는 복구 안전을 위해 자동 삭제하지 않습니다.' in html
+    assert '투자 데이터와 기존 리포트는 서버에 보존되지만, 새 계정을 만들어도 자동으로 연결되지는 않습니다.' in html
 
 
 def _mock_authenticated_user(monkeypatch, user_id):
