@@ -3570,7 +3570,37 @@ button:disabled {
     gap: 10px;
 }
 
- .transaction-filter-grid {
+  .transaction-add-button {
+    width: auto;
+    margin: 0 0 14px;
+}
+
+.transaction-entry-panel {
+    margin-bottom: 16px;
+    padding: 14px;
+    border: 1px solid #e1e4e8;
+    border-radius: 14px;
+    background: #f8fafc;
+}
+
+.transaction-entry-panel[hidden] {
+    display: none !important;
+}
+
+.transaction-entry-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.transaction-entry-header .small-button {
+    width: auto;
+    margin: 0;
+}
+
+.transaction-filter-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(180px, 1.5fr);
     gap: 8px;
@@ -4352,6 +4382,13 @@ Yahoo Finance에서 종목 정보를 확인합니다.
 <section id="transactions-section" class="card" hidden>
 <h2>거래</h2>
 <p class="subtitle">모든 계좌의 거래를 한 곳에서 확인합니다.</p>
+<button id="open-transaction-entry" type="button" class="transaction-add-button">＋ 거래 추가</button>
+<div id="transaction-entry-panel" class="transaction-entry-panel" hidden>
+<div class="transaction-entry-header"><strong>새 거래 입력</strong><button id="close-transaction-entry" type="button" class="small-button secondary-button">닫기</button></div>
+<label for="transaction-entry-account">계좌</label>
+<select id="transaction-entry-account"><option value="">계좌를 선택하세요</option></select>
+<div id="transaction-entry-form"></div>
+</div>
 <div class="transaction-filter-grid">
 <select id="transaction-account-filter" aria-label="계좌 필터"><option value="">전체 계좌</option></select>
 <select id="transaction-type-filter" aria-label="거래 유형 필터"><option value="">전체 거래</option><option value="BUY">매수</option><option value="SELL">매도</option></select>
@@ -4471,6 +4508,55 @@ appBottomNav.addEventListener("click", (event) => {
 });
 
 
+const openTransactionEntry = document.getElementById("open-transaction-entry");
+const closeTransactionEntry = document.getElementById("close-transaction-entry");
+const transactionEntryPanel = document.getElementById("transaction-entry-panel");
+const transactionEntryAccount = document.getElementById("transaction-entry-account");
+const transactionEntryForm = document.getElementById("transaction-entry-form");
+let transactionTabAccounts = [];
+let transactionTabAccessToken = "";
+
+async function showTransactionEntryForm() {
+    transactionEntryForm.innerHTML = "";
+    const account = transactionTabAccounts.find((item) => String(item.id) === transactionEntryAccount.value);
+    if (!account) return;
+    transactionEntryForm.innerHTML = '<div class="loading">입력폼을 준비하는 중...</div>';
+    try {
+        const targets = await loadAccountTargets(transactionTabAccessToken, account.id);
+        transactionEntryForm.innerHTML = "";
+        const form = createTransactionForm(
+            account,
+            targets,
+            transactionTabAccessToken,
+            null,
+            null,
+            {
+                onSaved: async () => {
+                    await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);
+                    transactionEntryPanel.hidden = true;
+                    transactionEntryAccount.value = "";
+                    transactionEntryForm.innerHTML = "";
+                },
+            }
+        );
+        transactionEntryForm.appendChild(form);
+    } catch (error) {
+        transactionEntryForm.className = "error";
+        transactionEntryForm.textContent = error.message || "거래 입력폼을 준비하지 못했습니다.";
+    }
+}
+
+openTransactionEntry.addEventListener("click", () => {
+    transactionEntryPanel.hidden = false;
+    transactionEntryPanel.scrollIntoView({behavior: "smooth", block: "start"});
+});
+closeTransactionEntry.addEventListener("click", () => {
+    transactionEntryPanel.hidden = true;
+    transactionEntryForm.innerHTML = "";
+    transactionEntryAccount.value = "";
+});
+transactionEntryAccount.addEventListener("change", showTransactionEntryForm);
+
 const transactionAccountFilter = document.getElementById("transaction-account-filter");
 const transactionTypeFilter = document.getElementById("transaction-type-filter");
 const transactionSearchFilter = document.getElementById("transaction-search-filter");
@@ -4532,9 +4618,13 @@ function renderTransactionTab() {
 }
 
 async function loadTransactionTab(accounts, accessToken) {
+    transactionTabAccounts = accounts;
+    transactionTabAccessToken = accessToken;
     transactionAccountFilter.innerHTML = '<option value="">전체 계좌</option>';
+    transactionEntryAccount.innerHTML = '<option value="">계좌를 선택하세요</option>';
     for (const account of accounts) {
         const option = document.createElement("option"); option.value = String(account.id); option.textContent = account.name; transactionAccountFilter.appendChild(option);
+        const entryOption = option.cloneNode(true); transactionEntryAccount.appendChild(entryOption);
     }
     const rows = await Promise.all(accounts.map(async (account) => {
         const transactions = await loadTransactions(accessToken, account.id);
@@ -9778,13 +9868,17 @@ async function showTransactionEditor(
                 );
 
 
-                await refreshPortfolioData(
-                    account,
-                    targets,
-                    accessToken,
-                    transactionsList,
-                    positionsList
-                );
+                if (typeof options.onSaved === "function") {
+                    await options.onSaved();
+                } else {
+                    await refreshPortfolioData(
+                        account,
+                        targets,
+                        accessToken,
+                        transactionsList,
+                        positionsList
+                    );
+                }
 
 
             } catch (error) {
@@ -9811,7 +9905,8 @@ function createTransactionForm(
     targets,
     accessToken,
     transactionsList,
-    positionsList
+    positionsList,
+    options = {}
 ) {
     const form =
         document.createElement(
