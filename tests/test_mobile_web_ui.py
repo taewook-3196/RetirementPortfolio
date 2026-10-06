@@ -173,3 +173,16 @@ def test_transactions_tab_supports_edit_and_delete(monkeypatch):
     assert 'deleteButton.textContent = "삭제";' in html
     assert "onCancel: () => renderTransactionTab()" in html
     assert 'await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);' in html
+
+
+
+def test_portfolio_cards_delegate_trades_to_transactions_tab(monkeypatch):
+    html = _html(monkeypatch)
+
+    render_accounts = html[html.index("async function renderAccounts("):]
+    render_accounts = render_accounts[:render_accounts.index("/*\n미국 종목 검색 / 등록")]
+    assert '"매수 / 매도 입력"' not in render_accounts
+    assert '"거래 내역"' not in render_accounts
+    assert "매수 / 매도 관리는 하단" in render_accounts
+    assert "async function refreshPortfolioAfterTransactionChange()" in html
+    assert "await refreshPortfolioAfterTransactionChange();" in html
