@@ -248,3 +248,16 @@ def test_new_account_creation_lives_in_settings_account_management(monkeypatch):
     render_accounts = html[html.index("async function renderAccounts("):]
     assert '"+ 새 계좌 추가"' not in render_accounts
     assert '"새 계좌 입력"' not in render_accounts
+
+
+
+def test_admin_has_separate_member_management_tab(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'id="member-management-tab-button"' in html
+    assert 'data-app-tab="members" hidden>회원관리</button>' in html
+    assert 'members: ["admin-section"]' in html
+    assert 'settings: ["account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section"]' in html
+    assert "memberManagementTabButton.hidden = false;" in html
+    assert "memberManagementTabButton.hidden = true;" in html
+    assert "repeat(auto-fit, minmax(64px, 1fr))" in html
