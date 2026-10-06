@@ -186,3 +186,22 @@ def test_portfolio_cards_delegate_trades_to_transactions_tab(monkeypatch):
     assert "매수 / 매도 관리는 하단" in render_accounts
     assert "async function refreshPortfolioAfterTransactionChange()" in html
     assert "await refreshPortfolioAfterTransactionChange();" in html
+
+
+
+def test_cash_flows_are_managed_from_transactions_tab(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'id="open-cash-flow-entry"' in html
+    assert 'id="cash-flow-entry-panel"' in html
+    assert 'id="all-cash-flows-list"' in html
+    assert "async function loadCashFlowTab(accounts, accessToken)" in html
+    assert "async function showCashFlowEntryForm()" in html
+    assert 'typeof options.onChanged === "function"' in html
+    assert 'typeof options.onSaved === "function"' in html
+
+    render_accounts = html[html.index("async function renderAccounts("):]
+    render_accounts = render_accounts[:render_accounts.index("/*\n미국 종목 검색 / 등록")]
+    assert '"입금 / 출금 입력"' not in render_accounts
+    assert '"입금 / 출금 내역"' not in render_accounts
+    assert "입금 / 출금 관리는 하단" in render_accounts
