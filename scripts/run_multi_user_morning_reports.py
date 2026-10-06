@@ -11,6 +11,7 @@ from core.config import load_config
 from database.connection import init_db
 from database.repository import Repository
 from services.daily_report_service import DailyReportService
+from data.price_updater import update_market_prices
 
 logger = logging.getLogger("RetirementPortfolio.MultiUserMorningReports")
 SEOUL = ZoneInfo("Asia/Seoul")
@@ -26,6 +27,39 @@ def _is_due(settings, now: datetime) -> bool:
     )
 
 
+class _CombinedMarketRepository:
+    """Expose all due users' tickers while writing shared market data once."""
+
+    user_id = "multi-user-market-sync"
+
+    def __init__(self, repositories):
+        self.repositories = list(repositories)
+        self.shared = self.repositories[0]
+
+    def get_account_targets(self, account_id=None):
+        return [
+            target
+            for repo in self.repositories
+            for target in repo.get_account_targets(account_id=account_id)
+        ]
+
+    def get_transactions(self):
+        return [
+            tx
+            for repo in self.repositories
+            for tx in repo.get_transactions()
+        ]
+
+    def get_etf_master(self, ticker):
+        return self.shared.get_etf_master(ticker)
+
+    def save_etf_master(self, items):
+        return self.shared.save_etf_master(items)
+
+    def upsert_prices(self, items):
+        return self.shared.upsert_prices(items)
+
+
 def run_all_users(now: datetime | None = None, force: bool = False) -> int:
     init_db()
     config = load_config()
@@ -37,12 +71,39 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
         return 0
 
     failures = 0
+    due_users = []
     for user_id in user_ids:
         try:
             repo = Repository(user_id=user_id)
             settings = repo.get_user_settings()
             if not force and not _is_due(settings, current):
                 continue
+            due_users.append((user_id, repo, settings))
+        except Exception:
+            failures += 1
+            logger.exception("모닝 리포트 대상 사용자 확인 예외: %s", user_id)
+
+    if due_users:
+        try:
+            combined_repo = _CombinedMarketRepository(
+                [repo for _, repo, _ in due_users]
+            )
+            update_market_prices(
+                config=config,
+                repo=combined_repo,
+                days=5,
+            )
+            logger.info(
+                "다중 사용자 공용 시장 가격 동기화 완료: 사용자 %d명",
+                len(due_users),
+            )
+        except Exception:
+            logger.exception(
+                "공용 시장 가격 동기화 실패 (기존 DB 캐시로 계속 진행)"
+            )
+
+    for user_id, repo, settings in due_users:
+        try:
 
             # A generated report and a delivered Kakao message are separate
             # states. If Kakao failed after the report was saved, retry on the
@@ -64,7 +125,7 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
             service = DailyReportService(config=config, repo=repo)
             ok, message, _ = service.generate_and_send(
                 send_kakao=bool(settings.kakao_enabled),
-                update_prices=True,
+                update_prices=False,
                 force_kakao=bool(settings.kakao_enabled),
             )
             if ok:
