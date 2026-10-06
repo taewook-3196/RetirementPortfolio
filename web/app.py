@@ -3997,7 +3997,7 @@ button:disabled {
 
 <section id="admin-section" class="card" style="display:none;">
 <h2>관리자 · 회원 관리</h2>
-<p class="subtitle">회원 운영정보와 초대를 관리합니다. 다른 회원의 보유종목, 투자금액, 매매내역 등 투자 데이터는 이 화면에서 열람할 수 없습니다.</p>
+<p class="subtitle">신규 회원가입 허용 여부와 회원 이용 권한을 관리합니다. 다른 회원의 보유종목, 투자금액, 매매내역 등 투자 데이터는 이 화면에서 열람할 수 없습니다.</p>
 <div class="security">실제 계좌번호 전체, 증권사 비밀번호, 인증번호, API 비밀키 등 민감한 정보는 RetirementPortfolio에 입력하지 마세요.</div>
 
 <div class="status-box" style="margin-bottom:18px;">
@@ -4304,7 +4304,8 @@ async function loadAdminPanel(accessToken) {
             + "가입: " + escapeAdminText(m.created_at || "-") + " · "
             + (m.is_admin ? "관리자" : "일반회원") + " · "
             + (m.is_active ? "사용중" : "사용중지")
-            + (m.is_admin ? "" : "<br><button type='button' class='small-button admin-toggle-member' data-id='" + escapeAdminText(m.user_id) + "' data-active='" + (m.is_active ? "true" : "false") + "'>" + (m.is_active ? "사용 중지" : "다시 활성화") + "</button>")
+            + (m.is_admin ? "" : "<br><button type='button' class='small-button admin-toggle-member' data-id='" + escapeAdminText(m.user_id) + "' data-active='" + (m.is_active ? "true" : "false") + "'>" + (m.is_active ? "사용 중지" : "다시 활성화") + "</button> "
+                + "<button type='button' class='small-button admin-delete-member' data-id='" + escapeAdminText(m.user_id) + "' data-email='" + escapeAdminText(m.email || "") + "'>회원 삭제</button>")
             + "</div>"
         ).join("") || "등록된 회원이 없습니다.";
     }
@@ -4332,10 +4333,21 @@ adminSignupEnabled.addEventListener("change", async () => {
 });
 
 adminMembers.addEventListener("click", async (event) => {
-    const button = event.target.closest(".admin-toggle-member");
+    const button = event.target.closest(".admin-toggle-member, .admin-delete-member");
     if (!button) return;
     const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
     if (!accessToken) return;
+    if (button.classList.contains("admin-delete-member")) {
+        const email = button.dataset.email || "이 회원";
+        if (!window.confirm(email + " 계정의 서비스 이용 권한을 삭제하시겠습니까?\n투자 데이터는 안전을 위해 자동 삭제하지 않습니다.")) return;
+        button.disabled = true;
+        const response = await fetch("/api/admin/members/" + encodeURIComponent(button.dataset.id), {
+            method: "DELETE", headers: {"Authorization": "Bearer " + accessToken},
+        });
+        if (response.ok) await loadAdminPanel(accessToken);
+        else button.disabled = false;
+        return;
+    }
     const currentlyActive = button.dataset.active === "true";
     button.disabled = true;
     const response = await fetch("/api/admin/members/" + encodeURIComponent(button.dataset.id) + "/access", {
