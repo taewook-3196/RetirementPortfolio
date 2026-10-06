@@ -319,11 +319,21 @@ def delete_member(
             raise HTTPException(status_code=404, detail="등록된 회원 정보를 찾을 수 없습니다.")
         if bool(profile.is_admin):
             raise HTTPException(status_code=400, detail="다른 관리자 계정은 여기서 삭제할 수 없습니다.")
+    # Fail closed before touching Supabase Auth. If any later deletion step
+    # fails, an existing application profile remains unable to use the service.
+    with get_db_session() as db:
+        profile = db.query(Profile).filter(Profile.id == member_id).one()
+        profile.is_active = False
+        profile.updated_at = datetime.now(timezone.utc)
+
     admin_client = _get_supabase_admin_client()
     try:
         admin_client.auth.admin.delete_user(str(member_id))
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="회원 인증 계정을 삭제하지 못했습니다.") from exc
+        raise HTTPException(
+            status_code=502,
+            detail="회원 인증 계정을 삭제하지 못했습니다. 계정 접근은 중지된 상태입니다.",
+        ) from exc
     # Portfolio rows remain user-scoped and inaccessible. Destructive data purge is
     # intentionally separate so an accidental membership deletion cannot erase investments.
     with get_db_session() as db:
