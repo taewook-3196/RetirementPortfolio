@@ -439,116 +439,45 @@ def cancel_admin_invite(
 
 
 class SignupRequest(BaseModel):
-    """초대코드 전용 회원가입 요청."""
-
-    email: str = Field(
-        min_length=3,
-        max_length=320,
-    )
-    password: str = Field(
-        min_length=8,
-        max_length=128,
-    )
-    invite_code: str = Field(
-        min_length=1,
-        max_length=200,
-    )
-
-
-def _invite_code_hash(invite_code: str) -> str:
-    """Normalize an invite secret and return the digest stored in PostgreSQL."""
-    candidate = str(invite_code or "").strip()
-    return hashlib.sha256(candidate.encode("utf-8")).hexdigest()
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=128)
 
 
 @app.post("/api/auth/signup", status_code=201)
-def signup_with_invite(request: SignupRequest):
-    """Create exactly one user from an unused, unexpired database invitation."""
+def signup(request: SignupRequest):
+    """Create a user only while an administrator has enabled registration."""
+    if not _signup_enabled():
+        raise HTTPException(status_code=403, detail="현재 신규 회원가입이 중지되어 있습니다.")
+
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     supabase_anon_key = os.getenv("SUPABASE_ANON_KEY", "").strip()
     supabase_service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-
     if not supabase_url or not supabase_anon_key or not supabase_service_key:
-        raise HTTPException(
-            status_code=500,
-            detail="Supabase 회원가입 설정이 없습니다.",
-        )
+        raise HTTPException(status_code=500, detail="Supabase 회원가입 설정이 없습니다.")
 
     email = request.email.strip().lower()
-    digest = _invite_code_hash(request.invite_code)
-
     try:
-        # Keep the PostgreSQL row locked until auth creation and invite consumption
-        # complete. Concurrent attempts using the same code therefore serialize.
+        admin_client = create_client(supabase_url, supabase_service_key)
+        response = admin_client.auth.admin.create_user({
+            "email": email,
+            "password": request.password,
+            "email_confirm": True,
+        })
+        if response.user is None:
+            raise HTTPException(status_code=400, detail="회원가입을 완료하지 못했습니다.")
+
         with get_db_session() as db:
-            invite = (
-                db.query(InviteCode)
-                .filter(InviteCode.code_hash == digest)
-                .with_for_update()
-                .one_or_none()
-            )
+            user_id = UUID(str(response.user.id))
+            profile = db.query(Profile).filter(Profile.id == user_id).one_or_none()
+            if profile is None:
+                db.add(Profile(id=user_id, is_admin=False, is_active=True))
 
-            now = datetime.now(timezone.utc)
-            if invite is None or invite.used_at is not None:
-                raise HTTPException(
-                    status_code=403,
-                    detail="유효하지 않거나 이미 사용된 초대코드입니다.",
-                )
-
-            if invite.expires_at is not None:
-                expires_at = invite.expires_at
-                if expires_at.tzinfo is None:
-                    expires_at = expires_at.replace(tzinfo=timezone.utc)
-                if expires_at <= now:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="만료된 초대코드입니다.",
-                    )
-
-            if (
-                invite.intended_email
-                and invite.intended_email.strip().lower() != email
-            ):
-                raise HTTPException(
-                    status_code=403,
-                    detail="이 초대코드는 지정된 이메일에서만 사용할 수 있습니다.",
-                )
-
-            admin_client = create_client(
-                supabase_url,
-                supabase_service_key,
-            )
-            response = admin_client.auth.admin.create_user(
-                {
-                    "email": email,
-                    "password": request.password,
-                    "email_confirm": True,
-                }
-            )
-
-            if response.user is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="회원가입을 완료하지 못했습니다.",
-                )
-
-            invite.used_at = now
-            invite.used_by = response.user.id
-
-        # service_role is server-only. The browser receives only a normal user
-        # session created through the public anon key.
-        public_client = create_client(
-            supabase_url,
-            supabase_anon_key,
-        )
-        session_response = public_client.auth.sign_in_with_password(
-            {
-                "email": email,
-                "password": request.password,
-            }
-        )
+        public_client = create_client(supabase_url, supabase_anon_key)
+        session_response = public_client.auth.sign_in_with_password({
+            "email": email,
+            "password": request.password,
+        })
         session = session_response.session
-
         return {
             "created": True,
             "email": response.user.email,
@@ -556,26 +485,13 @@ def signup_with_invite(request: SignupRequest):
             "access_token": session.access_token if session else None,
             "refresh_token": session.refresh_token if session else None,
         }
-
     except HTTPException:
         raise
     except Exception as exc:
         message = str(exc).lower()
-
-        if (
-            "already registered" in message
-            or "already been registered" in message
-            or "already exists" in message
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail="이미 가입된 이메일입니다.",
-            )
-
-        raise HTTPException(
-            status_code=400,
-            detail="회원가입을 완료하지 못했습니다.",
-        )
+        if "already registered" in message or "already been registered" in message or "already exists" in message:
+            raise HTTPException(status_code=409, detail="이미 가입된 이메일입니다.")
+        raise HTTPException(status_code=400, detail="회원가입을 완료하지 못했습니다.")
 
 
 @app.post("/api/bootstrap")
