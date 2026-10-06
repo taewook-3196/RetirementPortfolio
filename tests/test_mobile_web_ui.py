@@ -205,3 +205,15 @@ def test_cash_flows_are_managed_from_transactions_tab(monkeypatch):
     assert '"입금 / 출금 입력"' not in render_accounts
     assert '"입금 / 출금 내역"' not in render_accounts
     assert "입금 / 출금 관리는 하단" in render_accounts
+
+
+
+def test_app_navigation_remains_available_above_phone_width(monkeypatch):
+    html = _html(monkeypatch)
+
+    nav_css = html[html.index(".app-bottom-nav {"):html.index(".app-bottom-nav button {")]
+    assert "display: grid;" in nav_css
+    assert "display: none;" not in nav_css
+    assert 'portfolio: ["portfolio-section", "asset-search-section"]' in html
+    assert 'transactions: ["transactions-section"]' in html
+    assert 'settings: ["morning-report-settings-section"' in html
