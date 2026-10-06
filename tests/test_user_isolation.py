@@ -16,6 +16,7 @@ from database.models import (
     InvestmentProfile,
     KakaoCredential,
     MorningReport,
+    Profile,
     Transaction,
     UserSetting,
     Watchlist,
@@ -45,6 +46,7 @@ def _isolated_db(monkeypatch):
         Watchlist,
         MorningReport,
         KakaoCredential,
+        Profile,
     ):
         model.__table__.create(engine)
 
@@ -282,3 +284,18 @@ def test_kakao_credentials_are_owner_scoped(monkeypatch):
     assert repo_b.delete_kakao_credential() is True
     assert repo_b.get_kakao_credential() is None
     assert repo_a.get_kakao_credential().access_token_encrypted == "enc-a-access"
+
+
+
+def test_active_membership_recheck_fails_closed(monkeypatch):
+    db = _isolated_db(monkeypatch)
+    active_user, suspended_user, missing_user = uuid4(), uuid4(), uuid4()
+    with db() as session:
+        session.add_all([
+            Profile(id=active_user, is_admin=False, is_active=True),
+            Profile(id=suspended_user, is_admin=False, is_active=False),
+        ])
+
+    assert Repository(user_id=active_user).is_active_member() is True
+    assert Repository(user_id=suspended_user).is_active_member() is False
+    assert Repository(user_id=missing_user).is_active_member() is False
