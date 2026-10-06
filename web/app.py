@@ -14208,120 +14208,65 @@ async function restoreLoginSession() {
     }
 }
 
-showSignupButton.addEventListener(
-    "click",
-    () => {
-        const opening =
-            signupForm.style.display === "none";
-
-        signupForm.style.display =
-            opening ? "block" : "none";
-
-        showSignupButton.textContent =
-            opening
-                ? "회원가입 닫기"
-                : "회원가입";
-
-        message.textContent = "";
-        message.className = "";
+async function refreshSignupAvailability() {
+    try {
+        const response = await fetch("/api/signup-status");
+        const data = await response.json();
+        const enabled = response.ok && Boolean(data.signup_enabled);
+        showSignupButton.style.display = enabled ? "block" : "none";
+        if (!enabled) signupForm.style.display = "none";
+    } catch (_) {
+        showSignupButton.style.display = "none";
+        signupForm.style.display = "none";
     }
-);
+}
 
+showSignupButton.addEventListener("click", () => {
+    const opening = signupForm.style.display === "none";
+    signupForm.style.display = opening ? "block" : "none";
+    showSignupButton.textContent = opening ? "회원가입 닫기" : "회원가입";
+    message.textContent = "";
+    message.className = "";
+});
 
-signupForm.addEventListener(
-    "submit",
-    async (event) => {
-        event.preventDefault();
-
-        message.textContent = "";
-        message.className = "";
-        signupButton.disabled = true;
-        signupButton.textContent = "가입 중...";
-
-        const email =
-            document.getElementById(
-                "signup-email"
-            ).value.trim();
-
-        const password =
-            document.getElementById(
-                "signup-password"
-            ).value;
-
-        try {
-            const response =
-                await fetch(
-                    "/api/auth/signup",
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-                        },
-                        body: JSON.stringify({
-                            email: email,
-                            password: password,
-                        }),
-                    }
-                );
-
-            const data =
-                await response.json();
-
-            if (!response.ok) {
-                throw new Error(
-                    data.detail
-                    || "회원가입에 실패했습니다."
-                );
-            }
-
-            if (data.access_token) {
-                saveAuthTokens(
-                    data.access_token,
-                    data.refresh_token || ""
-                );
-
-                await showAuthenticatedApp(
-                    data.access_token
-                );
-
-                message.textContent = "";
-                return;
-            }
-
-            document.getElementById(
-                "email"
-            ).value = email;
-
-            signupForm.style.display =
-                "none";
-
-            showSignupButton.textContent =
-                "회원가입";
-
-            message.textContent =
-                "회원가입이 완료되었습니다. "
-                + "이메일 인증 후 로그인해주세요.";
-
-            message.className =
-                "success";
-
-        } catch (error) {
-            message.textContent =
-                error.message
-                || "회원가입에 실패했습니다.";
-
-            message.className =
-                "error";
-
-        } finally {
-            signupButton.disabled = false;
-            signupButton.textContent =
-                "회원가입";
+signupForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    message.textContent = "";
+    message.className = "";
+    signupButton.disabled = true;
+    signupButton.textContent = "가입 중...";
+    const email = document.getElementById("signup-email").value.trim();
+    const password = document.getElementById("signup-password").value;
+    try {
+        const response = await fetch("/api/auth/signup", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({email, password}),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "회원가입에 실패했습니다.");
+        if (data.access_token) {
+            saveAuthTokens(data.access_token, data.refresh_token || "");
+            await showAuthenticatedApp(data.access_token);
+            message.textContent = "";
+            return;
         }
+        document.getElementById("email").value = email;
+        signupForm.style.display = "none";
+        showSignupButton.textContent = "회원가입";
+        message.textContent = "회원가입이 완료되었습니다.";
+        message.className = "success";
+    } catch (error) {
+        message.textContent = error.message || "회원가입에 실패했습니다.";
+        message.className = "error";
+        await refreshSignupAvailability();
+    } finally {
+        signupButton.disabled = false;
+        signupButton.textContent = "회원가입";
     }
-);
+});
 
+refreshSignupAvailability();
 
 loginForm.addEventListener(
     "submit",
