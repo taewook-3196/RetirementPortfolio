@@ -328,7 +328,11 @@ def delete_member(
         profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
         if profile is not None:
             db.delete(profile)
-    return {"deleted": True, "user_id": str(member_id)}
+    return {
+        "deleted": True,
+        "user_id": str(member_id),
+        "portfolio_data_deleted": False,
+    }
 
 
 class SignupRequest(BaseModel):
@@ -4320,7 +4324,7 @@ async function loadAdminPanel(accessToken) {
             + (m.is_admin ? "관리자" : "일반회원") + " · "
             + (m.is_active ? "사용중" : "사용중지")
             + (m.is_admin ? "" : "<br><button type='button' class='small-button admin-toggle-member' data-id='" + escapeAdminText(m.user_id) + "' data-active='" + (m.is_active ? "true" : "false") + "'>" + (m.is_active ? "사용 중지" : "다시 활성화") + "</button> "
-                + "<button type='button' class='small-button admin-delete-member' data-id='" + escapeAdminText(m.user_id) + "' data-email='" + escapeAdminText(m.email || "") + "'>회원 삭제</button>")
+                + "<button type='button' class='small-button admin-delete-member' data-id='" + escapeAdminText(m.user_id) + "' data-email='" + escapeAdminText(m.email || "") + "'>로그인 계정 삭제</button>")
             + "</div>"
         ).join("") || "등록된 회원이 없습니다.";
     }
@@ -4354,7 +4358,7 @@ adminMembers.addEventListener("click", async (event) => {
     if (!accessToken) return;
     if (button.classList.contains("admin-delete-member")) {
         const email = button.dataset.email || "이 회원";
-        if (!window.confirm(email + " 계정의 서비스 이용 권한을 삭제하시겠습니까?\n투자 데이터는 안전을 위해 자동 삭제하지 않습니다.")) return;
+        if (!window.confirm(email + " 회원의 로그인 계정을 삭제하시겠습니까?\n\n앱 로그인과 서비스 이용은 즉시 차단됩니다.\n투자 데이터와 기존 리포트는 복구 안전을 위해 자동 삭제하지 않습니다.")) return;
         button.disabled = true;
         const response = await fetch("/api/admin/members/" + encodeURIComponent(button.dataset.id), {
             method: "DELETE", headers: {"Authorization": "Bearer " + accessToken},
