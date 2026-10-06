@@ -14119,6 +14119,8 @@ async function showAuthenticatedApp(
         accounts,
         accessToken
     );
+    await renderAccountCreator(accounts, accessToken);
+    await renderAccountManagement(accounts, accessToken);
 
     try {
         await loadTransactionTab(accounts, accessToken);
