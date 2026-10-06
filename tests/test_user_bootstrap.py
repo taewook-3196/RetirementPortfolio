@@ -111,3 +111,7 @@ def test_user_bootstrap_is_idempotent(monkeypatch):
             .strftime("%H:%M")
             == "07:00"
         )
+        assert settings[0].morning_report_enabled is True
+        assert settings[0].kakao_enabled is False
+        assert settings[0].news_enabled is True
+        assert settings[0].ai_advice_enabled is True
