@@ -12198,6 +12198,16 @@ function createAccountEditor(
                     accessToken
                 );
 
+                await renderAccountManagement(
+                    accounts,
+                    accessToken
+                );
+
+                await loadTransactionTab(
+                    accounts,
+                    accessToken
+                );
+
             } catch (error) {
 
                 result.textContent =
