@@ -4068,6 +4068,7 @@ button:disabled {
     id="show-signup-button"
     type="button"
     class="secondary-button"
+    style="display:none;"
 >
 회원가입
 </button>
@@ -14219,7 +14220,7 @@ showSignupButton.addEventListener(
         showSignupButton.textContent =
             opening
                 ? "회원가입 닫기"
-                : "초대코드로 회원가입";
+                : "회원가입";
 
         message.textContent = "";
         message.className = "";
@@ -14247,11 +14248,6 @@ signupForm.addEventListener(
                 "signup-password"
             ).value;
 
-        const inviteCode =
-            document.getElementById(
-                "invite-code"
-            ).value.trim();
-
         try {
             const response =
                 await fetch(
@@ -14265,8 +14261,6 @@ signupForm.addEventListener(
                         body: JSON.stringify({
                             email: email,
                             password: password,
-                            invite_code:
-                                inviteCode,
                         }),
                     }
                 );
@@ -14303,7 +14297,7 @@ signupForm.addEventListener(
                 "none";
 
             showSignupButton.textContent =
-                "초대코드로 회원가입";
+                "회원가입";
 
             message.textContent =
                 "회원가입이 완료되었습니다. "
@@ -14455,6 +14449,20 @@ loginForm.addEventListener(
 페이지를 새로 열었을 때
 저장된 Supabase 세션으로 자동 로그인합니다.
 */
+async function loadPublicSignupStatus() {
+    try {
+        const response = await fetch("/api/signup-status");
+        const data = await response.json();
+        const enabled = response.ok && Boolean(data.signup_enabled);
+        showSignupButton.style.display = enabled ? "block" : "none";
+        if (!enabled) signupForm.style.display = "none";
+    } catch (error) {
+        showSignupButton.style.display = "none";
+    }
+}
+
+loadPublicSignupStatus();
+
 restoreLoginSession().finally(() => {
     bootScreen.style.display = "none";
 
