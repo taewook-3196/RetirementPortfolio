@@ -6161,6 +6161,8 @@ function renderAssetChart(
         }
 
 
+        const transactionMarkerCounts = new Map();
+
         for (
             const transaction
             of transactions
@@ -6189,9 +6191,32 @@ function renderAssetChart(
                 );
 
 
-            const x =
+            const baseX =
                 getX(
                     nearestIndex
+                );
+
+            const markerGroupKey =
+                String(transaction.date)
+                + "|"
+                + String(transaction.type || "").toUpperCase();
+            const markerGroupIndex =
+                transactionMarkerCounts.get(markerGroupKey) || 0;
+            transactionMarkerCounts.set(markerGroupKey, markerGroupIndex + 1);
+
+            const markerOffsetStep = 11;
+            const markerOffsetDirection =
+                markerGroupIndex === 0 ? 0 : (markerGroupIndex % 2 === 1 ? 1 : -1);
+            const markerOffsetLevel =
+                markerGroupIndex === 0 ? 0 : Math.ceil(markerGroupIndex / 2);
+
+            const x =
+                Math.max(
+                    paddingLeft + 9,
+                    Math.min(
+                        width - paddingRight - 9,
+                        baseX + markerOffsetDirection * markerOffsetLevel * markerOffsetStep
+                    )
                 );
 
             const y =
