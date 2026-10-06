@@ -3705,6 +3705,29 @@ button:disabled {
     border-radius: 10px;
 }
 
+.settings-subnav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+    margin-bottom: 12px;
+}
+
+.settings-subnav button {
+    min-width: 0;
+    min-height: 44px;
+    margin: 0;
+    padding: 8px 5px;
+    border-radius: 10px;
+    background: #f3f5f7;
+    color: #68707b;
+    font-size: 12px;
+}
+
+.settings-subnav button.active {
+    background: #202124;
+    color: white;
+}
+
 .checkbox-row {
     display: flex;
     align-items: center;
@@ -3987,6 +4010,10 @@ body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
         grid-template-columns: 1fr;
         gap: 8px;
     }
+
+    .settings-subnav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
     .card {
         padding: 18px 14px;
         border-radius: 15px;
@@ -4199,6 +4226,16 @@ body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
 
 <h3>회원</h3>
 <div id="admin-members">불러오는 중...</div>
+</section>
+
+<section id="settings-navigation-section" class="card" hidden>
+<h2>설정</h2>
+<div id="settings-subnav" class="settings-subnav" aria-label="설정 메뉴">
+<button type="button" data-settings-panel="accounts" class="active" aria-current="page">계좌</button>
+<button type="button" data-settings-panel="report">리포트</button>
+<button type="button" data-settings-panel="kakao">카카오</button>
+<button type="button" data-settings-panel="strategy">투자전략</button>
+</div>
 </section>
 
 <section id="morning-report-settings-section" class="card">
@@ -4496,10 +4533,42 @@ const appTabSections = {
     home: ["app-header", "report-section"],
     portfolio: ["portfolio-section", "asset-search-section"],
     transactions: ["transactions-section"],
-    settings: ["account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section"],
+    settings: ["settings-navigation-section", "account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section"],
     members: ["admin-section"],
 };
 let activeAppTab = "home";
+let activeSettingsPanel = "accounts";
+const settingsPanels = {
+    accounts: "account-management-section",
+    report: "morning-report-settings-section",
+    kakao: "kakao-settings-section",
+    strategy: "investment-settings-section",
+};
+
+function applySettingsPanel() {
+    const settingsActive = activeAppTab === "settings";
+    for (const [panelName, sectionId] of Object.entries(settingsPanels)) {
+        const section = document.getElementById(sectionId);
+        if (section) section.hidden = !settingsActive || panelName !== activeSettingsPanel;
+    }
+    const settingsNavigation = document.getElementById("settings-navigation-section");
+    if (settingsNavigation) settingsNavigation.hidden = !settingsActive;
+    const settingsSubnav = document.getElementById("settings-subnav");
+    if (!settingsSubnav) return;
+    for (const button of settingsSubnav.querySelectorAll("[data-settings-panel]")) {
+        const active = button.dataset.settingsPanel === activeSettingsPanel;
+        button.classList.toggle("active", active);
+        if (active) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+    }
+}
+
+function setSettingsPanel(panelName, options = {}) {
+    if (!settingsPanels[panelName]) return;
+    activeSettingsPanel = panelName;
+    applySettingsPanel();
+    if (options.scroll !== false) window.scrollTo({top: 0, behavior: "smooth"});
+}
 
 function setAppTab(tabName, options = {}) {
     const nextTab = appTabSections[tabName] ? tabName : "home";
@@ -4510,6 +4579,7 @@ function setAppTab(tabName, options = {}) {
         if (!section) continue;
         section.hidden = !appTabSections[nextTab].includes(id);
     }
+    if (nextTab === "settings") applySettingsPanel();
     for (const button of appBottomNav.querySelectorAll("[data-app-tab]")) {
         const active = button.dataset.appTab === nextTab;
         button.classList.toggle("active", active);
@@ -4523,6 +4593,12 @@ appBottomNav.addEventListener("click", (event) => {
     const button = event.target.closest("[data-app-tab]");
     if (!button) return;
     setAppTab(button.dataset.appTab);
+});
+
+document.getElementById("settings-subnav").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-settings-panel]");
+    if (!button) return;
+    setSettingsPanel(button.dataset.settingsPanel);
 });
 
 
