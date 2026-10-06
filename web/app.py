@@ -4411,10 +4411,9 @@ const accountsList =
     );
 
 const adminSection = document.getElementById("admin-section");
-const adminInviteForm = document.getElementById("admin-invite-form");
-const adminInviteResult = document.getElementById("admin-invite-result");
 const adminMembers = document.getElementById("admin-members");
-const adminInvites = document.getElementById("admin-invites");
+const adminSignupEnabled = document.getElementById("admin-signup-enabled");
+const adminSignupStatus = document.getElementById("admin-signup-status");
 
 function escapeAdminText(value) {
     const node = document.createElement("div");
@@ -4423,130 +4422,71 @@ function escapeAdminText(value) {
 }
 
 async function loadAdminPanel(accessToken) {
-    const statusResponse = await fetch("/api/admin/me", {
-        headers: {"Authorization": "Bearer " + accessToken},
-    });
+    const headers = {"Authorization": "Bearer " + accessToken};
+    const statusResponse = await fetch("/api/admin/me", {headers});
     if (statusResponse.status === 403) {
         adminSection.style.display = "none";
         return;
     }
     if (!statusResponse.ok) return;
-
     adminSection.style.display = "block";
-    const [membersResponse, invitesResponse] = await Promise.all([
-        fetch("/api/admin/members", {headers: {"Authorization": "Bearer " + accessToken}}),
-        fetch("/api/admin/invites", {headers: {"Authorization": "Bearer " + accessToken}}),
+    const [membersResponse, signupResponse] = await Promise.all([
+        fetch("/api/admin/members", {headers}),
+        fetch("/api/signup-status"),
     ]);
     const membersData = await membersResponse.json();
-    const invitesData = await invitesResponse.json();
-
+    const signupData = await signupResponse.json();
+    if (signupResponse.ok) {
+        adminSignupEnabled.checked = Boolean(signupData.signup_enabled);
+        adminSignupStatus.textContent = signupData.signup_enabled ? "현재 신규 회원가입을 허용하고 있습니다." : "현재 신규 회원가입이 중지되어 있습니다.";
+    }
     if (membersResponse.ok) {
         adminMembers.innerHTML = (membersData.members || []).map((m) =>
             "<div class='status-box'><strong>" + escapeAdminText(m.email || "이메일 없음") + "</strong><br>"
             + "가입: " + escapeAdminText(m.created_at || "-") + " · "
-            + (m.is_admin ? "관리자" : "일반회원") + " · 카카오 "
-            + (m.kakao_connected ? "연결" : "미연결") + " · 리포트 "
-            + (m.morning_report_enabled ? "사용" : "미사용") + "</div>"
+            + (m.is_admin ? "관리자" : "일반회원") + " · "
+            + (m.is_active ? "사용중" : "사용중지")
+            + (m.is_admin ? "" : "<br><button type='button' class='small-button admin-toggle-member' data-id='" + escapeAdminText(m.user_id) + "' data-active='" + (m.is_active ? "true" : "false") + "'>" + (m.is_active ? "사용 중지" : "다시 활성화") + "</button>")
+            + "</div>"
         ).join("") || "등록된 회원이 없습니다.";
     }
-
-    if (invitesResponse.ok) {
-        adminInvites.innerHTML = (invitesData.invites || []).map((inv) =>
-            "<div class='status-box'><strong>" + escapeAdminText(inv.intended_email || "-") + "</strong><br>"
-            + "상태: " + escapeAdminText(inv.status) + " · 만료: " + escapeAdminText(inv.expires_at || "-")
-            + (inv.status === "pending" ? "<br><button type='button' class='small-button admin-cancel-invite' data-id='" + Number(inv.id) + "'>초대 취소</button>" : "")
-            + "</div>"
-        ).join("") || "초대 내역이 없습니다.";
-    }
 }
 
-async function runAdminEmailDiagnostic(button, result) {
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
-    if (!accessToken) {
-        result.textContent = "로그인이 필요합니다.";
-        return;
-    }
-    button.disabled = true;
-    result.textContent = "진단 메일을 발송하는 중입니다...";
-    try {
-        const response = await fetch("/api/admin/email-diagnostic", {
-            method: "POST",
-            headers: {"Authorization": "Bearer " + accessToken},
-        });
-        const data = await response.json();
-        result.textContent = response.ok
-            ? "정상: Resend가 테스트 메일을 접수했습니다."
-            : "실패: " + (data.detail || "진단 요청 오류");
-    } catch (error) {
-        result.textContent = "실패: 진단 요청에 연결하지 못했습니다.";
-    } finally {
-        button.disabled = false;
-    }
-}
-
-adminInviteForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+adminSignupEnabled.addEventListener("change", async () => {
     const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
     if (!accessToken) return;
-    adminInviteResult.textContent = "초대를 생성하고 있습니다.";
-    const response = await fetch("/api/admin/invites", {
-        method: "POST",
-        headers: {"Authorization": "Bearer " + accessToken, "Content-Type": "application/json"},
-        body: JSON.stringify({
-            email: document.getElementById("admin-invite-email").value.trim(),
-            label: document.getElementById("admin-invite-label").value.trim(),
-            days: Number(document.getElementById("admin-invite-days").value || 7),
-        }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        adminInviteResult.textContent = data.detail || "초대 생성에 실패했습니다.";
-        return;
-    }
-    let resultText = "초대가 생성되었습니다.";
+    adminSignupEnabled.disabled = true;
     try {
-        const emailStatusResponse = await fetch("/api/admin/email-status", {
-            headers: {"Authorization": "Bearer " + accessToken},
+        const response = await fetch("/api/admin/signup-status", {
+            method: "PUT",
+            headers: {"Authorization": "Bearer " + accessToken, "Content-Type": "application/json"},
+            body: JSON.stringify({enabled: adminSignupEnabled.checked}),
         });
-        const emailStatus = await emailStatusResponse.json();
-        if (emailStatusResponse.ok && emailStatus.configured) {
-            const sendResponse = await fetch(
-                "/api/admin/invites/" + encodeURIComponent(data.id) + "/send-email",
-                {
-                    method: "POST",
-                    headers: {
-                        "Authorization": "Bearer " + accessToken,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({invite_url: data.invite_url}),
-                }
-            );
-            const sendData = await sendResponse.json();
-            resultText = sendResponse.ok
-                ? "초대 이메일을 발송했습니다."
-                : "초대는 생성됐지만 이메일 발송에 실패했습니다: " + (sendData.detail || "발송 오류");
-        } else {
-            resultText += " 이메일 발송 설정이 아직 없어 자동 발송하지 않았습니다.";
-        }
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "회원가입 설정을 변경하지 못했습니다.");
+        adminSignupStatus.textContent = data.signup_enabled ? "현재 신규 회원가입을 허용하고 있습니다." : "현재 신규 회원가입이 중지되어 있습니다.";
     } catch (error) {
-        resultText += " 이메일 발송 상태를 확인하지 못했습니다.";
+        adminSignupEnabled.checked = !adminSignupEnabled.checked;
+        adminSignupStatus.textContent = error.message || "회원가입 설정을 변경하지 못했습니다.";
+    } finally {
+        adminSignupEnabled.disabled = false;
     }
-    adminInviteResult.textContent = resultText;
-    adminInviteForm.reset();
-    document.getElementById("admin-invite-days").value = "7";
-    await loadAdminPanel(accessToken);
 });
 
-adminInvites.addEventListener("click", async (event) => {
-    const button = event.target.closest(".admin-cancel-invite");
+adminMembers.addEventListener("click", async (event) => {
+    const button = event.target.closest(".admin-toggle-member");
     if (!button) return;
     const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
     if (!accessToken) return;
-    await fetch("/api/admin/invites/" + encodeURIComponent(button.dataset.id), {
-        method: "DELETE",
-        headers: {"Authorization": "Bearer " + accessToken},
+    const currentlyActive = button.dataset.active === "true";
+    button.disabled = true;
+    const response = await fetch("/api/admin/members/" + encodeURIComponent(button.dataset.id) + "/access", {
+        method: "PUT",
+        headers: {"Authorization": "Bearer " + accessToken, "Content-Type": "application/json"},
+        body: JSON.stringify({active: !currentlyActive}),
     });
-    await loadAdminPanel(accessToken);
+    if (response.ok) await loadAdminPanel(accessToken);
+    else button.disabled = false;
 });
 
 const morningReportSettingsForm = document.getElementById("morning-report-settings-form");
