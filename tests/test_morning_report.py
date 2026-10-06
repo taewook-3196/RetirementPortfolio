@@ -427,3 +427,15 @@ def test_investment_stance_html_and_kakao_rendering():
         gemini_analysis=gemini_data,
     )
     assert "• AI 요약 [🚀 공격적]: 단기 조정은 매수 기회입니다." in kakao_text
+
+
+
+def test_daily_report_service_uses_seoul_business_date():
+    source = Path("services/daily_report_service.py").read_text(encoding="utf-8")
+
+    assert 'SEOUL = ZoneInfo("Asia/Seoul")' in source
+    assert "report_date = datetime.datetime.now(SEOUL).date()" in source
+    assert "rate_date=report_date" in source
+    assert "self.repo.upsert_morning_report(\n                    report_date," in source
+    assert "self.repo.mark_morning_report_kakao_sent(report_date)" in source
+    assert "mark_morning_report_kakao_sent(datetime.date.today())" not in source
