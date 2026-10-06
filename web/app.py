@@ -3570,6 +3570,18 @@ button:disabled {
     gap: 10px;
 }
 
+ .transaction-filter-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(180px, 1.5fr);
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.transaction-filter-grid input,
+.transaction-filter-grid select {
+    margin: 0;
+}
+
 .transaction-row {
     padding: 11px 0;
     border-bottom: 1px solid #eee;
@@ -3940,9 +3952,10 @@ button:disabled {
 @media (max-width: 600px) {
     body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
     .app-bottom-nav { display: grid; }
-    .form-row {
+    .form-row,
+    .transaction-filter-grid {
         grid-template-columns: 1fr;
-        gap: 0;
+        gap: 8px;
     }
     .card {
         padding: 18px 14px;
@@ -4335,6 +4348,18 @@ Yahoo Finance에서 종목 정보를 확인합니다.
 </section>
 
 
+
+<section id="transactions-section" class="card" hidden>
+<h2>거래</h2>
+<p class="subtitle">모든 계좌의 거래를 한 곳에서 확인합니다.</p>
+<div class="transaction-filter-grid">
+<select id="transaction-account-filter" aria-label="계좌 필터"><option value="">전체 계좌</option></select>
+<select id="transaction-type-filter" aria-label="거래 유형 필터"><option value="">전체 거래</option><option value="BUY">매수</option><option value="SELL">매도</option></select>
+<input id="transaction-search-filter" type="search" placeholder="종목명 또는 티커 검색" aria-label="종목 검색">
+</div>
+<div id="all-transactions-list" class="loading">거래 내역을 불러오는 중...</div>
+</section>
+
 <section id="portfolio-section" class="card">
 
 <h2>내 계좌</h2>
@@ -4416,7 +4441,7 @@ const appBottomNav = document.getElementById("app-bottom-nav");
 const appTabSections = {
     home: ["app-header", "report-section"],
     portfolio: ["portfolio-section", "asset-search-section"],
-    transactions: ["portfolio-section"],
+    transactions: ["transactions-section"],
     settings: ["morning-report-settings-section", "kakao-settings-section", "investment-settings-section", "admin-section"],
 };
 let activeAppTab = "home";
@@ -4444,6 +4469,86 @@ appBottomNav.addEventListener("click", (event) => {
     if (!button) return;
     setAppTab(button.dataset.appTab);
 });
+
+
+const transactionAccountFilter = document.getElementById("transaction-account-filter");
+const transactionTypeFilter = document.getElementById("transaction-type-filter");
+const transactionSearchFilter = document.getElementById("transaction-search-filter");
+const allTransactionsList = document.getElementById("all-transactions-list");
+let transactionTabRows = [];
+let transactionTabVisibleCount = 20;
+
+function renderTransactionTab() {
+    const accountId = transactionAccountFilter.value;
+    const type = transactionTypeFilter.value;
+    const query = transactionSearchFilter.value.trim().toLowerCase();
+    const filtered = transactionTabRows.filter((item) => {
+        const transaction = item.transaction;
+        if (accountId && String(item.account.id) !== accountId) return false;
+        if (type && transaction.transaction_type !== type) return false;
+        if (query) {
+            const haystack = ((transaction.name || "") + " " + (transaction.ticker || "")).toLowerCase();
+            if (!haystack.includes(query)) return false;
+        }
+        return true;
+    });
+    allTransactionsList.innerHTML = "";
+    allTransactionsList.className = "";
+    if (!filtered.length) {
+        allTransactionsList.innerHTML = '<div class="empty">조건에 맞는 거래가 없습니다.</div>';
+        return;
+    }
+    const visible = filtered.slice(0, transactionTabVisibleCount);
+    for (const item of visible) {
+        const transaction = item.transaction;
+        const row = document.createElement("div");
+        row.className = "transaction-row";
+        const main = document.createElement("div");
+        main.className = "transaction-main";
+        const left = document.createElement("div");
+        left.className = transaction.transaction_type === "BUY" ? "buy" : "sell";
+        left.textContent = transaction.transaction_date + " · " + (transaction.name || transaction.ticker) + " (" + transaction.ticker + ") · " + (transaction.transaction_type === "BUY" ? "매수" : "매도");
+        const amount = document.createElement("div");
+        const currency = String(transaction.currency || getAccountCurrency(item.account)).toUpperCase();
+        amount.textContent = formatMoney(Number(transaction.quantity) * Number(transaction.price), currency);
+        main.append(left, amount);
+        row.appendChild(main);
+        row.appendChild(createDetail(item.account.name + " · 수량 " + formatNumber(transaction.quantity) + " · 체결가 " + formatMoney(transaction.price, currency)));
+        allTransactionsList.appendChild(row);
+    }
+    const controls = document.createElement("div");
+    controls.className = "transaction-list-controls";
+    const count = document.createElement("div");
+    count.className = "transaction-list-count";
+    count.textContent = "최근 " + visible.length + "건 / 검색 결과 " + filtered.length + "건";
+    controls.appendChild(count);
+    if (visible.length < filtered.length) {
+        const more = document.createElement("button");
+        more.type = "button"; more.className = "small-button secondary-button"; more.textContent = "20건 더 보기";
+        more.addEventListener("click", () => { transactionTabVisibleCount += 20; renderTransactionTab(); });
+        controls.appendChild(more);
+    }
+    allTransactionsList.appendChild(controls);
+}
+
+async function loadTransactionTab(accounts, accessToken) {
+    transactionAccountFilter.innerHTML = '<option value="">전체 계좌</option>';
+    for (const account of accounts) {
+        const option = document.createElement("option"); option.value = String(account.id); option.textContent = account.name; transactionAccountFilter.appendChild(option);
+    }
+    const rows = await Promise.all(accounts.map(async (account) => {
+        const transactions = await loadTransactions(accessToken, account.id);
+        return transactions.map((transaction) => ({account, transaction}));
+    }));
+    transactionTabRows = rows.flat().sort((a, b) => String(b.transaction.transaction_date).localeCompare(String(a.transaction.transaction_date)) || Number(b.transaction.id || 0) - Number(a.transaction.id || 0));
+    transactionTabVisibleCount = 20;
+    renderTransactionTab();
+}
+
+for (const control of [transactionAccountFilter, transactionTypeFilter]) {
+    control.addEventListener("change", () => { transactionTabVisibleCount = 20; renderTransactionTab(); });
+}
+transactionSearchFilter.addEventListener("input", () => { transactionTabVisibleCount = 20; renderTransactionTab(); });
 
 const loginStatus =
     document.getElementById(
@@ -14025,6 +14130,13 @@ async function showAuthenticatedApp(
         accounts,
         accessToken
     );
+
+    try {
+        await loadTransactionTab(accounts, accessToken);
+    } catch (error) {
+        allTransactionsList.className = "error";
+        allTransactionsList.textContent = error.message || "전체 거래 내역을 불러오지 못했습니다.";
+    }
 
     try {
         await loadAdminPanel(accessToken);
