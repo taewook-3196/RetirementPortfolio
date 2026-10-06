@@ -3623,6 +3623,24 @@ button:disabled {
     color: #137333;
 }
 
+ .transaction-list-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.transaction-list-count {
+    color: #777;
+    font-size: 12px;
+}
+
+.transaction-list-controls .small-button {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
 .transaction-message {
     min-height: 20px;
     margin-top: 12px;
@@ -8008,10 +8026,46 @@ function renderTransactions(
     const newestFirst =
         [...transactions].reverse();
 
-    for (
-        const transaction
-        of newestFirst
-    ) {
+    const pageSize = 20;
+    let visibleCount = Math.min(pageSize, newestFirst.length);
+
+    const list =
+        document.createElement("div");
+
+    const controls =
+        document.createElement("div");
+
+    controls.className =
+        "transaction-list-controls";
+
+    const countLabel =
+        document.createElement("div");
+
+    countLabel.className =
+        "transaction-list-count";
+
+    const moreButton =
+        document.createElement("button");
+
+    moreButton.type = "button";
+    moreButton.className = "small-button secondary-button";
+    moreButton.textContent = "20건 더 보기";
+
+    controls.appendChild(countLabel);
+    controls.appendChild(moreButton);
+    container.appendChild(list);
+    container.appendChild(controls);
+
+    function drawVisibleTransactions() {
+        list.innerHTML = "";
+
+        const visibleTransactions =
+            newestFirst.slice(0, visibleCount);
+
+        for (
+            const transaction
+            of visibleTransactions
+        ) {
 
         const assetCurrency =
             String(
@@ -8255,8 +8309,34 @@ function renderTransactions(
         );
 
 
-        container.appendChild(row);
+        list.appendChild(row);
+        }
+
+        countLabel.textContent =
+            "최근 "
+            + visibleCount
+            + "건 / 전체 "
+            + newestFirst.length
+            + "건";
+
+        moreButton.style.display =
+            visibleCount < newestFirst.length
+            ? "block"
+            : "none";
     }
+
+    moreButton.addEventListener(
+        "click",
+        () => {
+            visibleCount = Math.min(
+                visibleCount + pageSize,
+                newestFirst.length
+            );
+            drawVisibleTransactions();
+        }
+    );
+
+    drawVisibleTransactions();
 }
 
 async function loadCashFlows(
