@@ -12197,6 +12197,18 @@ function createAccountEditor(
                     accounts,
                     accessToken
                 );
+                await renderAccountCreator(
+                    accounts,
+                    accessToken
+                );
+                await renderAccountManagement(
+                    accounts,
+                    accessToken
+                );
+                await loadTransactionTab(
+                    accounts,
+                    accessToken
+                );
 
             } catch (error) {
 
