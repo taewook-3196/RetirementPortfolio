@@ -31,6 +31,7 @@ from database.models import (
     KakaoCredential,
     MorningReport,
     Price,
+    Profile,
     RecommendationLog,
     Transaction,
     UserSetting,
@@ -3799,7 +3800,11 @@ class Repository:
                 row[0]
                 for row in (
                     session.query(UserSetting.user_id)
-                    .filter(UserSetting.morning_report_enabled.is_(True))
+                    .join(Profile, Profile.id == UserSetting.user_id)
+                    .filter(
+                        UserSetting.morning_report_enabled.is_(True),
+                        Profile.is_active.is_(True),
+                    )
                     .order_by(UserSetting.user_id.asc())
                     .all()
                 )
