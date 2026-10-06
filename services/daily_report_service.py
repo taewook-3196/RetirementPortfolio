@@ -1676,6 +1676,8 @@ class DailyReportService:
             if send_kakao:
                 should_send = force_kakao or bool(self.config.morning_report.enabled)
                 if should_send:
+                    if self.repo.user_id and not self.repo.is_active_member():
+                        return False, "현재 이용 가능한 회원 계정이 아니어서 카카오톡을 발송하지 않았습니다.", html_file
                     if not self.kakao_service.is_configured():
                         return False, "카카오톡 토큰이 설정되지 않았습니다. [환경 설정]에서 토큰을 입력해주세요.", html_file
 
