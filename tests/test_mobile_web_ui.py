@@ -97,3 +97,14 @@ def test_kakao_connected_ui_offers_immediate_test_message(monkeypatch):
     assert 'fetch("/api/kakao/test"' in html
     assert 'method: "POST"' in html
     assert 'kakaoTestButton.style.display = data.connected ? "block" : "none";' in html
+
+
+
+def test_mobile_layout_stacks_forms_and_keeps_touch_targets(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert "@media (max-width: 600px)" in html
+    assert ".form-row {\n        grid-template-columns: 1fr;" in html
+    assert ".small-button,\n    .asset-chart-period-button {\n        min-height: 44px;" in html
+    assert ".transaction-actions {\n        flex-wrap: wrap;" in html
+    assert ".transaction-actions button {\n        flex: 1 1 120px;" in html
