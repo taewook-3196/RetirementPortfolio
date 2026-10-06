@@ -228,3 +228,57 @@ def test_admin_deletes_member_login_but_reports_data_retained(monkeypatch, membe
     }
     with membership_db() as db:
         assert db.query(Profile).filter(Profile.id == member_id).one_or_none() is None
+
+
+def test_admin_cannot_create_profile_for_unknown_member(monkeypatch, membership_db):
+    admin_id, unknown_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: {"user_id": str(admin_id)},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.set_member_access(
+            unknown_id,
+            web_app.MemberAccessRequest(active=True),
+            "Bearer admin",
+        )
+
+    assert exc.value.status_code == 404
+    with membership_db() as db:
+        assert db.query(Profile).filter(Profile.id == unknown_id).one_or_none() is None
+
+
+def test_signup_rolls_back_auth_user_when_profile_write_fails(monkeypatch):
+    monkeypatch.setattr(web_app, "_signup_enabled", lambda: True)
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service")
+    user_id = uuid4()
+    deleted_auth_users = []
+    created_user = SimpleNamespace(id=user_id, email="person@example.com")
+    admin_api = SimpleNamespace(
+        create_user=lambda payload: SimpleNamespace(user=created_user),
+        delete_user=lambda value: deleted_auth_users.append(value),
+    )
+    admin_client = SimpleNamespace(auth=SimpleNamespace(admin=admin_api))
+    monkeypatch.setattr(web_app, "create_client", lambda url, key: admin_client)
+
+    @contextmanager
+    def failing_session():
+        raise RuntimeError("database unavailable")
+        yield
+
+    monkeypatch.setattr(web_app, "get_db_session", failing_session)
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.signup(
+            web_app.SignupRequest(
+                email="person@example.com",
+                password="password123",
+            )
+        )
+
+    assert exc.value.status_code == 500
+    assert deleted_auth_users == [str(user_id)]
