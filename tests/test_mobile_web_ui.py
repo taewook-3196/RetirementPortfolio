@@ -69,3 +69,13 @@ def test_login_script_has_no_literal_newline_escape_between_statements(monkeypat
     )
     assert 'loginForm.addEventListener(' in html
     assert 'event.preventDefault();' in html
+
+
+
+def test_generated_browser_script_has_no_statement_newline_escapes(monkeypatch):
+    html = _html(monkeypatch)
+    script = html.split("<script>", 1)[1].rsplit("</script>", 1)[0]
+
+    # Literal backslash-n is valid inside JS strings, but not between statements.
+    assert "{\\n            const detail" not in script
+    assert ";\\nconst " not in script
