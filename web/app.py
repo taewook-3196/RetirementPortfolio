@@ -111,6 +111,11 @@ def get_current_user(
                 detail="유효하지 않은 로그인입니다.",
             )
 
+        with get_db_session() as db:
+            profile = db.query(Profile).filter(Profile.id == UUID(str(user.id))).one_or_none()
+            if profile is not None and not bool(profile.is_active):
+                raise HTTPException(status_code=403, detail="관리자에 의해 사용이 중지된 계정입니다.")
+
         return {
             "authenticated": True,
             "user_id": str(user.id),
@@ -262,11 +267,37 @@ def list_admin_members(
                 else str(getattr(user, "created_at", "") or "") or None
             ),
             "is_admin": bool(profile and profile.is_admin),
+            "is_active": bool(profile.is_active) if profile else True,
             "kakao_connected": user_id in kakao_ids,
             "morning_report_enabled": (
                 bool(setting.morning_report_enabled) if setting else False
             ),
         })
+
+
+
+class MemberAccessRequest(BaseModel):
+    active: bool
+
+
+@app.put("/api/admin/members/{member_id}/access")
+def set_member_access(
+    member_id: UUID,
+    request: MemberAccessRequest,
+    authorization: str | None = Header(default=None),
+):
+    admin = require_admin(authorization)
+    if str(member_id) == str(admin["user_id"]) and not request.active:
+        raise HTTPException(status_code=400, detail="현재 로그인한 관리자 계정은 중지할 수 없습니다.")
+    with get_db_session() as db:
+        profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
+        if profile is None:
+            profile = Profile(id=member_id, is_admin=False, is_active=request.active)
+            db.add(profile)
+        else:
+            profile.is_active = request.active
+            profile.updated_at = datetime.now(timezone.utc)
+    return {"user_id": str(member_id), "is_active": request.active}
 
     return {
         "members": members,
