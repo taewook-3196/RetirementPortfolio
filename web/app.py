@@ -4417,6 +4417,7 @@ Yahoo Finance에서 종목 정보를 확인합니다.
 <section id="account-management-section" class="card" hidden>
 <h2>계좌 관리</h2>
 <p class="subtitle">계좌 정보 변경과 계좌 삭제를 관리합니다. 계좌 삭제는 관련 거래·입출금·배당·목표 포트폴리오도 함께 삭제합니다.</p>
+<div id="account-creator"></div>
 <div id="account-management-list"></div>
 </section>
 
@@ -4791,6 +4792,7 @@ const loginStatus =
         "login-status"
     );
 
+const accountCreator = document.getElementById("account-creator");
 const accountManagementList = document.getElementById("account-management-list");
 
 const accountsList =
@@ -12234,11 +12236,8 @@ async function renderAccountManagement(accounts, accessToken) {
     }
 }
 
-async function renderAccounts(
-    accounts,
-    accessToken
-) {
-    accountsList.innerHTML = "";
+async function renderAccountCreator(accounts, accessToken) {
+    accountCreator.innerHTML = "";
 
 
     /*
@@ -13026,10 +13025,10 @@ async function renderAccounts(
                     );
 
 
-                await renderAccounts(
-                    refreshedAccounts,
-                    accessToken
-                );
+                await renderAccounts(refreshedAccounts, accessToken);
+                await renderAccountCreator(refreshedAccounts, accessToken);
+                await renderAccountManagement(refreshedAccounts, accessToken);
+                await loadTransactionTab(refreshedAccounts, accessToken);
 
 
             } catch (error) {
@@ -13056,7 +13055,7 @@ async function renderAccounts(
         createForm
     );
 
-    accountsList.appendChild(
+    accountCreator.appendChild(
         createSection
     );
 
@@ -13079,13 +13078,21 @@ async function renderAccounts(
         empty.textContent =
             "아직 등록된 계좌가 없습니다. 위에서 첫 계좌를 추가해주세요.";
 
-        accountsList.appendChild(
+        accountCreator.appendChild(
             empty
         );
 
         return;
     }
 
+
+}
+
+async function renderAccounts(
+    accounts,
+    accessToken
+) {
+    accountsList.innerHTML = "";
 
     /*
     기존 계좌 표시
@@ -14112,6 +14119,8 @@ async function showAuthenticatedApp(
         accounts,
         accessToken
     );
+    await renderAccountCreator(accounts, accessToken);
+    await renderAccountManagement(accounts, accessToken);
 
     try {
         await loadTransactionTab(accounts, accessToken);
