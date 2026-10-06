@@ -115,6 +115,21 @@ def test_operational_clients_do_not_disable_tls_verification():
 def test_signed_report_link_serves_only_signed_owner(monkeypatch):
     monkeypatch.setenv("OAUTH_TOKEN_ENCRYPTION_KEY", "test-report-signing-key")
     captured = {}
+    user_id = uuid4()
+
+    class FakeQuery:
+        def filter(self, *args):
+            return self
+        def one_or_none(self):
+            return type("ProfileRow", (), {"is_active": True})()
+
+    class FakeDb:
+        def query(self, *args):
+            return FakeQuery()
+
+    @contextmanager
+    def fake_db_session():
+        yield FakeDb()
 
     class FakeRepository:
         def __init__(self, user_id):
@@ -122,15 +137,44 @@ def test_signed_report_link_serves_only_signed_owner(monkeypatch):
         def get_latest_morning_report(self):
             return type("Report", (), {"html_content": "<h1>signed private report</h1>"})()
 
+    monkeypatch.setattr(web_app, "get_db_session", fake_db_session)
     monkeypatch.setattr(web_app, "Repository", FakeRepository)
     token = web_app._morning_report_link_serializer().dumps({
-        "user_id": "user-a",
+        "user_id": str(user_id),
         "purpose": "morning-report",
     })
     response = web_app.open_signed_morning_report(token)
-    assert captured["user_id"] == "user-a"
+    assert captured["user_id"] == str(user_id)
     assert "signed private report" in response.body.decode()
     assert response.headers["cache-control"] == "private, no-store"
+
+
+def test_signed_report_link_rejects_inactive_member(monkeypatch):
+    monkeypatch.setenv("OAUTH_TOKEN_ENCRYPTION_KEY", "test-report-signing-key")
+    user_id = uuid4()
+
+    class FakeQuery:
+        def filter(self, *args):
+            return self
+        def one_or_none(self):
+            return type("ProfileRow", (), {"is_active": False})()
+
+    class FakeDb:
+        def query(self, *args):
+            return FakeQuery()
+
+    @contextmanager
+    def fake_db_session():
+        yield FakeDb()
+
+    monkeypatch.setattr(web_app, "get_db_session", fake_db_session)
+    token = web_app._morning_report_link_serializer().dumps({
+        "user_id": str(user_id),
+        "purpose": "morning-report",
+    })
+    with pytest.raises(HTTPException) as exc_info:
+        web_app.open_signed_morning_report(token)
+    assert exc_info.value.status_code == 403
 
 
 def test_signed_report_link_rejects_tampering(monkeypatch):
