@@ -297,6 +297,8 @@ def set_member_access(
         profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
         if profile is None:
             raise HTTPException(status_code=404, detail="등록된 회원 정보를 찾을 수 없습니다.")
+        if bool(profile.is_admin) and not request.active:
+            raise HTTPException(status_code=400, detail="관리자 계정은 회원 관리 화면에서 중지할 수 없습니다.")
         profile.is_active = request.active
         profile.updated_at = datetime.now(timezone.utc)
     return {"user_id": str(member_id), "is_active": request.active}
@@ -313,7 +315,9 @@ def delete_member(
         raise HTTPException(status_code=400, detail="현재 로그인한 관리자 계정은 삭제할 수 없습니다.")
     with get_db_session() as db:
         profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
-        if profile is not None and bool(profile.is_admin):
+        if profile is None:
+            raise HTTPException(status_code=404, detail="등록된 회원 정보를 찾을 수 없습니다.")
+        if bool(profile.is_admin):
             raise HTTPException(status_code=400, detail="다른 관리자 계정은 여기서 삭제할 수 없습니다.")
     admin_client = _get_supabase_admin_client()
     try:
@@ -378,16 +382,25 @@ def signup(request: SignupRequest):
                 detail="회원 정보 저장에 실패하여 생성된 인증 계정을 정리했습니다. 다시 시도해 주세요.",
             ) from exc
 
-        public_client = create_client(supabase_url, supabase_anon_key)
-        session_response = public_client.auth.sign_in_with_password({
-            "email": email,
-            "password": request.password,
-        })
-        session = session_response.session
+        session = None
+        try:
+            public_client = create_client(supabase_url, supabase_anon_key)
+            session_response = public_client.auth.sign_in_with_password({
+                "email": email,
+                "password": request.password,
+            })
+            session = session_response.session
+        except Exception:
+            # Account + Profile creation already succeeded. Auto-login is a
+            # convenience step and must not turn a successful signup into a
+            # misleading signup failure.
+            session = None
+
         return {
             "created": True,
             "email": response.user.email,
             "email_confirmation_required": False,
+            "login_required": session is None,
             "access_token": session.access_token if session else None,
             "refresh_token": session.refresh_token if session else None,
         }
