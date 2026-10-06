@@ -552,6 +552,19 @@ def kakao_callback(code: str = "", state: str = "", error: str = ""):
         raise HTTPException(status_code=400, detail="유효하지 않은 카카오 연결 요청입니다.")
 
     user_id = state_data["user_id"]
+    try:
+        member_id = UUID(str(user_id))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="유효하지 않은 카카오 연결 요청입니다.")
+
+    with get_db_session() as db:
+        profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
+        if profile is None or not bool(profile.is_active):
+            raise HTTPException(
+                status_code=403,
+                detail="현재 이용 가능한 회원 계정이 아닙니다.",
+            )
+
     client_id = os.getenv("KAKAO_REST_API_KEY", "").strip()
     client_secret = os.getenv("KAKAO_CLIENT_SECRET", "").strip()
     form = {

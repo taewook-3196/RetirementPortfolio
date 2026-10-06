@@ -282,3 +282,53 @@ def test_signup_rolls_back_auth_user_when_profile_write_fails(monkeypatch):
 
     assert exc.value.status_code == 500
     assert deleted_auth_users == [str(user_id)]
+
+
+
+def test_kakao_callback_rejects_suspended_member_before_token_exchange(
+    monkeypatch,
+    membership_db,
+):
+    user_id = uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=user_id, is_admin=False, is_active=False))
+
+    state = web_app._kakao_state_serializer().dumps({
+        "user_id": str(user_id),
+        "purpose": "kakao-connect",
+    })
+    token_exchange_called = []
+    monkeypatch.setattr(
+        web_app.urllib.request,
+        "urlopen",
+        lambda *args, **kwargs: token_exchange_called.append(True),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.kakao_callback(code="one-time-code", state=state)
+
+    assert exc.value.status_code == 403
+    assert token_exchange_called == []
+
+
+def test_kakao_callback_rejects_deleted_member_before_token_exchange(
+    monkeypatch,
+    membership_db,
+):
+    user_id = uuid4()
+    state = web_app._kakao_state_serializer().dumps({
+        "user_id": str(user_id),
+        "purpose": "kakao-connect",
+    })
+    token_exchange_called = []
+    monkeypatch.setattr(
+        web_app.urllib.request,
+        "urlopen",
+        lambda *args, **kwargs: token_exchange_called.append(True),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.kakao_callback(code="one-time-code", state=state)
+
+    assert exc.value.status_code == 403
+    assert token_exchange_called == []
