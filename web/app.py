@@ -4427,6 +4427,7 @@ Yahoo Finance에서 종목 정보를 확인합니다.
 <button type="button" data-app-tab="portfolio">포트폴리오</button>
 <button type="button" data-app-tab="transactions">거래</button>
 <button type="button" data-app-tab="settings">설정</button>
+<button id="member-management-tab-button" type="button" data-app-tab="members" hidden>회원관리</button>
 </nav>
 
 </div>
@@ -4495,7 +4496,8 @@ const appTabSections = {
     home: ["app-header", "report-section"],
     portfolio: ["portfolio-section", "asset-search-section"],
     transactions: ["transactions-section"],
-    settings: ["account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section", "admin-section"],
+    settings: ["account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section"],
+    members: ["admin-section"],
 };
 let activeAppTab = "home";
 
@@ -4801,6 +4803,7 @@ const accountsList =
     );
 
 const adminSection = document.getElementById("admin-section");
+const memberManagementTabButton = document.getElementById("member-management-tab-button");
 const adminMembers = document.getElementById("admin-members");
 const adminSignupEnabled = document.getElementById("admin-signup-enabled");
 const adminSignupStatus = document.getElementById("admin-signup-status");
@@ -4815,11 +4818,15 @@ async function loadAdminPanel(accessToken) {
     const headers = {"Authorization": "Bearer " + accessToken};
     const statusResponse = await fetch("/api/admin/me", {headers});
     if (statusResponse.status === 403) {
-        adminSection.style.display = "none";
+        memberManagementTabButton.hidden = true;
+        adminSection.hidden = true;
+        if (activeAppTab === "members") setAppTab("home", {scroll: false});
         return;
     }
     if (!statusResponse.ok) return;
-    adminSection.style.display = "block";
+    memberManagementTabButton.hidden = false;
+    adminSection.style.display = "";
+    adminSection.hidden = activeAppTab !== "members";
     const [membersResponse, signupResponse] = await Promise.all([
         fetch("/api/admin/members", {headers}),
         fetch("/api/signup-status"),
@@ -14133,7 +14140,8 @@ async function showAuthenticatedApp(
         await loadAdminPanel(accessToken);
     } catch (error) {
         console.error("관리자 화면 로딩 오류:", error);
-        adminSection.style.display = "none";
+        memberManagementTabButton.hidden = true;
+        adminSection.hidden = true;
     }
 
     try {
