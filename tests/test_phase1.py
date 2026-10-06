@@ -63,14 +63,16 @@ def test_config_load_and_validation(tmp_path):
     """config 로드 및 유효성 검증 테스트"""
     cfg_file = tmp_path / "config.yaml"
     cfg = get_default_config()
-    assert cfg.initial_capital == 100000000
-    assert cfg.base_monthly == 10000000
-    assert len(cfg.etfs) == 3
+    assert cfg.initial_capital == 0
+    assert cfg.base_monthly == 0
+    assert cfg.max_additional_monthly == 0
+    assert len(cfg.etfs) == 1
+    assert cfg.etfs[0].ticker == "SAMPLE_ETF"
 
     save_config(cfg, cfg_file)
     loaded = load_config(cfg_file)
-    assert loaded.initial_capital == 100000000
-    assert loaded.base_monthly == 10000000
+    assert loaded.initial_capital == 0
+    assert loaded.base_monthly == 0
     assert loaded.show_splash_screen is True
     assert sum(e.target_weight for e in loaded.etfs) == 1.0
 
@@ -81,11 +83,11 @@ def test_config_load_and_validation(tmp_path):
     assert reloaded.show_splash_screen is False
 
     # 목표 비중 100% 미만 허용 (미설정분은 현금)
-    cfg.etfs[0].target_weight = 0.50
-    cfg.validate()  # 0.50 + 0.25 + 0.15 = 0.90 -> 정상 통과
+    cfg.etfs[0].target_weight = 0.90
+    cfg.validate()  # 100% 미만은 현금 비중으로 허용
 
     # 목표 비중 합계 100% 초과 시 유효성 오류 발생
-    cfg.etfs[0].target_weight = 0.80
+    cfg.etfs[0].target_weight = 1.01
     with pytest.raises(ValueError, match="100%를 초과할 수 없습니다"):
         cfg.validate()
 
@@ -100,7 +102,7 @@ def test_watchlist_config_and_validation(tmp_path):
 
     loaded = load_config(cfg_file)
     assert len(loaded.watchlist) == 2
-    assert loaded.watchlist[0].ticker == "069500"
+    assert loaded.watchlist[0].ticker == "SAMPLE_WATCH"
     assert loaded.watchlist[1].ticker == "102110"
 
     # 중복 관심 종목코드 검증
