@@ -364,3 +364,44 @@ def test_new_member_bootstrap_cannot_inherit_existing_member_private_data(monkey
     assert [row["ticker"] for row in existing_repo.get_watchlist()] == ["SECRET"]
     assert existing_repo.get_latest_morning_report().html_content == "<p>existing private report</p>"
     assert existing_repo.get_kakao_credential().access_token_encrypted == "existing-access"
+
+
+
+def test_kakao_disconnect_for_one_user_does_not_touch_another(monkeypatch):
+    _isolated_db(monkeypatch)
+    user_a, user_b = uuid4(), uuid4()
+    repo_a, repo_b = Repository(user_id=user_a), Repository(user_id=user_b)
+    repo_a.ensure_user_initialized()
+    repo_b.ensure_user_initialized()
+
+    repo_a.save_kakao_credential("a-access", "a-refresh", scopes="talk_message")
+    repo_b.save_kakao_credential("b-access", "b-refresh", scopes="talk_message")
+    repo_a.save_user_settings(
+        morning_report_enabled=True,
+        morning_report_time="07:00",
+        kakao_enabled=True,
+        news_enabled=True,
+        ai_advice_enabled=True,
+    )
+    repo_b.save_user_settings(
+        morning_report_enabled=True,
+        morning_report_time="07:00",
+        kakao_enabled=True,
+        news_enabled=True,
+        ai_advice_enabled=True,
+    )
+
+    assert repo_a.delete_kakao_credential() is True
+    repo_a.save_user_settings(
+        morning_report_enabled=True,
+        morning_report_time="07:00",
+        kakao_enabled=False,
+        news_enabled=True,
+        ai_advice_enabled=True,
+    )
+
+    assert repo_a.get_kakao_credential() is None
+    assert repo_a.get_user_settings().kakao_enabled is False
+    assert repo_b.get_kakao_credential().access_token_encrypted == "b-access"
+    assert repo_b.get_kakao_credential().refresh_token_encrypted == "b-refresh"
+    assert repo_b.get_user_settings().kakao_enabled is True
