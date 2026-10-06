@@ -300,6 +300,32 @@ def set_member_access(
 
 
 
+@app.delete("/api/admin/members/{member_id}")
+def delete_member(
+    member_id: UUID,
+    authorization: str | None = Header(default=None),
+):
+    admin = require_admin(authorization)
+    if str(member_id) == str(admin["user_id"]):
+        raise HTTPException(status_code=400, detail="현재 로그인한 관리자 계정은 삭제할 수 없습니다.")
+    with get_db_session() as db:
+        profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
+        if profile is not None and bool(profile.is_admin):
+            raise HTTPException(status_code=400, detail="다른 관리자 계정은 여기서 삭제할 수 없습니다.")
+    admin_client = _get_supabase_admin_client()
+    try:
+        admin_client.auth.admin.delete_user(str(member_id))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="회원 인증 계정을 삭제하지 못했습니다.") from exc
+    # Portfolio rows remain user-scoped and inaccessible. Destructive data purge is
+    # intentionally separate so an accidental membership deletion cannot erase investments.
+    with get_db_session() as db:
+        profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
+        if profile is not None:
+            db.delete(profile)
+    return {"deleted": True, "user_id": str(member_id)}
+
+
 class SignupRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=8, max_length=128)
