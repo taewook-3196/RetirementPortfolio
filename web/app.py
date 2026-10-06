@@ -6,10 +6,8 @@ RetirementPortfolio 모바일 웹 애플리케이션.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
-import secrets
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timezone, timedelta
@@ -20,17 +18,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from supabase import create_client
 from services.portfolio_service import PortfolioService
-from services.invitation_email_service import (
-    InvitationEmailError,
-    invitation_email_configured,
-    send_invitation_email,
-    send_resend_diagnostic_email,
-)
 from core.secret_crypto import encrypt_secret
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from database.connection import get_db_session
-from database.models import InviteCode, Profile, AppSetting, KakaoCredential, UserSetting
+from database.models import Profile, AppSetting, KakaoCredential, UserSetting
 from database.repository import Repository
 from portfolio.holdings import calculate_etf_positions
 from data.yfinance_client import YFinanceClient
@@ -306,167 +298,6 @@ def set_member_access(
             profile.updated_at = datetime.now(timezone.utc)
     return {"user_id": str(member_id), "is_active": request.active}
 
-
-
-class AdminInviteCreateRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=320)
-    label: str = Field(default="", max_length=200)
-    days: int = Field(default=7, ge=1, le=365)
-
-
-@app.get("/api/admin/invites")
-def list_admin_invites(
-    authorization: str | None = Header(default=None),
-):
-    """List invitation metadata; invitation secrets are never returned."""
-    require_admin(authorization)
-    now = datetime.now(timezone.utc)
-
-    with get_db_session() as db:
-        rows = db.query(InviteCode).order_by(InviteCode.created_at.desc()).all()
-        result = []
-        for row in rows:
-            expires_at = row.expires_at
-            if expires_at is not None and expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if row.used_at is not None:
-                status = "used"
-            elif expires_at is not None and expires_at <= now:
-                status = "expired"
-            else:
-                status = "pending"
-            result.append({
-                "id": row.id,
-                "label": row.label,
-                "intended_email": row.intended_email,
-                "status": status,
-                "expires_at": row.expires_at.isoformat() if row.expires_at else None,
-                "used_at": row.used_at.isoformat() if row.used_at else None,
-                "created_at": row.created_at.isoformat() if row.created_at else None,
-            })
-    return {"invites": result}
-
-
-@app.post("/api/admin/invites", status_code=201)
-def create_admin_invite(
-    request: AdminInviteCreateRequest,
-    authorization: str | None = Header(default=None),
-):
-    """Create a one-time invitation. The secret is returned exactly once."""
-    require_admin(authorization)
-    email = request.email.strip().lower()
-    if "@" not in email:
-        raise HTTPException(status_code=422, detail="올바른 이메일 주소가 필요합니다.")
-
-    secret = secrets.token_urlsafe(24)
-    digest = _invite_code_hash(secret)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=request.days)
-
-    with get_db_session() as db:
-        row = InviteCode(
-            code_hash=digest,
-            label=request.label.strip() or None,
-            intended_email=email,
-            expires_at=expires_at,
-        )
-        db.add(row)
-        db.flush()
-        invite_id = row.id
-
-    # Do not persist or log the plaintext secret. It is only returned now so the
-    # later email-delivery layer can send it to the intended recipient.
-    return {
-        "id": invite_id,
-        "email": email,
-        "invite_code": secret,
-        # Keep the one-time secret in the URL fragment so browsers do not send it
-        # to the server in HTTP request lines, access logs, or Referer headers.
-        "invite_url": "https://retirementportfolio.onrender.com/#invite="
-        + urllib.parse.quote(secret, safe=""),
-        "expires_at": expires_at.isoformat(),
-        "privacy_notice": (
-            "관리자 화면에서는 회원의 보유종목, 투자금액, 매매내역 등 "
-            "개인 투자정보를 열람할 수 없습니다. 실제 계좌번호 전체, 증권사 "
-            "비밀번호, 인증번호, API 비밀키 등 민감한 정보는 입력하지 마세요."
-        ),
-    }
-
-
-class AdminInviteEmailRequest(BaseModel):
-    invite_url: str = Field(min_length=20, max_length=2000)
-
-
-@app.get("/api/admin/email-status")
-def get_admin_email_status(
-    authorization: str | None = Header(default=None),
-):
-    require_admin(authorization)
-    return {"configured": invitation_email_configured()}
-
-
-@app.post("/api/admin/email-diagnostic")
-def run_admin_email_diagnostic(
-    authorization: str | None = Header(default=None),
-):
-    require_admin(authorization)
-    try:
-        message_id = send_resend_diagnostic_email()
-    except InvitationEmailError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-    return {"ok": True, "message_id": message_id}
-
-
-@app.post("/api/admin/invites/{invite_id}/send-email")
-def send_admin_invite_email(
-    invite_id: int,
-    payload: AdminInviteEmailRequest,
-    authorization: str | None = Header(default=None),
-):
-    require_admin(authorization)
-    expected_prefix = "https://retirementportfolio.onrender.com/#invite="
-    if not payload.invite_url.startswith(expected_prefix):
-        raise HTTPException(status_code=400, detail="올바른 초대 링크가 아닙니다.")
-
-    with get_db_session() as db:
-        invite = db.query(InviteCode).filter(InviteCode.id == invite_id).one_or_none()
-        if invite is None:
-            raise HTTPException(status_code=404, detail="초대를 찾을 수 없습니다.")
-        if invite.used_at is not None:
-            raise HTTPException(status_code=409, detail="이미 사용된 초대입니다.")
-        if invite.expires_at <= datetime.now(timezone.utc):
-            raise HTTPException(status_code=409, detail="만료된 초대입니다.")
-        recipient = (invite.intended_email or "").strip()
-        expires_at = invite.expires_at.isoformat()
-
-    if not recipient:
-        raise HTTPException(status_code=400, detail="초대 이메일 주소가 없습니다.")
-    try:
-        message_id = send_invitation_email(
-            recipient=recipient,
-            invite_url=payload.invite_url,
-            expires_at=expires_at,
-        )
-    except InvitationEmailError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-
-    return {"sent": True, "message_id": message_id}
-
-
-@app.delete("/api/admin/invites/{invite_id}")
-def cancel_admin_invite(
-    invite_id: int,
-    authorization: str | None = Header(default=None),
-):
-    """Cancel an unused invitation by deleting its stored digest."""
-    require_admin(authorization)
-    with get_db_session() as db:
-        row = db.query(InviteCode).filter(InviteCode.id == invite_id).one_or_none()
-        if row is None:
-            raise HTTPException(status_code=404, detail="초대 정보를 찾을 수 없습니다.")
-        if row.used_at is not None:
-            raise HTTPException(status_code=409, detail="이미 사용된 초대는 취소할 수 없습니다.")
-        db.delete(row)
-    return {"cancelled": True, "id": invite_id}
 
 
 class SignupRequest(BaseModel):
