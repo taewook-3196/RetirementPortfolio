@@ -287,3 +287,16 @@ def test_sqlite_backup_and_restore(temp_db, tmp_path):
     restored = repo.restore_database(backup_path)
     assert restored is True
     assert len(repo.get_transactions()) == 1
+
+
+
+def test_membership_controls_source_contract():
+    from web import app as web_app
+    fields = set(web_app.SignupRequest.model_fields)
+    assert fields == {'email', 'password'}
+    html = web_app.home().body.decode('utf-8')
+    assert 'id="admin-signup-enabled"' in html
+    assert 'admin-toggle-member' in html
+    assert 'admin-delete-member' in html
+    assert 'invite_code' not in html
+    assert '이메일 발송 진단' not in html

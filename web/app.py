@@ -6,10 +6,8 @@ RetirementPortfolio 모바일 웹 애플리케이션.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
-import secrets
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timezone, timedelta
@@ -20,17 +18,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from supabase import create_client
 from services.portfolio_service import PortfolioService
-from services.invitation_email_service import (
-    InvitationEmailError,
-    invitation_email_configured,
-    send_invitation_email,
-    send_resend_diagnostic_email,
-)
 from core.secret_crypto import encrypt_secret
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from database.connection import get_db_session
-from database.models import InviteCode, Profile, KakaoCredential, UserSetting
+from database.models import Profile, AppSetting, KakaoCredential, UserSetting
 from database.repository import Repository
 from portfolio.holdings import calculate_etf_positions
 from data.yfinance_client import YFinanceClient
@@ -111,6 +103,11 @@ def get_current_user(
                 detail="유효하지 않은 로그인입니다.",
             )
 
+        with get_db_session() as db:
+            profile = db.query(Profile).filter(Profile.id == UUID(str(user.id))).one_or_none()
+            if profile is not None and not bool(profile.is_active):
+                raise HTTPException(status_code=403, detail="관리자에 의해 사용이 중지된 계정입니다.")
+
         return {
             "authenticated": True,
             "user_id": str(user.id),
@@ -173,6 +170,41 @@ def get_admin_status(
     }
 
 
+SIGNUP_ENABLED_KEY = "signup_enabled"
+
+
+def _signup_enabled() -> bool:
+    with get_db_session() as db:
+        row = db.query(AppSetting).filter(AppSetting.key == SIGNUP_ENABLED_KEY).one_or_none()
+        return bool(row and str(row.value).strip().lower() == "true")
+
+
+class SignupControlRequest(BaseModel):
+    enabled: bool
+
+
+@app.get("/api/signup-status")
+def get_signup_status():
+    return {"signup_enabled": _signup_enabled()}
+
+
+@app.put("/api/admin/signup-status")
+def set_signup_status(
+    request: SignupControlRequest,
+    authorization: str | None = Header(default=None),
+):
+    require_admin(authorization)
+    with get_db_session() as db:
+        row = db.query(AppSetting).filter(AppSetting.key == SIGNUP_ENABLED_KEY).one_or_none()
+        value = "true" if request.enabled else "false"
+        if row is None:
+            db.add(AppSetting(key=SIGNUP_ENABLED_KEY, value=value))
+        else:
+            row.value = value
+            row.updated_at = datetime.now(timezone.utc)
+    return {"signup_enabled": request.enabled}
+
+
 def _get_supabase_admin_client():
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
@@ -227,6 +259,7 @@ def list_admin_members(
                 else str(getattr(user, "created_at", "") or "") or None
             ),
             "is_admin": bool(profile and profile.is_admin),
+            "is_active": bool(profile.is_active) if profile else True,
             "kakao_connected": user_id in kakao_ids,
             "morning_report_enabled": (
                 bool(setting.morning_report_enabled) if setting else False
@@ -242,278 +275,97 @@ def list_admin_members(
     }
 
 
-class AdminInviteCreateRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=320)
-    label: str = Field(default="", max_length=200)
-    days: int = Field(default=7, ge=1, le=365)
+class MemberAccessRequest(BaseModel):
+    active: bool
 
 
-@app.get("/api/admin/invites")
-def list_admin_invites(
+@app.put("/api/admin/members/{member_id}/access")
+def set_member_access(
+    member_id: UUID,
+    request: MemberAccessRequest,
     authorization: str | None = Header(default=None),
 ):
-    """List invitation metadata; invitation secrets are never returned."""
-    require_admin(authorization)
-    now = datetime.now(timezone.utc)
-
+    admin = require_admin(authorization)
+    if str(member_id) == str(admin["user_id"]) and not request.active:
+        raise HTTPException(status_code=400, detail="현재 로그인한 관리자 계정은 중지할 수 없습니다.")
     with get_db_session() as db:
-        rows = db.query(InviteCode).order_by(InviteCode.created_at.desc()).all()
-        result = []
-        for row in rows:
-            expires_at = row.expires_at
-            if expires_at is not None and expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if row.used_at is not None:
-                status = "used"
-            elif expires_at is not None and expires_at <= now:
-                status = "expired"
-            else:
-                status = "pending"
-            result.append({
-                "id": row.id,
-                "label": row.label,
-                "intended_email": row.intended_email,
-                "status": status,
-                "expires_at": row.expires_at.isoformat() if row.expires_at else None,
-                "used_at": row.used_at.isoformat() if row.used_at else None,
-                "created_at": row.created_at.isoformat() if row.created_at else None,
-            })
-    return {"invites": result}
+        profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
+        if profile is None:
+            profile = Profile(id=member_id, is_admin=False, is_active=request.active)
+            db.add(profile)
+        else:
+            profile.is_active = request.active
+            profile.updated_at = datetime.now(timezone.utc)
+    return {"user_id": str(member_id), "is_active": request.active}
 
 
-@app.post("/api/admin/invites", status_code=201)
-def create_admin_invite(
-    request: AdminInviteCreateRequest,
+
+@app.delete("/api/admin/members/{member_id}")
+def delete_member(
+    member_id: UUID,
     authorization: str | None = Header(default=None),
 ):
-    """Create a one-time invitation. The secret is returned exactly once."""
-    require_admin(authorization)
-    email = request.email.strip().lower()
-    if "@" not in email:
-        raise HTTPException(status_code=422, detail="올바른 이메일 주소가 필요합니다.")
-
-    secret = secrets.token_urlsafe(24)
-    digest = _invite_code_hash(secret)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=request.days)
-
+    admin = require_admin(authorization)
+    if str(member_id) == str(admin["user_id"]):
+        raise HTTPException(status_code=400, detail="현재 로그인한 관리자 계정은 삭제할 수 없습니다.")
     with get_db_session() as db:
-        row = InviteCode(
-            code_hash=digest,
-            label=request.label.strip() or None,
-            intended_email=email,
-            expires_at=expires_at,
-        )
-        db.add(row)
-        db.flush()
-        invite_id = row.id
-
-    # Do not persist or log the plaintext secret. It is only returned now so the
-    # later email-delivery layer can send it to the intended recipient.
-    return {
-        "id": invite_id,
-        "email": email,
-        "invite_code": secret,
-        # Keep the one-time secret in the URL fragment so browsers do not send it
-        # to the server in HTTP request lines, access logs, or Referer headers.
-        "invite_url": "https://retirementportfolio.onrender.com/#invite="
-        + urllib.parse.quote(secret, safe=""),
-        "expires_at": expires_at.isoformat(),
-        "privacy_notice": (
-            "관리자 화면에서는 회원의 보유종목, 투자금액, 매매내역 등 "
-            "개인 투자정보를 열람할 수 없습니다. 실제 계좌번호 전체, 증권사 "
-            "비밀번호, 인증번호, API 비밀키 등 민감한 정보는 입력하지 마세요."
-        ),
-    }
-
-
-class AdminInviteEmailRequest(BaseModel):
-    invite_url: str = Field(min_length=20, max_length=2000)
-
-
-@app.get("/api/admin/email-status")
-def get_admin_email_status(
-    authorization: str | None = Header(default=None),
-):
-    require_admin(authorization)
-    return {"configured": invitation_email_configured()}
-
-
-@app.post("/api/admin/email-diagnostic")
-def run_admin_email_diagnostic(
-    authorization: str | None = Header(default=None),
-):
-    require_admin(authorization)
+        profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
+        if profile is not None and bool(profile.is_admin):
+            raise HTTPException(status_code=400, detail="다른 관리자 계정은 여기서 삭제할 수 없습니다.")
+    admin_client = _get_supabase_admin_client()
     try:
-        message_id = send_resend_diagnostic_email()
-    except InvitationEmailError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-    return {"ok": True, "message_id": message_id}
-
-
-@app.post("/api/admin/invites/{invite_id}/send-email")
-def send_admin_invite_email(
-    invite_id: int,
-    payload: AdminInviteEmailRequest,
-    authorization: str | None = Header(default=None),
-):
-    require_admin(authorization)
-    expected_prefix = "https://retirementportfolio.onrender.com/#invite="
-    if not payload.invite_url.startswith(expected_prefix):
-        raise HTTPException(status_code=400, detail="올바른 초대 링크가 아닙니다.")
-
+        admin_client.auth.admin.delete_user(str(member_id))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="회원 인증 계정을 삭제하지 못했습니다.") from exc
+    # Portfolio rows remain user-scoped and inaccessible. Destructive data purge is
+    # intentionally separate so an accidental membership deletion cannot erase investments.
     with get_db_session() as db:
-        invite = db.query(InviteCode).filter(InviteCode.id == invite_id).one_or_none()
-        if invite is None:
-            raise HTTPException(status_code=404, detail="초대를 찾을 수 없습니다.")
-        if invite.used_at is not None:
-            raise HTTPException(status_code=409, detail="이미 사용된 초대입니다.")
-        if invite.expires_at <= datetime.now(timezone.utc):
-            raise HTTPException(status_code=409, detail="만료된 초대입니다.")
-        recipient = (invite.intended_email or "").strip()
-        expires_at = invite.expires_at.isoformat()
-
-    if not recipient:
-        raise HTTPException(status_code=400, detail="초대 이메일 주소가 없습니다.")
-    try:
-        message_id = send_invitation_email(
-            recipient=recipient,
-            invite_url=payload.invite_url,
-            expires_at=expires_at,
-        )
-    except InvitationEmailError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-
-    return {"sent": True, "message_id": message_id}
-
-
-@app.delete("/api/admin/invites/{invite_id}")
-def cancel_admin_invite(
-    invite_id: int,
-    authorization: str | None = Header(default=None),
-):
-    """Cancel an unused invitation by deleting its stored digest."""
-    require_admin(authorization)
-    with get_db_session() as db:
-        row = db.query(InviteCode).filter(InviteCode.id == invite_id).one_or_none()
-        if row is None:
-            raise HTTPException(status_code=404, detail="초대 정보를 찾을 수 없습니다.")
-        if row.used_at is not None:
-            raise HTTPException(status_code=409, detail="이미 사용된 초대는 취소할 수 없습니다.")
-        db.delete(row)
-    return {"cancelled": True, "id": invite_id}
+        profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
+        if profile is not None:
+            db.delete(profile)
+    return {"deleted": True, "user_id": str(member_id)}
 
 
 class SignupRequest(BaseModel):
-    """초대코드 전용 회원가입 요청."""
-
-    email: str = Field(
-        min_length=3,
-        max_length=320,
-    )
-    password: str = Field(
-        min_length=8,
-        max_length=128,
-    )
-    invite_code: str = Field(
-        min_length=1,
-        max_length=200,
-    )
-
-
-def _invite_code_hash(invite_code: str) -> str:
-    """Normalize an invite secret and return the digest stored in PostgreSQL."""
-    candidate = str(invite_code or "").strip()
-    return hashlib.sha256(candidate.encode("utf-8")).hexdigest()
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=128)
 
 
 @app.post("/api/auth/signup", status_code=201)
-def signup_with_invite(request: SignupRequest):
-    """Create exactly one user from an unused, unexpired database invitation."""
+def signup(request: SignupRequest):
+    """Create a user only while an administrator has enabled registration."""
+    if not _signup_enabled():
+        raise HTTPException(status_code=403, detail="현재 신규 회원가입이 중지되어 있습니다.")
+
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     supabase_anon_key = os.getenv("SUPABASE_ANON_KEY", "").strip()
     supabase_service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-
     if not supabase_url or not supabase_anon_key or not supabase_service_key:
-        raise HTTPException(
-            status_code=500,
-            detail="Supabase 회원가입 설정이 없습니다.",
-        )
+        raise HTTPException(status_code=500, detail="Supabase 회원가입 설정이 없습니다.")
 
     email = request.email.strip().lower()
-    digest = _invite_code_hash(request.invite_code)
-
     try:
-        # Keep the PostgreSQL row locked until auth creation and invite consumption
-        # complete. Concurrent attempts using the same code therefore serialize.
+        admin_client = create_client(supabase_url, supabase_service_key)
+        response = admin_client.auth.admin.create_user({
+            "email": email,
+            "password": request.password,
+            "email_confirm": True,
+        })
+        if response.user is None:
+            raise HTTPException(status_code=400, detail="회원가입을 완료하지 못했습니다.")
+
         with get_db_session() as db:
-            invite = (
-                db.query(InviteCode)
-                .filter(InviteCode.code_hash == digest)
-                .with_for_update()
-                .one_or_none()
-            )
+            user_id = UUID(str(response.user.id))
+            profile = db.query(Profile).filter(Profile.id == user_id).one_or_none()
+            if profile is None:
+                db.add(Profile(id=user_id, is_admin=False, is_active=True))
 
-            now = datetime.now(timezone.utc)
-            if invite is None or invite.used_at is not None:
-                raise HTTPException(
-                    status_code=403,
-                    detail="유효하지 않거나 이미 사용된 초대코드입니다.",
-                )
-
-            if invite.expires_at is not None:
-                expires_at = invite.expires_at
-                if expires_at.tzinfo is None:
-                    expires_at = expires_at.replace(tzinfo=timezone.utc)
-                if expires_at <= now:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="만료된 초대코드입니다.",
-                    )
-
-            if (
-                invite.intended_email
-                and invite.intended_email.strip().lower() != email
-            ):
-                raise HTTPException(
-                    status_code=403,
-                    detail="이 초대코드는 지정된 이메일에서만 사용할 수 있습니다.",
-                )
-
-            admin_client = create_client(
-                supabase_url,
-                supabase_service_key,
-            )
-            response = admin_client.auth.admin.create_user(
-                {
-                    "email": email,
-                    "password": request.password,
-                    "email_confirm": True,
-                }
-            )
-
-            if response.user is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="회원가입을 완료하지 못했습니다.",
-                )
-
-            invite.used_at = now
-            invite.used_by = response.user.id
-
-        # service_role is server-only. The browser receives only a normal user
-        # session created through the public anon key.
-        public_client = create_client(
-            supabase_url,
-            supabase_anon_key,
-        )
-        session_response = public_client.auth.sign_in_with_password(
-            {
-                "email": email,
-                "password": request.password,
-            }
-        )
+        public_client = create_client(supabase_url, supabase_anon_key)
+        session_response = public_client.auth.sign_in_with_password({
+            "email": email,
+            "password": request.password,
+        })
         session = session_response.session
-
         return {
             "created": True,
             "email": response.user.email,
@@ -521,26 +373,13 @@ def signup_with_invite(request: SignupRequest):
             "access_token": session.access_token if session else None,
             "refresh_token": session.refresh_token if session else None,
         }
-
     except HTTPException:
         raise
     except Exception as exc:
         message = str(exc).lower()
-
-        if (
-            "already registered" in message
-            or "already been registered" in message
-            or "already exists" in message
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail="이미 가입된 이메일입니다.",
-            )
-
-        raise HTTPException(
-            status_code=400,
-            detail="회원가입을 완료하지 못했습니다.",
-        )
+        if "already registered" in message or "already been registered" in message or "already exists" in message:
+            raise HTTPException(status_code=409, detail="이미 가입된 이메일입니다.")
+        raise HTTPException(status_code=400, detail="회원가입을 완료하지 못했습니다.")
 
 
 @app.post("/api/bootstrap")
@@ -4086,8 +3925,9 @@ button:disabled {
     id="show-signup-button"
     type="button"
     class="secondary-button"
+    style="display:none;"
 >
-초대코드로 회원가입
+회원가입
 </button>
 
 <form
@@ -4112,16 +3952,6 @@ button:disabled {
     type="password"
     minlength="8"
     autocomplete="new-password"
-    required
->
-
-<label for="invite-code">
-초대코드
-</label>
-<input
-    id="invite-code"
-    type="password"
-    autocomplete="off"
     required
 >
 
@@ -4167,32 +3997,20 @@ button:disabled {
 
 <section id="admin-section" class="card" style="display:none;">
 <h2>관리자 · 회원 관리</h2>
-<p class="subtitle">회원 운영정보와 초대를 관리합니다. 다른 회원의 보유종목, 투자금액, 매매내역 등 투자 데이터는 이 화면에서 열람할 수 없습니다.</p>
+<p class="subtitle">신규 회원가입 허용 여부와 회원 이용 권한을 관리합니다. 다른 회원의 보유종목, 투자금액, 매매내역 등 투자 데이터는 이 화면에서 열람할 수 없습니다.</p>
 <div class="security">실제 계좌번호 전체, 증권사 비밀번호, 인증번호, API 비밀키 등 민감한 정보는 RetirementPortfolio에 입력하지 마세요.</div>
 
-<div id="admin-email-diagnostic" style="margin-bottom:24px;">
-<h3>이메일 발송 진단</h3>
-<p>실제 회원에게 보내지 않고 Resend 공식 테스트 수신자로 발송 설정만 확인합니다.</p>
-<button id="admin-email-test-button" type="button">이메일 발송 테스트</button>
-<p id="admin-email-test-result" aria-live="polite"></p>
+<div class="status-box" style="margin-bottom:18px;">
+<strong>신규 회원가입</strong><br>
+<label class="checkbox-row" style="margin-top:10px;">
+<input id="admin-signup-enabled" type="checkbox">
+<span>회원가입 허용</span>
+</label>
+<p id="admin-signup-status" aria-live="polite"></p>
 </div>
-
-<h3>새 회원 초대</h3>
-<form id="admin-invite-form">
-<label for="admin-invite-email">초대할 이메일</label>
-<input id="admin-invite-email" type="email" autocomplete="email" required>
-<label for="admin-invite-label">이름/메모 (선택)</label>
-<input id="admin-invite-label" type="text" maxlength="200">
-<label for="admin-invite-days">유효기간 (일)</label>
-<input id="admin-invite-days" type="number" min="1" max="365" value="7" required>
-<button type="submit">초대 생성</button>
-<div id="admin-invite-result" class="transaction-message"></div>
-</form>
 
 <h3>회원</h3>
 <div id="admin-members">불러오는 중...</div>
-<h3>초대 현황</h3>
-<div id="admin-invites">불러오는 중...</div>
 </section>
 
 <section id="morning-report-settings-section" class="card">
@@ -4394,21 +4212,6 @@ const SUPABASE_KEY =
     __SUPABASE_KEY_JSON__;
 
 
-function applyInviteFromFragment() {
-    const hash = window.location.hash || "";
-    if (!hash.startsWith("#invite=")) return;
-    const inviteSecret = decodeURIComponent(hash.slice("#invite=".length));
-    if (!inviteSecret) return;
-    const inviteInput = document.getElementById("invite-code");
-    if (inviteInput) inviteInput.value = inviteSecret;
-    signupForm.style.display = "block";
-    showSignupButton.textContent = "회원가입 닫기";
-    // Remove the secret from the visible address/history after copying it into
-    // the form. It is never sent as a query string.
-    history.replaceState(null, "", window.location.pathname + window.location.search);
-}
-
-
 
 const loginCard =
     document.getElementById(
@@ -4466,10 +4269,9 @@ const accountsList =
     );
 
 const adminSection = document.getElementById("admin-section");
-const adminInviteForm = document.getElementById("admin-invite-form");
-const adminInviteResult = document.getElementById("admin-invite-result");
 const adminMembers = document.getElementById("admin-members");
-const adminInvites = document.getElementById("admin-invites");
+const adminSignupEnabled = document.getElementById("admin-signup-enabled");
+const adminSignupStatus = document.getElementById("admin-signup-status");
 
 function escapeAdminText(value) {
     const node = document.createElement("div");
@@ -4478,130 +4280,83 @@ function escapeAdminText(value) {
 }
 
 async function loadAdminPanel(accessToken) {
-    const statusResponse = await fetch("/api/admin/me", {
-        headers: {"Authorization": "Bearer " + accessToken},
-    });
+    const headers = {"Authorization": "Bearer " + accessToken};
+    const statusResponse = await fetch("/api/admin/me", {headers});
     if (statusResponse.status === 403) {
         adminSection.style.display = "none";
         return;
     }
     if (!statusResponse.ok) return;
-
     adminSection.style.display = "block";
-    const [membersResponse, invitesResponse] = await Promise.all([
-        fetch("/api/admin/members", {headers: {"Authorization": "Bearer " + accessToken}}),
-        fetch("/api/admin/invites", {headers: {"Authorization": "Bearer " + accessToken}}),
+    const [membersResponse, signupResponse] = await Promise.all([
+        fetch("/api/admin/members", {headers}),
+        fetch("/api/signup-status"),
     ]);
     const membersData = await membersResponse.json();
-    const invitesData = await invitesResponse.json();
-
+    const signupData = await signupResponse.json();
+    if (signupResponse.ok) {
+        adminSignupEnabled.checked = Boolean(signupData.signup_enabled);
+        adminSignupStatus.textContent = signupData.signup_enabled ? "현재 신규 회원가입을 허용하고 있습니다." : "현재 신규 회원가입이 중지되어 있습니다.";
+    }
     if (membersResponse.ok) {
         adminMembers.innerHTML = (membersData.members || []).map((m) =>
             "<div class='status-box'><strong>" + escapeAdminText(m.email || "이메일 없음") + "</strong><br>"
             + "가입: " + escapeAdminText(m.created_at || "-") + " · "
-            + (m.is_admin ? "관리자" : "일반회원") + " · 카카오 "
-            + (m.kakao_connected ? "연결" : "미연결") + " · 리포트 "
-            + (m.morning_report_enabled ? "사용" : "미사용") + "</div>"
+            + (m.is_admin ? "관리자" : "일반회원") + " · "
+            + (m.is_active ? "사용중" : "사용중지")
+            + (m.is_admin ? "" : "<br><button type='button' class='small-button admin-toggle-member' data-id='" + escapeAdminText(m.user_id) + "' data-active='" + (m.is_active ? "true" : "false") + "'>" + (m.is_active ? "사용 중지" : "다시 활성화") + "</button> "
+                + "<button type='button' class='small-button admin-delete-member' data-id='" + escapeAdminText(m.user_id) + "' data-email='" + escapeAdminText(m.email || "") + "'>회원 삭제</button>")
+            + "</div>"
         ).join("") || "등록된 회원이 없습니다.";
     }
-
-    if (invitesResponse.ok) {
-        adminInvites.innerHTML = (invitesData.invites || []).map((inv) =>
-            "<div class='status-box'><strong>" + escapeAdminText(inv.intended_email || "-") + "</strong><br>"
-            + "상태: " + escapeAdminText(inv.status) + " · 만료: " + escapeAdminText(inv.expires_at || "-")
-            + (inv.status === "pending" ? "<br><button type='button' class='small-button admin-cancel-invite' data-id='" + Number(inv.id) + "'>초대 취소</button>" : "")
-            + "</div>"
-        ).join("") || "초대 내역이 없습니다.";
-    }
 }
 
-async function runAdminEmailDiagnostic(button, result) {
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
-    if (!accessToken) {
-        result.textContent = "로그인이 필요합니다.";
-        return;
-    }
-    button.disabled = true;
-    result.textContent = "진단 메일을 발송하는 중입니다...";
-    try {
-        const response = await fetch("/api/admin/email-diagnostic", {
-            method: "POST",
-            headers: {"Authorization": "Bearer " + accessToken},
-        });
-        const data = await response.json();
-        result.textContent = response.ok
-            ? "정상: Resend가 테스트 메일을 접수했습니다."
-            : "실패: " + (data.detail || "진단 요청 오류");
-    } catch (error) {
-        result.textContent = "실패: 진단 요청에 연결하지 못했습니다.";
-    } finally {
-        button.disabled = false;
-    }
-}
-
-adminInviteForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+adminSignupEnabled.addEventListener("change", async () => {
     const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
     if (!accessToken) return;
-    adminInviteResult.textContent = "초대를 생성하고 있습니다.";
-    const response = await fetch("/api/admin/invites", {
-        method: "POST",
-        headers: {"Authorization": "Bearer " + accessToken, "Content-Type": "application/json"},
-        body: JSON.stringify({
-            email: document.getElementById("admin-invite-email").value.trim(),
-            label: document.getElementById("admin-invite-label").value.trim(),
-            days: Number(document.getElementById("admin-invite-days").value || 7),
-        }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        adminInviteResult.textContent = data.detail || "초대 생성에 실패했습니다.";
-        return;
-    }
-    let resultText = "초대가 생성되었습니다.";
+    adminSignupEnabled.disabled = true;
     try {
-        const emailStatusResponse = await fetch("/api/admin/email-status", {
-            headers: {"Authorization": "Bearer " + accessToken},
+        const response = await fetch("/api/admin/signup-status", {
+            method: "PUT",
+            headers: {"Authorization": "Bearer " + accessToken, "Content-Type": "application/json"},
+            body: JSON.stringify({enabled: adminSignupEnabled.checked}),
         });
-        const emailStatus = await emailStatusResponse.json();
-        if (emailStatusResponse.ok && emailStatus.configured) {
-            const sendResponse = await fetch(
-                "/api/admin/invites/" + encodeURIComponent(data.id) + "/send-email",
-                {
-                    method: "POST",
-                    headers: {
-                        "Authorization": "Bearer " + accessToken,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({invite_url: data.invite_url}),
-                }
-            );
-            const sendData = await sendResponse.json();
-            resultText = sendResponse.ok
-                ? "초대 이메일을 발송했습니다."
-                : "초대는 생성됐지만 이메일 발송에 실패했습니다: " + (sendData.detail || "발송 오류");
-        } else {
-            resultText += " 이메일 발송 설정이 아직 없어 자동 발송하지 않았습니다.";
-        }
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "회원가입 설정을 변경하지 못했습니다.");
+        adminSignupStatus.textContent = data.signup_enabled ? "현재 신규 회원가입을 허용하고 있습니다." : "현재 신규 회원가입이 중지되어 있습니다.";
     } catch (error) {
-        resultText += " 이메일 발송 상태를 확인하지 못했습니다.";
+        adminSignupEnabled.checked = !adminSignupEnabled.checked;
+        adminSignupStatus.textContent = error.message || "회원가입 설정을 변경하지 못했습니다.";
+    } finally {
+        adminSignupEnabled.disabled = false;
     }
-    adminInviteResult.textContent = resultText;
-    adminInviteForm.reset();
-    document.getElementById("admin-invite-days").value = "7";
-    await loadAdminPanel(accessToken);
 });
 
-adminInvites.addEventListener("click", async (event) => {
-    const button = event.target.closest(".admin-cancel-invite");
+adminMembers.addEventListener("click", async (event) => {
+    const button = event.target.closest(".admin-toggle-member, .admin-delete-member");
     if (!button) return;
     const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
     if (!accessToken) return;
-    await fetch("/api/admin/invites/" + encodeURIComponent(button.dataset.id), {
-        method: "DELETE",
-        headers: {"Authorization": "Bearer " + accessToken},
+    if (button.classList.contains("admin-delete-member")) {
+        const email = button.dataset.email || "이 회원";
+        if (!window.confirm(email + " 계정의 서비스 이용 권한을 삭제하시겠습니까?\n투자 데이터는 안전을 위해 자동 삭제하지 않습니다.")) return;
+        button.disabled = true;
+        const response = await fetch("/api/admin/members/" + encodeURIComponent(button.dataset.id), {
+            method: "DELETE", headers: {"Authorization": "Bearer " + accessToken},
+        });
+        if (response.ok) await loadAdminPanel(accessToken);
+        else button.disabled = false;
+        return;
+    }
+    const currentlyActive = button.dataset.active === "true";
+    button.disabled = true;
+    const response = await fetch("/api/admin/members/" + encodeURIComponent(button.dataset.id) + "/access", {
+        method: "PUT",
+        headers: {"Authorization": "Bearer " + accessToken, "Content-Type": "application/json"},
+        body: JSON.stringify({active: !currentlyActive}),
     });
-    await loadAdminPanel(accessToken);
+    if (response.ok) await loadAdminPanel(accessToken);
+    else button.disabled = false;
 });
 
 const morningReportSettingsForm = document.getElementById("morning-report-settings-form");
@@ -14322,130 +14077,65 @@ async function restoreLoginSession() {
     }
 }
 
-
-applyInviteFromFragment();
-
-showSignupButton.addEventListener(
-    "click",
-    () => {
-        const opening =
-            signupForm.style.display === "none";
-
-        signupForm.style.display =
-            opening ? "block" : "none";
-
-        showSignupButton.textContent =
-            opening
-                ? "회원가입 닫기"
-                : "초대코드로 회원가입";
-
-        message.textContent = "";
-        message.className = "";
+async function refreshSignupAvailability() {
+    try {
+        const response = await fetch("/api/signup-status");
+        const data = await response.json();
+        const enabled = response.ok && Boolean(data.signup_enabled);
+        showSignupButton.style.display = enabled ? "block" : "none";
+        if (!enabled) signupForm.style.display = "none";
+    } catch (_) {
+        showSignupButton.style.display = "none";
+        signupForm.style.display = "none";
     }
-);
+}
 
+showSignupButton.addEventListener("click", () => {
+    const opening = signupForm.style.display === "none";
+    signupForm.style.display = opening ? "block" : "none";
+    showSignupButton.textContent = opening ? "회원가입 닫기" : "회원가입";
+    message.textContent = "";
+    message.className = "";
+});
 
-signupForm.addEventListener(
-    "submit",
-    async (event) => {
-        event.preventDefault();
-
-        message.textContent = "";
-        message.className = "";
-        signupButton.disabled = true;
-        signupButton.textContent = "가입 중...";
-
-        const email =
-            document.getElementById(
-                "signup-email"
-            ).value.trim();
-
-        const password =
-            document.getElementById(
-                "signup-password"
-            ).value;
-
-        const inviteCode =
-            document.getElementById(
-                "invite-code"
-            ).value.trim();
-
-        try {
-            const response =
-                await fetch(
-                    "/api/auth/signup",
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-                        },
-                        body: JSON.stringify({
-                            email: email,
-                            password: password,
-                            invite_code:
-                                inviteCode,
-                        }),
-                    }
-                );
-
-            const data =
-                await response.json();
-
-            if (!response.ok) {
-                throw new Error(
-                    data.detail
-                    || "회원가입에 실패했습니다."
-                );
-            }
-
-            if (data.access_token) {
-                saveAuthTokens(
-                    data.access_token,
-                    data.refresh_token || ""
-                );
-
-                await showAuthenticatedApp(
-                    data.access_token
-                );
-
-                message.textContent = "";
-                return;
-            }
-
-            document.getElementById(
-                "email"
-            ).value = email;
-
-            signupForm.style.display =
-                "none";
-
-            showSignupButton.textContent =
-                "초대코드로 회원가입";
-
-            message.textContent =
-                "회원가입이 완료되었습니다. "
-                + "이메일 인증 후 로그인해주세요.";
-
-            message.className =
-                "success";
-
-        } catch (error) {
-            message.textContent =
-                error.message
-                || "회원가입에 실패했습니다.";
-
-            message.className =
-                "error";
-
-        } finally {
-            signupButton.disabled = false;
-            signupButton.textContent =
-                "회원가입";
+signupForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    message.textContent = "";
+    message.className = "";
+    signupButton.disabled = true;
+    signupButton.textContent = "가입 중...";
+    const email = document.getElementById("signup-email").value.trim();
+    const password = document.getElementById("signup-password").value;
+    try {
+        const response = await fetch("/api/auth/signup", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({email, password}),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "회원가입에 실패했습니다.");
+        if (data.access_token) {
+            saveAuthTokens(data.access_token, data.refresh_token || "");
+            await showAuthenticatedApp(data.access_token);
+            message.textContent = "";
+            return;
         }
+        document.getElementById("email").value = email;
+        signupForm.style.display = "none";
+        showSignupButton.textContent = "회원가입";
+        message.textContent = "회원가입이 완료되었습니다.";
+        message.className = "success";
+    } catch (error) {
+        message.textContent = error.message || "회원가입에 실패했습니다.";
+        message.className = "error";
+        await refreshSignupAvailability();
+    } finally {
+        signupButton.disabled = false;
+        signupButton.textContent = "회원가입";
     }
-);
+});
 
+refreshSignupAvailability();
 
 loginForm.addEventListener(
     "submit",
@@ -14573,6 +14263,20 @@ loginForm.addEventListener(
 페이지를 새로 열었을 때
 저장된 Supabase 세션으로 자동 로그인합니다.
 */
+async function loadPublicSignupStatus() {
+    try {
+        const response = await fetch("/api/signup-status");
+        const data = await response.json();
+        const enabled = response.ok && Boolean(data.signup_enabled);
+        showSignupButton.style.display = enabled ? "block" : "none";
+        if (!enabled) signupForm.style.display = "none";
+    } catch (error) {
+        showSignupButton.style.display = "none";
+    }
+}
+
+loadPublicSignupStatus();
+
 restoreLoginSession().finally(() => {
     bootScreen.style.display = "none";
 

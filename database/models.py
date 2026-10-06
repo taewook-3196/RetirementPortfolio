@@ -39,21 +39,17 @@ class Profile(Base):
     # Application authorization. Admins manage membership/invitations only;
     # this role does not grant cross-user portfolio access.
     is_admin = Column(Boolean, nullable=False, default=False)
+    is_active = Column(Boolean, nullable=False, default=True)
 
 
-class InviteCode(Base):
-    """One-time signup invitation. Only a SHA-256 digest of the secret is stored."""
+class AppSetting(Base):
+    """Server-managed application settings."""
 
-    __tablename__ = "invite_codes"
+    __tablename__ = "app_settings"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    code_hash = Column(String(64), nullable=False, unique=True, index=True)
-    label = Column(Text, nullable=True)
-    intended_email = Column(Text, nullable=True, index=True)
-    expires_at = Column(DateTime(timezone=True), nullable=True)
-    used_at = Column(DateTime(timezone=True), nullable=True)
-    used_by = Column(UUID(as_uuid=True), nullable=True, unique=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.now)
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.now)
 
 
 class Account(Base):
