@@ -453,7 +453,17 @@ def open_signed_morning_report(token: str = ""):
     if data.get("purpose") != "morning-report" or not data.get("user_id"):
         raise HTTPException(status_code=403, detail="상세 리포트 링크 내용이 올바르지 않습니다.")
 
-    report = Repository(user_id=str(data["user_id"])).get_latest_morning_report()
+    try:
+        report_user_id = UUID(str(data["user_id"]))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=403, detail="상세 리포트 링크 내용이 올바르지 않습니다.")
+
+    with get_db_session() as db:
+        profile = db.query(Profile).filter(Profile.id == report_user_id).one_or_none()
+        if profile is None or not bool(profile.is_active):
+            raise HTTPException(status_code=403, detail="현재 사용할 수 없는 계정의 리포트입니다.")
+
+    report = Repository(user_id=str(report_user_id)).get_latest_morning_report()
     if report is None:
         raise HTTPException(status_code=404, detail="저장된 모닝 리포트가 없습니다.")
 
