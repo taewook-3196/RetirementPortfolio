@@ -4033,7 +4033,7 @@ body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
 
 @media (min-width: 768px) {
     .account-summary-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
     }
 
     .form-row {
