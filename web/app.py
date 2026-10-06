@@ -3884,14 +3884,11 @@ button:disabled {
     font-size: 13px;
 }
 
-@media (max-width: 380px) {
+@media (max-width: 600px) {
     .form-row {
         grid-template-columns: 1fr;
         gap: 0;
     }
-}
-
-@media (max-width: 600px) {
     .card {
         padding: 18px 14px;
         border-radius: 15px;
@@ -3918,8 +3915,21 @@ button:disabled {
         min-height: 44px;
     }
 
-    .small-button {
+    .small-button,
+    .asset-chart-period-button {
         min-height: 44px;
+    }
+
+    .transaction-actions {
+        flex-wrap: wrap;
+    }
+
+    .transaction-actions button {
+        flex: 1 1 120px;
+    }
+
+    .asset-chart-panel {
+        padding: 12px 10px;
     }
 }
 
