@@ -296,11 +296,9 @@ def set_member_access(
     with get_db_session() as db:
         profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
         if profile is None:
-            profile = Profile(id=member_id, is_admin=False, is_active=request.active)
-            db.add(profile)
-        else:
-            profile.is_active = request.active
-            profile.updated_at = datetime.now(timezone.utc)
+            raise HTTPException(status_code=404, detail="등록된 회원 정보를 찾을 수 없습니다.")
+        profile.is_active = request.active
+        profile.updated_at = datetime.now(timezone.utc)
     return {"user_id": str(member_id), "is_active": request.active}
 
 
@@ -353,8 +351,9 @@ def signup(request: SignupRequest):
         raise HTTPException(status_code=500, detail="Supabase 회원가입 설정이 없습니다.")
 
     email = request.email.strip().lower()
+    admin_client = create_client(supabase_url, supabase_service_key)
+    created_user_id: UUID | None = None
     try:
-        admin_client = create_client(supabase_url, supabase_service_key)
         response = admin_client.auth.admin.create_user({
             "email": email,
             "password": request.password,
@@ -363,11 +362,21 @@ def signup(request: SignupRequest):
         if response.user is None:
             raise HTTPException(status_code=400, detail="회원가입을 완료하지 못했습니다.")
 
-        with get_db_session() as db:
-            user_id = UUID(str(response.user.id))
-            profile = db.query(Profile).filter(Profile.id == user_id).one_or_none()
-            if profile is None:
-                db.add(Profile(id=user_id, is_admin=False, is_active=True))
+        created_user_id = UUID(str(response.user.id))
+        try:
+            with get_db_session() as db:
+                profile = db.query(Profile).filter(Profile.id == created_user_id).one_or_none()
+                if profile is None:
+                    db.add(Profile(id=created_user_id, is_admin=False, is_active=True))
+        except Exception as exc:
+            try:
+                admin_client.auth.admin.delete_user(str(created_user_id))
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=500,
+                detail="회원 정보 저장에 실패하여 생성된 인증 계정을 정리했습니다. 다시 시도해 주세요.",
+            ) from exc
 
         public_client = create_client(supabase_url, supabase_anon_key)
         session_response = public_client.auth.sign_in_with_password({
