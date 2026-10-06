@@ -332,3 +332,98 @@ def test_kakao_callback_rejects_deleted_member_before_token_exchange(
 
     assert exc.value.status_code == 403
     assert token_exchange_called == []
+
+
+
+def test_admin_cannot_suspend_another_admin(monkeypatch, membership_db):
+    admin_id, other_admin_id = uuid4(), uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=other_admin_id, is_admin=True, is_active=True))
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: {"user_id": str(admin_id)},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.set_member_access(
+            other_admin_id,
+            web_app.MemberAccessRequest(active=False),
+            "Bearer admin",
+        )
+
+    assert exc.value.status_code == 400
+    with membership_db() as db:
+        profile = db.query(Profile).filter(Profile.id == other_admin_id).one()
+        assert profile.is_active is True
+
+
+def test_admin_cannot_delete_unknown_member(monkeypatch, membership_db):
+    admin_id, unknown_id = uuid4(), uuid4()
+    delete_calls = []
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: {"user_id": str(admin_id)},
+    )
+    monkeypatch.setattr(
+        web_app,
+        "_get_supabase_admin_client",
+        lambda: SimpleNamespace(
+            auth=SimpleNamespace(
+                admin=SimpleNamespace(
+                    delete_user=lambda user_id: delete_calls.append(user_id)
+                )
+            )
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.delete_member(unknown_id, "Bearer admin")
+
+    assert exc.value.status_code == 404
+    assert delete_calls == []
+
+
+def test_signup_remains_successful_when_auto_login_fails(monkeypatch, membership_db):
+    monkeypatch.setattr(web_app, "_signup_enabled", lambda: True)
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service")
+    user_id = uuid4()
+    deleted_auth_users = []
+    created_user = SimpleNamespace(id=user_id, email="person@example.com")
+    admin_api = SimpleNamespace(
+        create_user=lambda payload: SimpleNamespace(user=created_user),
+        delete_user=lambda value: deleted_auth_users.append(value),
+    )
+    admin_client = SimpleNamespace(auth=SimpleNamespace(admin=admin_api))
+    public_client = SimpleNamespace(
+        auth=SimpleNamespace(
+            sign_in_with_password=lambda payload: (_ for _ in ()).throw(
+                RuntimeError("temporary login failure")
+            )
+        )
+    )
+    monkeypatch.setattr(
+        web_app,
+        "create_client",
+        lambda url, key: admin_client if key == "service" else public_client,
+    )
+
+    result = web_app.signup(
+        web_app.SignupRequest(
+            email="person@example.com",
+            password="password123",
+        )
+    )
+
+    assert result["created"] is True
+    assert result["login_required"] is True
+    assert result["access_token"] is None
+    assert result["refresh_token"] is None
+    assert deleted_auth_users == []
+    with membership_db() as db:
+        profile = db.query(Profile).filter(Profile.id == user_id).one_or_none()
+        assert profile is not None
+        assert profile.is_active is True
