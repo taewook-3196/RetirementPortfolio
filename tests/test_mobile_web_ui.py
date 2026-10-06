@@ -234,3 +234,17 @@ def test_account_settings_and_deletion_live_in_settings_tab(monkeypatch):
     assert 'deleteAccountButton.textContent' not in render_accounts
     assert 'card.appendChild(createAccountEditor(account, accessToken));' in html
     assert 'deleteButton.textContent = "계좌 삭제";' in html
+
+
+
+def test_new_account_creation_lives_in_settings_account_management(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'id="account-creator"' in html
+    assert "async function renderAccountCreator(accounts, accessToken)" in html
+    assert 'createHeader.textContent =\n        "+ 새 계좌 추가";' in html
+    assert "await renderAccountCreator(accounts, accessToken);" in html
+
+    render_accounts = html[html.index("async function renderAccounts("):]
+    assert '"+ 새 계좌 추가"' not in render_accounts
+    assert '"새 계좌 입력"' not in render_accounts
