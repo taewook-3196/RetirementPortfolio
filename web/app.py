@@ -4516,6 +4516,11 @@ const transactionEntryForm = document.getElementById("transaction-entry-form");
 let transactionTabAccounts = [];
 let transactionTabAccessToken = "";
 
+async function refreshPortfolioAfterTransactionChange() {
+    if (!transactionTabAccessToken || !transactionTabAccounts.length) return;
+    await renderAccounts(transactionTabAccounts, transactionTabAccessToken);
+}
+
 async function showTransactionEntryForm() {
     transactionEntryForm.innerHTML = "";
     const account = transactionTabAccounts.find((item) => String(item.id) === transactionEntryAccount.value);
@@ -4533,6 +4538,7 @@ async function showTransactionEntryForm() {
             {
                 onSaved: async () => {
                     await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);
+                    await refreshPortfolioAfterTransactionChange();
                     transactionEntryPanel.hidden = true;
                     transactionEntryAccount.value = "";
                     transactionEntryForm.innerHTML = "";
@@ -4629,6 +4635,7 @@ function renderTransactionTab() {
                     {
                         onSaved: async () => {
                             await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);
+                            await refreshPortfolioAfterTransactionChange();
                         },
                         onCancel: () => renderTransactionTab(),
                     }
@@ -4650,6 +4657,7 @@ function renderTransactionTab() {
                     {method: "DELETE"}
                 );
                 await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);
+                await refreshPortfolioAfterTransactionChange();
             } catch (error) {
                 window.alert(error.message || "거래 삭제에 실패했습니다.");
                 deleteButton.disabled = false;
@@ -13438,96 +13446,9 @@ async function renderAccounts(
             }
 
             /*
-            거래 입력
+            매수 / 매도 관리는 하단 "거래" 탭에서 통합 관리합니다.
+            포트폴리오 화면은 계좌 요약과 보유현황에 집중합니다.
             */
-
-            const formTitle =
-                document.createElement(
-                    "div"
-                );
-
-            formTitle.className =
-                "section-title";
-
-            formTitle.textContent =
-                "매수 / 매도 입력";
-
-            card.appendChild(
-                formTitle
-            );
-
-
-            const transactionsList =
-                document.createElement(
-                    "div"
-                );
-
-
-            const transactionForm =
-                createTransactionForm(
-                    account,
-                    targets,
-                    accessToken,
-                    transactionsList,
-                    positionsList
-                );
-
-            card.appendChild(
-                transactionForm
-            );
-
-
-            /*
-            거래 내역
-            */
-
-            const transactionsTitle =
-                document.createElement(
-                    "div"
-                );
-
-            transactionsTitle.className =
-                "section-title";
-
-            transactionsTitle.textContent =
-                "거래 내역";
-
-            card.appendChild(
-                transactionsTitle
-            );
-
-
-            card.appendChild(
-                transactionsList
-            );
-
-
-            try {
-
-                const transactions =
-                    await loadTransactions(
-                        accessToken,
-                        account.id
-                    );
-
-                renderTransactions(
-                    transactionsList,
-                    transactions,
-                    targets,
-                    account,
-                    accessToken,
-                    positionsList
-                );
-
-            } catch (error) {
-
-                transactionsList.className =
-                    "error";
-
-                transactionsList.textContent =
-                    error.message
-                    || "거래 내역을 불러오지 못했습니다.";
-            }
 
             /*
             현금 입출금 입력
