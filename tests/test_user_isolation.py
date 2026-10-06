@@ -14,8 +14,11 @@ from database.models import (
     Account,
     AssetMaster,
     InvestmentProfile,
+    KakaoCredential,
+    MorningReport,
     Transaction,
     UserSetting,
+    Watchlist,
 )
 from database.repository import Repository
 
@@ -39,11 +42,21 @@ def _isolated_db(monkeypatch):
         Transaction,
         InvestmentProfile,
         UserSetting,
+        Watchlist,
+        MorningReport,
+        KakaoCredential,
     ):
         model.__table__.create(engine)
 
     factory = sessionmaker(bind=engine, expire_on_commit=False)
-    next_ids = {Account: 1, Transaction: 1, InvestmentProfile: 1, UserSetting: 1}
+    next_ids = {
+        Account: 1,
+        Transaction: 1,
+        InvestmentProfile: 1,
+        UserSetting: 1,
+        Watchlist: 1,
+        KakaoCredential: 1,
+    }
 
     @event.listens_for(factory, "before_flush")
     def assign_ids(session, *_):
@@ -199,3 +212,73 @@ def test_user_settings_are_independent(monkeypatch):
     assert settings_a.kakao_enabled is True
     assert settings_b.morning_report_time.strftime("%H:%M") == "07:00"
     assert settings_b.kakao_enabled is False
+
+
+
+def test_investment_profiles_are_owner_scoped(monkeypatch):
+    _isolated_db(monkeypatch)
+    user_a, user_b = uuid4(), uuid4()
+    repo_a, repo_b = Repository(user_id=user_a), Repository(user_id=user_b)
+
+    repo_a.save_investment_profile(
+        risk_profile="aggressive",
+        investment_preference_text="A private strategy",
+    )
+    repo_b.save_investment_profile(
+        risk_profile="conservative",
+        investment_preference_text="B private strategy",
+    )
+
+    assert repo_a.get_investment_profile().investment_preference_text == "A private strategy"
+    assert repo_b.get_investment_profile().investment_preference_text == "B private strategy"
+
+
+def test_watchlists_are_owner_scoped(monkeypatch):
+    db = _isolated_db(monkeypatch)
+    user_a, user_b = uuid4(), uuid4()
+    repo_a, repo_b = Repository(user_id=user_a), Repository(user_id=user_b)
+    with db() as session:
+        session.add(
+            AssetMaster(
+                ticker="PRIVATE",
+                name="Private Asset",
+                market="US",
+                asset_type="STOCK",
+                currency="USD",
+                is_active=True,
+            )
+        )
+
+    repo_a.add_watchlist("PRIVATE", memo="A only")
+    assert [row["ticker"] for row in repo_a.get_watchlist()] == ["PRIVATE"]
+    assert repo_b.get_watchlist() == []
+    assert repo_b.remove_watchlist("PRIVATE") is False
+    assert [row["memo"] for row in repo_a.get_watchlist()] == ["A only"]
+
+
+def test_morning_reports_are_owner_scoped(monkeypatch):
+    _isolated_db(monkeypatch)
+    user_a, user_b = uuid4(), uuid4()
+    repo_a, repo_b = Repository(user_id=user_a), Repository(user_id=user_b)
+
+    repo_a.upsert_morning_report("2026-10-06", "<p>A private report</p>")
+    repo_b.upsert_morning_report("2026-10-06", "<p>B private report</p>")
+
+    assert repo_a.get_latest_morning_report().html_content == "<p>A private report</p>"
+    assert repo_b.get_latest_morning_report().html_content == "<p>B private report</p>"
+
+
+def test_kakao_credentials_are_owner_scoped(monkeypatch):
+    _isolated_db(monkeypatch)
+    user_a, user_b = uuid4(), uuid4()
+    repo_a, repo_b = Repository(user_id=user_a), Repository(user_id=user_b)
+
+    repo_a.save_kakao_credential("enc-a-access", "enc-a-refresh", scopes="talk_message")
+    repo_b.save_kakao_credential("enc-b-access", "enc-b-refresh", scopes="talk_message")
+
+    assert repo_a.get_kakao_credential().access_token_encrypted == "enc-a-access"
+    assert repo_b.get_kakao_credential().access_token_encrypted == "enc-b-access"
+
+    assert repo_b.delete_kakao_credential() is True
+    assert repo_b.get_kakao_credential() is None
+    assert repo_a.get_kakao_credential().access_token_encrypted == "enc-a-access"
