@@ -121,7 +121,8 @@ def test_mobile_app_has_bottom_navigation_shell(monkeypatch):
     assert 'data-app-tab="settings"' in html
     assert 'function setAppTab(tabName, options = {})' in html
     assert 'setAppTab("home", {scroll: false});' in html
-    assert '.app-bottom-nav { display: grid; }' in html
+    nav_css = html[html.index(".app-bottom-nav {"):html.index(".app-bottom-nav button {")]
+    assert "display: grid;" in nav_css
 
 
 
