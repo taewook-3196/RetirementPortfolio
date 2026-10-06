@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import os
-import urllib.parse
 import urllib.request
 from datetime import date, datetime, timezone, timedelta
 from uuid import UUID
