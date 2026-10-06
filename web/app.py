@@ -4449,7 +4449,12 @@ morningReportSettingsForm.addEventListener("submit", async (event) => {
             }),
         });
         const data = await response.json();
-        if (!response.ok) {\n            const detail = Array.isArray(data.detail)\n                ? data.detail.map(item => item.msg || JSON.stringify(item)).join(" / ")\n                : data.detail;\n            throw new Error(detail || "모닝 리포트 설정을 저장하지 못했습니다.");\n        }
+        if (!response.ok) {
+            const detail = Array.isArray(data.detail)
+                ? data.detail.map(item => item.msg || JSON.stringify(item)).join(" / ")
+                : data.detail;
+            throw new Error(detail || "모닝 리포트 설정을 저장하지 못했습니다.");
+        }
         morningReportSettingsMessage.textContent = "저장되었습니다.";
     } catch (error) {
         morningReportSettingsMessage.textContent = error.message || "모닝 리포트 설정을 저장하지 못했습니다.";
