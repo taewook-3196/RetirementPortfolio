@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from supabase import create_client
 from services.portfolio_service import PortfolioService
+from services.kakao_service import KakaoService
 from core.secret_crypto import encrypt_secret
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
@@ -641,6 +642,21 @@ def kakao_status(authorization: str | None = Header(default=None)):
     user_id = get_verified_user_id(authorization)
     connected = Repository(user_id=user_id).get_kakao_credential() is not None
     return {"connected": connected}
+
+
+@app.post("/api/kakao/test")
+def kakao_test_message(authorization: str | None = Header(default=None)):
+    """Send an immediate test message using only the authenticated user's Kakao token."""
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    service = KakaoService.for_user(__import__("core.config", fromlist=["load_config"]).load_config(), repo)
+    if not service.is_configured():
+        raise HTTPException(status_code=400, detail="먼저 카카오톡 계정을 연결해 주세요.")
+    web_url = os.getenv("RETIREMENT_PORTFOLIO_WEB_URL", "").strip()
+    ok, message = service.send_test_message(web_url=web_url)
+    if not ok:
+        raise HTTPException(status_code=502, detail=f"카카오톡 테스트 발송에 실패했습니다: {message}")
+    return {"sent": True, "message": "카카오톡 테스트 메시지를 보냈습니다."}
 
 
 @app.delete("/api/kakao/disconnect")
@@ -4103,7 +4119,7 @@ button:disabled {
 토큰을 직접 입력할 필요 없이 카카오 계정을 한 번 연결하면 됩니다.
 </p>
 <div id="kakao-status" class="status-box">연결 상태 확인 중...</div>
-<button id="kakao-connect-button" type="button">카카오톡 연결</button>\n<button id="kakao-disconnect-button" type="button" style="display:none;">카카오톡 연결 해제</button>
+<button id="kakao-connect-button" type="button">카카오톡 연결</button>\n<button id="kakao-test-button" type="button" style="display:none;">테스트 메시지 보내기</button>\n<button id="kakao-disconnect-button" type="button" style="display:none;">카카오톡 연결 해제</button>
 
 </section>
 
@@ -4472,7 +4488,7 @@ morningReportSettingsForm.addEventListener("submit", async (event) => {
 });
 
 const kakaoStatus = document.getElementById("kakao-status");
-const kakaoConnectButton = document.getElementById("kakao-connect-button");\nconst kakaoDisconnectButton = document.getElementById("kakao-disconnect-button");
+const kakaoConnectButton = document.getElementById("kakao-connect-button");\nconst kakaoTestButton = document.getElementById("kakao-test-button");\nconst kakaoDisconnectButton = document.getElementById("kakao-disconnect-button");
 
 async function loadKakaoStatus(accessToken) {
     const response = await fetch("/api/kakao/status", {
@@ -4486,8 +4502,30 @@ async function loadKakaoStatus(accessToken) {
     kakaoConnectButton.textContent = data.connected
         ? "카카오톡 다시 연결"
         : "카카오톡 연결";
+    kakaoTestButton.style.display = data.connected ? "block" : "none";
     kakaoDisconnectButton.style.display = data.connected ? "block" : "none";
 }
+
+kakaoTestButton.addEventListener("click", async () => {
+    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    if (!accessToken) return;
+    kakaoTestButton.disabled = true;
+    try {
+        const response = await fetch("/api/kakao/test", {
+            method: "POST",
+            headers: {"Authorization": "Bearer " + accessToken},
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "테스트 메시지를 보내지 못했습니다.");
+        kakaoStatus.textContent = data.message || "카카오톡 테스트 메시지를 보냈습니다.";
+        kakaoStatus.className = "status-box success";
+    } catch (error) {
+        kakaoStatus.textContent = error.message || "테스트 메시지를 보내지 못했습니다.";
+        kakaoStatus.className = "status-box error";
+    } finally {
+        kakaoTestButton.disabled = false;
+    }
+});
 
 kakaoDisconnectButton.addEventListener("click", async () => {
     const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");

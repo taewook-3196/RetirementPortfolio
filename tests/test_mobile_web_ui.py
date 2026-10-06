@@ -87,3 +87,13 @@ def test_generated_admin_confirm_keeps_newlines_inside_js_string(monkeypatch):
 
     assert "로그인 계정을 삭제하시겠습니까?\\n\\n앱 로그인" in html
     assert "삭제하시겠습니까?\n\n앱 로그인" not in html
+
+
+
+def test_kakao_connected_ui_offers_immediate_test_message(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'id="kakao-test-button"' in html
+    assert 'fetch("/api/kakao/test"' in html
+    assert 'method: "POST"' in html
+    assert 'kakaoTestButton.style.display = data.connected ? "block" : "none";' in html
