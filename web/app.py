@@ -105,7 +105,12 @@ def get_current_user(
 
         with get_db_session() as db:
             profile = db.query(Profile).filter(Profile.id == UUID(str(user.id))).one_or_none()
-            if profile is not None and not bool(profile.is_active):
+            if profile is None:
+                raise HTTPException(
+                    status_code=403,
+                    detail="회원 정보가 등록되지 않은 계정입니다. 관리자에게 문의해 주세요.",
+                )
+            if not bool(profile.is_active):
                 raise HTTPException(status_code=403, detail="관리자에 의해 사용이 중지된 계정입니다.")
 
         return {
@@ -259,7 +264,7 @@ def list_admin_members(
                 else str(getattr(user, "created_at", "") or "") or None
             ),
             "is_admin": bool(profile and profile.is_admin),
-            "is_active": bool(profile.is_active) if profile else True,
+            "is_active": bool(profile.is_active) if profile else False,
             "kakao_connected": user_id in kakao_ids,
             "morning_report_enabled": (
                 bool(setting.morning_report_enabled) if setting else False
