@@ -128,3 +128,40 @@ def test_home_has_signup_gate_and_no_invitation_ui(monkeypatch):
     assert 'admin-invite-form' not in html
     assert 'email-diagnostic' not in html
     assert 'body: JSON.stringify({email, password})' in html
+
+
+def _mock_authenticated_user(monkeypatch, user_id):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    auth = SimpleNamespace(
+        get_user=lambda token: SimpleNamespace(
+            user=SimpleNamespace(id=user_id, email="member@example.com")
+        )
+    )
+    monkeypatch.setattr(
+        web_app,
+        "create_client",
+        lambda url, key: SimpleNamespace(auth=auth),
+    )
+
+
+def test_authenticated_user_without_profile_is_rejected(monkeypatch, membership_db):
+    user_id = uuid4()
+    _mock_authenticated_user(monkeypatch, user_id)
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.get_current_user("Bearer still-valid-token")
+
+    assert exc.value.status_code == 403
+
+
+def test_authenticated_active_profile_is_allowed(monkeypatch, membership_db):
+    user_id = uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=user_id, is_admin=False, is_active=True))
+    _mock_authenticated_user(monkeypatch, user_id)
+
+    result = web_app.get_current_user("Bearer valid-token")
+
+    assert result["authenticated"] is True
+    assert result["user_id"] == str(user_id)

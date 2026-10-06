@@ -8,12 +8,13 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 import database.repository as repository_module
-from database.models import UserSetting
+from database.models import Profile, UserSetting
 from database.repository import Repository
 
 
 def test_only_enabled_report_users_are_discovered(monkeypatch):
     engine = create_engine("sqlite:///:memory:")
+    Profile.__table__.create(engine)
     UserSetting.__table__.create(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     next_id = 1
@@ -40,8 +41,12 @@ def test_only_enabled_report_users_are_discovered(monkeypatch):
 
     enabled_user = uuid4()
     disabled_user = uuid4()
+    suspended_user = uuid4()
     with session_scope() as session:
         session.add_all([
+            Profile(id=enabled_user, is_admin=False, is_active=True),
+            Profile(id=disabled_user, is_admin=False, is_active=True),
+            Profile(id=suspended_user, is_admin=False, is_active=False),
             UserSetting(
                 user_id=enabled_user,
                 morning_report_enabled=True,
@@ -55,6 +60,14 @@ def test_only_enabled_report_users_are_discovered(monkeypatch):
                 morning_report_enabled=False,
                 morning_report_time=time(7, 0),
                 kakao_enabled=False,
+                news_enabled=True,
+                ai_advice_enabled=True,
+            ),
+            UserSetting(
+                user_id=suspended_user,
+                morning_report_enabled=True,
+                morning_report_time=time(7, 0),
+                kakao_enabled=True,
                 news_enabled=True,
                 ai_advice_enabled=True,
             ),
