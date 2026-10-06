@@ -4540,6 +4540,7 @@ async function refreshPortfolioAfterTransactionChange() {
 }
 
 async function showTransactionEntryForm() {
+    transactionEntryForm.className = "";
     transactionEntryForm.innerHTML = "";
     const account = transactionTabAccounts.find((item) => String(item.id) === transactionEntryAccount.value);
     if (!account) return;
@@ -4559,6 +4560,7 @@ async function showTransactionEntryForm() {
                     await refreshPortfolioAfterTransactionChange();
                     transactionEntryPanel.hidden = true;
                     transactionEntryAccount.value = "";
+                    transactionEntryForm.className = "";
                     transactionEntryForm.innerHTML = "";
                 },
             }
@@ -4576,6 +4578,7 @@ openTransactionEntry.addEventListener("click", () => {
 });
 closeTransactionEntry.addEventListener("click", () => {
     transactionEntryPanel.hidden = true;
+    transactionEntryForm.className = "";
     transactionEntryForm.innerHTML = "";
     transactionEntryAccount.value = "";
 });
