@@ -4600,6 +4600,62 @@ function renderTransactionTab() {
         main.append(left, amount);
         row.appendChild(main);
         row.appendChild(createDetail(item.account.name + " · 수량 " + formatNumber(transaction.quantity) + " · 체결가 " + formatMoney(transaction.price, currency)));
+
+        const actions = document.createElement("div");
+        actions.className = "transaction-actions";
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.className = "small-button secondary-button";
+        editButton.textContent = "수정";
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "small-button delete-button";
+        deleteButton.textContent = "삭제";
+        actions.append(editButton, deleteButton);
+        row.appendChild(actions);
+
+        editButton.addEventListener("click", async () => {
+            editButton.disabled = true;
+            try {
+                const targets = await loadAccountTargets(transactionTabAccessToken, item.account.id);
+                showTransactionEditor(
+                    row,
+                    transaction,
+                    targets,
+                    item.account,
+                    transactionTabAccessToken,
+                    null,
+                    null,
+                    {
+                        onSaved: async () => {
+                            await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);
+                        },
+                        onCancel: () => renderTransactionTab(),
+                    }
+                );
+            } catch (error) {
+                window.alert(error.message || "거래 수정 화면을 열지 못했습니다.");
+                editButton.disabled = false;
+            }
+        });
+
+        deleteButton.addEventListener("click", async () => {
+            const assetName = transaction.name || transaction.ticker;
+            if (!window.confirm(assetName + " 거래를 삭제할까요?")) return;
+            deleteButton.disabled = true;
+            try {
+                await apiRequest(
+                    "/api/accounts/" + item.account.id + "/transactions/" + transaction.id,
+                    transactionTabAccessToken,
+                    {method: "DELETE"}
+                );
+                await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);
+            } catch (error) {
+                window.alert(error.message || "거래 삭제에 실패했습니다.");
+                deleteButton.disabled = false;
+            }
+        });
+
         allTransactionsList.appendChild(row);
     }
     const controls = document.createElement("div");
@@ -9330,7 +9386,8 @@ async function showTransactionEditor(
     account,
     accessToken,
     transactionsList,
-    positionsList
+    positionsList,
+    options = {}
 ) {
     row.innerHTML = "";
 
@@ -9770,14 +9827,17 @@ async function showTransactionEditor(
     cancelButton.addEventListener(
         "click",
         async () => {
-
-            await refreshPortfolioData(
-                account,
-                targets,
-                accessToken,
-                transactionsList,
-                positionsList
-            );
+            if (typeof options.onCancel === "function") {
+                await options.onCancel();
+            } else {
+                await refreshPortfolioData(
+                    account,
+                    targets,
+                    accessToken,
+                    transactionsList,
+                    positionsList
+                );
+            }
         }
     );
 
