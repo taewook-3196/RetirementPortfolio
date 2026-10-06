@@ -252,3 +252,132 @@ def test_due_users_share_one_market_price_sync(monkeypatch):
     assert sync_calls == [[str(first), str(second)]]
     assert [user_id for user_id, _ in report_calls] == [first, second]
     assert all(kwargs["update_prices"] is False for _, kwargs in report_calls)
+
+
+
+def test_multi_user_delivery_states_are_isolated(monkeypatch):
+    no_kakao, retry_kakao, already_sent = uuid4(), uuid4(), uuid4()
+    calls = []
+    existing = {
+        no_kakao: None,
+        retry_kakao: SimpleNamespace(kakao_sent_at=None),
+        already_sent: SimpleNamespace(
+            kakao_sent_at=datetime(2026, 10, 2, 7, 5, tzinfo=SEOUL)
+        ),
+    }
+
+    class FakeRepo:
+        def __init__(self, user_id):
+            self.user_id = user_id
+
+        @staticmethod
+        def get_morning_report_user_ids():
+            return [no_kakao, retry_kakao, already_sent]
+
+        def get_user_settings(self):
+            return SimpleNamespace(
+                morning_report_enabled=True,
+                morning_report_time=time(7, 0),
+                kakao_enabled=self.user_id != no_kakao,
+            )
+
+        def get_morning_report_for_date(self, report_date):
+            return existing[self.user_id]
+
+        def get_account_targets(self, account_id=None):
+            return []
+
+        def get_transactions(self):
+            return []
+
+        def get_etf_master(self, ticker):
+            return None
+
+        def save_etf_master(self, items):
+            return len(items)
+
+        def upsert_prices(self, items):
+            return len(items)
+
+    class FakeService:
+        def __init__(self, config, repo):
+            self.repo = repo
+
+        def generate_and_send(self, **kwargs):
+            calls.append((self.repo.user_id, kwargs))
+            return True, "ok", None
+
+    monkeypatch.setattr(runner, "init_db", lambda: None)
+    monkeypatch.setattr(runner, "load_config", lambda: object())
+    monkeypatch.setattr(runner, "Repository", FakeRepo)
+    monkeypatch.setattr(runner, "DailyReportService", FakeService)
+    monkeypatch.setattr(runner, "update_market_prices", lambda **kwargs: {"saved": 0})
+
+    assert runner.run_all_users(
+        datetime(2026, 10, 2, 8, 0, tzinfo=SEOUL)
+    ) == 0
+
+    assert [user_id for user_id, _ in calls] == [no_kakao, retry_kakao]
+    assert calls[0][1]["send_kakao"] is False
+    assert calls[0][1]["force_kakao"] is False
+    assert calls[1][1]["send_kakao"] is True
+    assert calls[1][1]["force_kakao"] is True
+
+
+def test_one_kakao_delivery_failure_does_not_block_other_user(monkeypatch):
+    failing, succeeding = uuid4(), uuid4()
+    calls = []
+
+    class FakeRepo:
+        def __init__(self, user_id):
+            self.user_id = user_id
+
+        @staticmethod
+        def get_morning_report_user_ids():
+            return [failing, succeeding]
+
+        def get_user_settings(self):
+            return SimpleNamespace(
+                morning_report_enabled=True,
+                morning_report_time=time(7, 0),
+                kakao_enabled=True,
+            )
+
+        def get_morning_report_for_date(self, report_date):
+            return None
+
+        def get_account_targets(self, account_id=None):
+            return []
+
+        def get_transactions(self):
+            return []
+
+        def get_etf_master(self, ticker):
+            return None
+
+        def save_etf_master(self, items):
+            return len(items)
+
+        def upsert_prices(self, items):
+            return len(items)
+
+    class FakeService:
+        def __init__(self, config, repo):
+            self.repo = repo
+
+        def generate_and_send(self, **kwargs):
+            calls.append(self.repo.user_id)
+            if self.repo.user_id == failing:
+                return False, "kakao failed", None
+            return True, "ok", None
+
+    monkeypatch.setattr(runner, "init_db", lambda: None)
+    monkeypatch.setattr(runner, "load_config", lambda: object())
+    monkeypatch.setattr(runner, "Repository", FakeRepo)
+    monkeypatch.setattr(runner, "DailyReportService", FakeService)
+    monkeypatch.setattr(runner, "update_market_prices", lambda **kwargs: {"saved": 0})
+
+    assert runner.run_all_users(
+        datetime(2026, 10, 2, 8, 0, tzinfo=SEOUL)
+    ) == 1
+    assert calls == [failing, succeeding]
