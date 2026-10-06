@@ -320,3 +320,15 @@ def test_settings_tab_uses_compact_subnavigation(monkeypatch):
     assert 'function applySettingsPanel()' in html
     assert 'section.hidden = !settingsActive || panelName !== activeSettingsPanel;' in html
     assert '.settings-subnav {\n        grid-template-columns: repeat(2, minmax(0, 1fr));' in html
+
+
+
+def test_cash_flow_history_is_incrementally_revealed(monkeypatch):
+    html = _html(monkeypatch)
+
+    cash_flows = html[html.index("function renderCashFlows("):html.index("async function refreshPortfolioData(")]
+    assert "const pageSize = 20;" in cash_flows
+    assert "newestFirst.slice(0, visibleCount)" in cash_flows
+    assert '"20건 더 보기"' in cash_flows
+    assert '"최근 " + visibleCashFlows.length + "건 / 전체 " + newestFirst.length + "건"' in cash_flows
+    assert "visibleCount + pageSize" in cash_flows

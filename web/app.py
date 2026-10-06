@@ -8840,7 +8840,29 @@ function renderCashFlows(
     }
 
 
-    for (const cashFlow of cashFlows) {
+    const pageSize = 20;
+    const newestFirst = [...cashFlows].sort(
+        (a, b) => String(b.flow_date).localeCompare(String(a.flow_date))
+            || Number(b.id || 0) - Number(a.id || 0)
+    );
+    let visibleCount = Math.min(pageSize, newestFirst.length);
+    const rowsContainer = document.createElement("div");
+    const controls = document.createElement("div");
+    controls.className = "transaction-list-controls";
+    const count = document.createElement("div");
+    count.className = "transaction-list-count";
+    const moreButton = document.createElement("button");
+    moreButton.type = "button";
+    moreButton.className = "small-button secondary-button";
+    moreButton.textContent = "20건 더 보기";
+    controls.append(count, moreButton);
+    container.append(rowsContainer, controls);
+
+    function drawVisibleCashFlows() {
+        rowsContainer.innerHTML = "";
+        const visibleCashFlows = newestFirst.slice(0, visibleCount);
+
+    for (const cashFlow of visibleCashFlows) {
 
         const row =
             document.createElement(
@@ -9508,10 +9530,21 @@ function renderCashFlows(
         );
 
 
-        container.appendChild(
+        rowsContainer.appendChild(
             row
         );
     }
+
+        count.textContent = "최근 " + visibleCashFlows.length + "건 / 전체 " + newestFirst.length + "건";
+        moreButton.style.display = visibleCount < newestFirst.length ? "block" : "none";
+    }
+
+    moreButton.addEventListener("click", () => {
+        visibleCount = Math.min(visibleCount + pageSize, newestFirst.length);
+        drawVisibleCashFlows();
+    });
+
+    drawVisibleCashFlows();
 }
 
 
