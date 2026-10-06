@@ -3950,7 +3950,7 @@ button:disabled {
     left: 50%;
     bottom: 0;
     z-index: 1000;
-    display: none;
+    display: grid;
     width: min(920px, 100%);
     transform: translateX(-50%);
     grid-template-columns: repeat(4, 1fr);
@@ -3979,9 +3979,9 @@ button:disabled {
     display: none !important;
 }
 
+body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
+
 @media (max-width: 600px) {
-    body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
-    .app-bottom-nav { display: grid; }
     .form-row,
     .transaction-filter-grid {
         grid-template-columns: 1fr;
