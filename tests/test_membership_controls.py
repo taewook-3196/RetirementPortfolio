@@ -128,6 +128,8 @@ def test_home_has_signup_gate_and_no_invitation_ui(monkeypatch):
     assert 'admin-invite-form' not in html
     assert 'email-diagnostic' not in html
     assert 'body: JSON.stringify({email, password})' in html
+    assert '로그인 계정 삭제' in html
+    assert '투자 데이터와 기존 리포트는 복구 안전을 위해 자동 삭제하지 않습니다.' in html
 
 
 def _mock_authenticated_user(monkeypatch, user_id):
@@ -165,3 +167,64 @@ def test_authenticated_active_profile_is_allowed(monkeypatch, membership_db):
 
     assert result["authenticated"] is True
     assert result["user_id"] == str(user_id)
+
+
+def test_admin_cannot_delete_self(monkeypatch, membership_db):
+    admin_id = uuid4()
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: {"user_id": str(admin_id)},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.delete_member(admin_id, "Bearer admin")
+
+    assert exc.value.status_code == 400
+
+
+def test_admin_cannot_delete_another_admin(monkeypatch, membership_db):
+    admin_id, other_admin_id = uuid4(), uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=other_admin_id, is_admin=True, is_active=True))
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: {"user_id": str(admin_id)},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.delete_member(other_admin_id, "Bearer admin")
+
+    assert exc.value.status_code == 400
+
+
+def test_admin_deletes_member_login_but_reports_data_retained(monkeypatch, membership_db):
+    admin_id, member_id = uuid4(), uuid4()
+    deleted_auth_users = []
+    with membership_db() as db:
+        db.add(Profile(id=member_id, is_admin=False, is_active=True))
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: {"user_id": str(admin_id)},
+    )
+    admin_api = SimpleNamespace(
+        delete_user=lambda user_id: deleted_auth_users.append(user_id)
+    )
+    monkeypatch.setattr(
+        web_app,
+        "_get_supabase_admin_client",
+        lambda: SimpleNamespace(auth=SimpleNamespace(admin=admin_api)),
+    )
+
+    result = web_app.delete_member(member_id, "Bearer admin")
+
+    assert deleted_auth_users == [str(member_id)]
+    assert result == {
+        "deleted": True,
+        "user_id": str(member_id),
+        "portfolio_data_deleted": False,
+    }
+    with membership_db() as db:
+        assert db.query(Profile).filter(Profile.id == member_id).one_or_none() is None
