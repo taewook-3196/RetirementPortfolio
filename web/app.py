@@ -274,6 +274,13 @@ def list_admin_members(
             ),
         })
 
+    return {
+        "members": members,
+        "privacy_scope": (
+            "관리자에게는 회원 운영 상태만 제공되며 보유종목, 수량, 평가금액, "
+            "거래내역, 현금잔고, 투자성향, 모닝리포트 내용은 제공되지 않습니다."
+        ),
+    }
 
 
 class MemberAccessRequest(BaseModel):
@@ -299,13 +306,6 @@ def set_member_access(
             profile.updated_at = datetime.now(timezone.utc)
     return {"user_id": str(member_id), "is_active": request.active}
 
-    return {
-        "members": members,
-        "privacy_scope": (
-            "관리자에게는 회원 운영 상태만 제공되며 보유종목, 수량, 평가금액, "
-            "거래내역, 현금잔고, 투자성향, 모닝리포트 내용은 제공되지 않습니다."
-        ),
-    }
 
 
 class AdminInviteCreateRequest(BaseModel):
