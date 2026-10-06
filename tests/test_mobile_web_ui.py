@@ -147,3 +147,17 @@ def test_transactions_tab_is_independent_and_filterable(monkeypatch):
     assert "async function loadTransactionTab(accounts, accessToken)" in html
     assert "transactionTabVisibleCount = 20;" in html
     assert '"20건 더 보기"' in html
+
+
+
+def test_transactions_tab_has_expandable_entry_panel(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'id="open-transaction-entry"' in html
+    assert '＋ 거래 추가' in html
+    assert 'id="transaction-entry-panel"' in html
+    assert 'id="transaction-entry-account"' in html
+    assert "async function showTransactionEntryForm()" in html
+    assert 'transactionEntryPanel.hidden = false;' in html
+    assert 'typeof options.onSaved === "function"' in html
+    assert "await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);" in html
