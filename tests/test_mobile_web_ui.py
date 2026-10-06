@@ -283,3 +283,15 @@ def test_transaction_entry_error_state_resets_before_reuse(monkeypatch):
     assert 'transactionEntryForm.className = "error";' in entry
     close_handler = entry[entry.index('closeTransactionEntry.addEventListener("click"'):]
     assert 'transactionEntryForm.className = "";' in close_handler
+
+
+
+def test_chart_offsets_overlapping_transaction_markers(monkeypatch):
+    html = _html(monkeypatch)
+
+    chart = html[html.index("function renderAssetChart("):html.index("function createAccountEditor(")]
+    assert "const transactionMarkerCounts = new Map();" in chart
+    assert "const markerGroupKey =" in chart
+    assert "const markerOffsetStep = 11;" in chart
+    assert "Math.ceil(markerGroupIndex / 2)" in chart
+    assert "baseX + markerOffsetDirection * markerOffsetLevel * markerOffsetStep" in chart
