@@ -4675,11 +4675,13 @@ async function loadCashFlowTab(accounts, accessToken) {
     })));
     allCashFlowsList.innerHTML = "";
     let count = 0;
+    const selectedAccountId = transactionAccountFilter.value;
     for (const group of groups) {
         const option = document.createElement("option");
         option.value = String(group.account.id);
         option.textContent = group.account.name;
         cashFlowEntryAccount.appendChild(option);
+        if (selectedAccountId && String(group.account.id) !== selectedAccountId) continue;
         if (!group.cashFlows.length) continue;
         const heading = document.createElement("div");
         heading.className = "section-title";
@@ -4863,9 +4865,15 @@ async function loadTransactionTab(accounts, accessToken) {
     await loadCashFlowTab(accounts, accessToken);
 }
 
-for (const control of [transactionAccountFilter, transactionTypeFilter]) {
-    control.addEventListener("change", () => { transactionTabVisibleCount = 20; renderTransactionTab(); });
-}
+transactionAccountFilter.addEventListener("change", async () => {
+    transactionTabVisibleCount = 20;
+    renderTransactionTab();
+    await loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken);
+});
+transactionTypeFilter.addEventListener("change", () => {
+    transactionTabVisibleCount = 20;
+    renderTransactionTab();
+});
 transactionSearchFilter.addEventListener("input", () => { transactionTabVisibleCount = 20; renderTransactionTab(); });
 
 const loginStatus =

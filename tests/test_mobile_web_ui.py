@@ -332,3 +332,14 @@ def test_cash_flow_history_is_incrementally_revealed(monkeypatch):
     assert '"20건 더 보기"' in cash_flows
     assert '"최근 " + visibleCashFlows.length + "건 / 전체 " + newestFirst.length + "건"' in cash_flows
     assert "visibleCount + pageSize" in cash_flows
+
+
+
+def test_account_filter_applies_to_cash_flow_history(monkeypatch):
+    html = _html(monkeypatch)
+
+    cash_tab = html[html.index("async function loadCashFlowTab("):html.index("async function showCashFlowEntryForm(")]
+    assert "const selectedAccountId = transactionAccountFilter.value;" in cash_tab
+    assert "String(group.account.id) !== selectedAccountId" in cash_tab
+    assert 'transactionAccountFilter.addEventListener("change", async () =>' in html
+    assert "await loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken);" in html
