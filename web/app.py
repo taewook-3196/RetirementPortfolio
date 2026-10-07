@@ -23,7 +23,7 @@ from core.secret_crypto import encrypt_secret
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from database.connection import get_db_session
-from database.models import Profile, DeletedMember, AppSetting, KakaoCredential, UserSetting
+from database.models import Profile, DeletedMember, AppSetting, Account, InvestmentProfile, Watchlist, KakaoCredential, UserSetting, MorningReport, RecommendationLog
 from database.repository import Repository
 from portfolio.holdings import calculate_etf_positions
 from data.yfinance_client import YFinanceClient
@@ -319,6 +319,48 @@ def list_deleted_members(
             for row in tombstones
         ],
         "privacy_scope": "탈퇴 회원의 보존 데이터 내용이나 투자금액은 표시하지 않습니다.",
+    }
+
+
+class DeletedMemberPurgeRequest(BaseModel):
+    confirm_user_id: UUID
+
+
+@app.post("/api/admin/deleted-members/{member_id}/purge")
+def purge_deleted_member_data(
+    member_id: UUID,
+    request: DeletedMemberPurgeRequest,
+    authorization: str | None = Header(default=None),
+):
+    """Permanently purge retained private data only for a recorded deleted member."""
+    require_admin(authorization)
+    if request.confirm_user_id != member_id:
+        raise HTTPException(status_code=400, detail="영구삭제 확인값이 대상 회원과 일치하지 않습니다.")
+
+    with get_db_session() as db:
+        tombstone = db.query(DeletedMember).filter(DeletedMember.user_id == member_id).one_or_none()
+        if tombstone is None:
+            raise HTTPException(status_code=404, detail="탈퇴 처리된 회원만 영구삭제할 수 있습니다.")
+        if db.query(Profile).filter(Profile.id == member_id).one_or_none() is not None:
+            raise HTTPException(status_code=409, detail="활성 회원 정보가 남아 있어 영구삭제를 중단했습니다.")
+
+        # Delete direct user-owned rows explicitly. Account-owned child rows are
+        # removed by database ON DELETE CASCADE when their Account rows are deleted.
+        deleted = {
+            "recommendation_logs": db.query(RecommendationLog).filter(RecommendationLog.user_id == member_id).delete(synchronize_session=False),
+            "morning_reports": db.query(MorningReport).filter(MorningReport.user_id == member_id).delete(synchronize_session=False),
+            "kakao_credentials": db.query(KakaoCredential).filter(KakaoCredential.user_id == member_id).delete(synchronize_session=False),
+            "user_settings": db.query(UserSetting).filter(UserSetting.user_id == member_id).delete(synchronize_session=False),
+            "watchlists": db.query(Watchlist).filter(Watchlist.user_id == member_id).delete(synchronize_session=False),
+            "investment_profiles": db.query(InvestmentProfile).filter(InvestmentProfile.user_id == member_id).delete(synchronize_session=False),
+            "accounts": db.query(Account).filter(Account.user_id == member_id).delete(synchronize_session=False),
+        }
+        db.delete(tombstone)
+
+    return {
+        "purged": True,
+        "user_id": str(member_id),
+        "deleted_rows": deleted,
     }
 
 
