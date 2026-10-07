@@ -7,6 +7,7 @@ services/report_html_generator.py
 """
 
 from __future__ import annotations
+import urllib.parse
 import html
 import json
 import re
@@ -2595,7 +2596,13 @@ class ReportHtmlGenerator:
             title = n.get("title", "")
             media = n.get("media", "언론사")
             date_time = n.get("date", "")
-            link = n.get("link", "#")
+            raw_link = str(n.get("link", "") or "").strip()
+            parsed_link = urllib.parse.urlparse(raw_link)
+            link = (
+                raw_link
+                if parsed_link.scheme.lower() in {"http", "https"}
+                else "#"
+            )
             parsed_link = urlparse(html.unescape(str(link)))
             if parsed_link.scheme not in ("http", "https"):
                 link = "#"
@@ -2607,7 +2614,7 @@ class ReportHtmlGenerator:
                     <span class="news-tag">{tag}</span>
                     <span class="news-media">{media}</span>
                 </div>
-                <a href="{link}" target="_blank" class="news-title">{title}</a>
+                <a href="{link}" target="_blank" rel="noopener noreferrer" class="news-title">{title}</a>
                 <span class="news-time">{date_time}</span>
             </div>
             """
