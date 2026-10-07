@@ -353,3 +353,16 @@ def test_bottom_navigation_supports_admin_fifth_tab(monkeypatch):
     assert "grid-auto-columns: minmax(0, 1fr);" in html
     assert "grid-template-columns: repeat(4, 1fr);" not in html
     assert 'data-app-tab="members"' in html
+
+
+
+def test_settings_has_logout_that_clears_session_and_app_state(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'id="logout-button"' in html
+    assert 'logoutButton.addEventListener("click", () =>' in html
+    assert "clearAuthTokens();" in html
+    assert "memberManagementTabButton.hidden = true;" in html
+    assert 'appArea.style.display = "none";' in html
+    assert 'loginCard.style.display = "block";' in html
+    assert "loginForm.reset();" in html
