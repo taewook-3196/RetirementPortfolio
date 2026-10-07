@@ -76,3 +76,19 @@ def test_reused_request_rejects_changed_amount(repo_and_session):
         write(repo, "request-1", amount=200)
     with db_session() as session:
         assert session.query(CashFlow).count() == 1
+
+
+def test_request_id_cannot_replay_another_users_account(repo_and_session):
+    repo, db_session = repo_and_session
+    write(repo, "shared-id")
+    other_user = uuid4()
+    with db_session() as session:
+        session.add(Account(id=2, user_id=other_user, account_name="Other", currency="KRW"))
+    other_repo = repository_module.Repository(user_id=other_user)
+    with pytest.raises(ValueError, match="이미 사용된 요청 ID"):
+        other_repo.create_cash_flow(
+            account_id=2, flow_date="2026-10-08", flow_type="DEPOSIT",
+            amount=100, currency="KRW", request_id="shared-id",
+        )
+    with db_session() as session:
+        assert session.query(CashFlow).count() == 1
