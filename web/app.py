@@ -14190,6 +14190,17 @@ logoutButton.addEventListener("click", () => {
     adminSection.hidden = true;
     transactionTabAccounts = [];
     transactionTabAccessToken = "";
+    transactionTabRows = [];
+    transactionTabVisibleCount = 20;
+    transactionAccountFilter.innerHTML = '<option value="">전체 계좌</option>';
+    transactionTypeFilter.value = "";
+    transactionSearchFilter.value = "";
+    allTransactionsList.innerHTML = "";
+    allCashFlowsList.innerHTML = "";
+    accountsList.innerHTML = "";
+    accountCreator.innerHTML = "";
+    accountManagementList.innerHTML = "";
+    adminMembers.innerHTML = "불러오는 중...";
     activeSettingsPanel = "accounts";
     setAppTab("home", {scroll: false});
     appArea.style.display = "none";
