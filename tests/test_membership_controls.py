@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import web.app as web_app
-from database.models import AppSetting, DeletedMember, Profile
+from database.models import AppSetting, DeletedMember, KakaoCredential, Profile, UserSetting
 
 
 @pytest.fixture
@@ -17,6 +17,8 @@ def membership_db(monkeypatch):
     Profile.__table__.create(engine)
     AppSetting.__table__.create(engine)
     DeletedMember.__table__.create(engine)
+    KakaoCredential.__table__.create(engine)
+    UserSetting.__table__.create(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     @contextmanager
