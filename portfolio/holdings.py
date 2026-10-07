@@ -15,6 +15,7 @@ portfolio/holdings.py
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime
 from typing import Dict, List, Optional
 
 from database.models import Dividend, Price, Transaction
@@ -46,6 +47,8 @@ class ETFPosition:
     market_price_available: bool = False
     price_date: str = ""
     price_is_estimated: bool = False
+    price_is_stale: bool = False
+    price_age_days: int = 0
 
     # 현재 평가금액
     current_value: float = 0.0
@@ -96,12 +99,14 @@ def calculate_etf_positions(
     latest_prices: Dict[str, Price],
     ticker_names: Optional[Dict[str, str]] = None,
     ticker_currencies: Optional[Dict[str, str]] = None,
+    as_of_date: Optional[date] = None,
 ) -> Dict[str, ETFPosition]:
     """
     거래 내역과 분배금 내역을 시간순으로 재생하여
     종목별 포지션, 평단가 및 손익을 계산합니다.
     """
     positions: Dict[str, ETFPosition] = {}
+    valuation_date = as_of_date or date.today()
 
     names_map = ticker_names or {}
     currencies_map = ticker_currencies or {}    
@@ -307,6 +312,8 @@ def calculate_etf_positions(
         market_price_available = False
         price_date = ""
         price_is_estimated = False
+        price_is_stale = False
+        price_age_days = 0
 
         if price_object:
             current_price = _to_float(
@@ -322,6 +329,31 @@ def calculate_etf_positions(
                 )
 
             market_price_available = current_price > 0
+
+            if raw_price_date is not None:
+                try:
+                    parsed_price_date = (
+                        raw_price_date.date()
+                        if isinstance(raw_price_date, datetime)
+                        else raw_price_date
+                        if isinstance(raw_price_date, date)
+                        else date.fromisoformat(str(raw_price_date)[:10])
+                    )
+                    price_age_days = max(
+                        (valuation_date - parsed_price_date).days,
+                        0,
+                    )
+                    # Use a deliberately conservative calendar threshold.
+                    # Normal weekends and ordinary long weekends remain valid,
+                    # while a price a full week old is no longer treated as
+                    # current enough for investment recommendations.
+                    price_is_stale = (
+                        market_price_available
+                        and price_age_days >= 7
+                    )
+                except (TypeError, ValueError):
+                    price_age_days = 0
+                    price_is_stale = False
 
             # 가격 데이터가 NaN, Infinity, 0 이하 등
             # 정상적인 시장 가격이 아니라면
@@ -396,6 +428,8 @@ def calculate_etf_positions(
         position.market_price_available = market_price_available
         position.price_date = price_date
         position.price_is_estimated = price_is_estimated
+        position.price_is_stale = price_is_stale
+        position.price_age_days = price_age_days
 
         position.current_value = round(
             current_value,
