@@ -105,22 +105,6 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
     for user_id, repo, settings in due_users:
         try:
 
-            # A generated report and a delivered Kakao message are separate
-            # states. If Kakao failed after the report was saved, retry on the
-            # next workflow run instead of suppressing delivery for the day.
-            existing_report = repo.get_morning_report_for_date(current.date())
-            if existing_report is not None and not force:
-                if not settings.kakao_enabled:
-                    logger.info("오늘 리포트가 이미 생성됨: %s", user_id)
-                    continue
-                if getattr(existing_report, "kakao_sent_at", None) is not None:
-                    logger.info("오늘 카카오 리포트가 이미 발송됨: %s", user_id)
-                    continue
-                logger.info("오늘 리포트는 생성됐지만 카카오 미발송 상태라 재시도: %s", user_id)
-
-            if force and existing_report is not None:
-                logger.info("수동 강제 재생성·재발송: %s", user_id)
-
             send_kakao = bool(settings.kakao_enabled)
             if send_kakao:
                 credential = repo.get_kakao_credential()
@@ -135,6 +119,22 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
                         "카카오 메시지 권한이 없어 발송을 건너뜀: %s",
                         user_id,
                     )
+
+            # A generated report and a delivered Kakao message are separate
+            # states. Retry an unsent report only when Kakao is actually ready;
+            # otherwise repeated scheduler runs would regenerate the same report.
+            existing_report = repo.get_morning_report_for_date(current.date())
+            if existing_report is not None and not force:
+                if not settings.kakao_enabled or not send_kakao:
+                    logger.info("오늘 리포트가 이미 생성됨: %s", user_id)
+                    continue
+                if getattr(existing_report, "kakao_sent_at", None) is not None:
+                    logger.info("오늘 카카오 리포트가 이미 발송됨: %s", user_id)
+                    continue
+                logger.info("오늘 리포트는 생성됐지만 카카오 미발송 상태라 재시도: %s", user_id)
+
+            if force and existing_report is not None:
+                logger.info("수동 강제 재생성·재발송: %s", user_id)
 
             logger.info("사용자별 모닝 리포트 생성 시작: %s", user_id)
             service = DailyReportService(config=config, repo=repo)
