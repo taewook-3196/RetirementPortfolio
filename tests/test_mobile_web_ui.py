@@ -444,3 +444,12 @@ def test_account_creation_labels_are_associated_with_fields(monkeypatch):
     assert '"account-create-field-"' in html
     assert 'element.id = fieldId;' in html
     assert 'label.htmlFor =' in html
+
+
+def test_account_editor_labels_are_associated_with_fields(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert '"account-editor-"' in html
+    assert 'label.htmlFor =' in html
+    assert 'defaultLabel.htmlFor =' in html
+    assert 'isDefault.id =' in html
