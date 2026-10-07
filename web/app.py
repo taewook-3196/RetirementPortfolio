@@ -14195,7 +14195,7 @@ usAssetSearchForm.addEventListener(
         event.preventDefault();
 
         const accessToken =
-            sessionStorage.getItem(
+            localStorage.getItem(
                 "access_token"
             );
 
@@ -14314,7 +14314,7 @@ investmentProfileForm.addEventListener(
             );
 
         const accessToken =
-            sessionStorage.getItem(
+            localStorage.getItem(
                 "access_token"
             );
 
