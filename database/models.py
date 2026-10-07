@@ -251,6 +251,7 @@ class CashFlow(Base):
         autoincrement=True,
     )
 
+    request_id = Column(Text, nullable=True, unique=True)
     account_id = Column(
         BigInteger,
         ForeignKey(
@@ -308,6 +309,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
+    request_id = Column(Text, nullable=True, unique=True)
     account_id = Column(
         BigInteger,
         ForeignKey("accounts.id", ondelete="CASCADE"),
