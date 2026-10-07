@@ -1275,6 +1275,12 @@ class Repository:
                 ).first()
                 if existing_request is None or existing_request.account_id != clean_account_id:
                     raise
+                if (existing_request.flow_date != clean_flow_date
+                    or existing_request.flow_type != clean_flow_type
+                    or float(existing_request.amount) != float(clean_amount)
+                    or existing_request.currency != clean_currency
+                    or existing_request.memo != str(memo or "").strip()):
+                    raise ValueError("동일 요청 ID에 다른 저장 내용이 전달되었습니다.")
                 return existing_request
 
     def update_cash_flow(
@@ -2276,6 +2282,15 @@ class Repository:
                 ).first()
                 if existing_request is None or existing_request.account_id != account.id:
                     raise
+                if (existing_request.transaction_date != tx_date
+                    or existing_request.ticker != clean_ticker
+                    or existing_request.transaction_type != tx_type
+                    or float(existing_request.quantity) != float(clean_quantity)
+                    or float(existing_request.price) != float(clean_price)
+                    or float(existing_request.fee) != float(clean_fee)
+                    or float(existing_request.tax) != float(clean_tax)
+                    or existing_request.memo != str(memo or "").strip()):
+                    raise ValueError("동일 요청 ID에 다른 저장 내용이 전달되었습니다.")
                 return existing_request
 
     def get_transactions(
