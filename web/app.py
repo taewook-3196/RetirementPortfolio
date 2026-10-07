@@ -4237,6 +4237,7 @@ body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
 <button type="button" data-settings-panel="kakao">카카오</button>
 <button type="button" data-settings-panel="strategy">투자전략</button>
 </div>
+<button id="logout-button" type="button" class="secondary-button">로그아웃</button>
 </section>
 
 <section id="morning-report-settings-section" class="card">
@@ -14180,6 +14181,24 @@ function clearAuthTokens() {
         "refresh_token"
     );
 }
+
+
+const logoutButton = document.getElementById("logout-button");
+logoutButton.addEventListener("click", () => {
+    clearAuthTokens();
+    memberManagementTabButton.hidden = true;
+    adminSection.hidden = true;
+    transactionTabAccounts = [];
+    transactionTabAccessToken = "";
+    activeSettingsPanel = "accounts";
+    setAppTab("home", {scroll: false});
+    appArea.style.display = "none";
+    loginCard.style.display = "block";
+    loginStatus.textContent = "로그인 완료";
+    loginForm.reset();
+    message.textContent = "";
+    window.scrollTo({top: 0, behavior: "smooth"});
+});
 
 
 async function showAuthenticatedApp(
