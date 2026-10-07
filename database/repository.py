@@ -1234,6 +1234,8 @@ class Repository:
                         CashFlow.request_id == request_id,
                         ).first()
                     if existing_request:
+                        if existing_request.account_id != clean_account_id:
+                            raise ValueError("이미 사용된 요청 ID입니다.")
                         if (existing_request.flow_date != clean_flow_date
                             or existing_request.flow_type != clean_flow_type
                             or float(existing_request.amount) != float(clean_amount)
@@ -2213,6 +2215,8 @@ class Repository:
                         Transaction.request_id == request_id,
                         ).first()
                     if existing_request:
+                        if existing_request.account_id != account.id:
+                            raise ValueError("이미 사용된 요청 ID입니다.")
                         if (existing_request.transaction_date != tx_date
                             or existing_request.ticker != clean_ticker
                             or existing_request.transaction_type != tx_type
