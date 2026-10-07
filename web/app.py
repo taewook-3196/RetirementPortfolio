@@ -9312,14 +9312,29 @@ function renderCashFlows(
                 필드 추가
                 */
 
+                let editFieldIndex = 0;
+
                 function appendField(
                     labelText,
                     element
                 ) {
+                    editFieldIndex += 1;
+
+                    const fieldId =
+                        "cash-flow-edit-"
+                        + cashFlow.id
+                        + "-field-"
+                        + editFieldIndex;
+
+                    element.id = fieldId;
+
                     const label =
                         document.createElement(
                             "label"
                         );
+
+                    label.htmlFor =
+                        fieldId;
 
                     label.textContent =
                         labelText;
