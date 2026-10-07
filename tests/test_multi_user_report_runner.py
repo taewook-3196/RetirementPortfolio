@@ -468,3 +468,59 @@ def test_missing_kakao_scope_generates_report_without_delivery(monkeypatch):
     assert len(calls) == 1
     assert calls[0]["send_kakao"] is False
     assert calls[0]["force_kakao"] is False
+
+
+def test_existing_unsent_report_without_kakao_scope_is_not_reprocessed(monkeypatch):
+    user_id = uuid4()
+    calls = []
+
+    class FakeRepo:
+        def __init__(self, user_id):
+            self.user_id = user_id
+
+        @staticmethod
+        def get_morning_report_user_ids():
+            return [user_id]
+
+        def get_user_settings(self):
+            return SimpleNamespace(
+                morning_report_enabled=True,
+                morning_report_time=time(7, 0),
+                kakao_enabled=True,
+            )
+
+        def get_kakao_credential(self):
+            return SimpleNamespace(scopes="")
+
+        def get_morning_report_for_date(self, report_date):
+            return SimpleNamespace(kakao_sent_at=None)
+
+        def get_account_targets(self, account_id=None):
+            return []
+
+        def get_transactions(self):
+            return []
+
+        def get_etf_master(self, ticker):
+            return None
+
+        def save_etf_master(self, items):
+            return len(items)
+
+        def upsert_prices(self, items):
+            return len(items)
+
+    class FakeService:
+        def __init__(self, config, repo):
+            calls.append(repo.user_id)
+
+    monkeypatch.setattr(runner, "init_db", lambda: None)
+    monkeypatch.setattr(runner, "load_config", lambda: object())
+    monkeypatch.setattr(runner, "Repository", FakeRepo)
+    monkeypatch.setattr(runner, "DailyReportService", FakeService)
+    monkeypatch.setattr(runner, "update_market_prices", lambda **kwargs: {"saved": 0})
+
+    assert runner.run_all_users(
+        datetime(2026, 10, 2, 8, 0, tzinfo=SEOUL)
+    ) == 0
+    assert calls == []
