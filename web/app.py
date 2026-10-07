@@ -5098,7 +5098,7 @@ adminSignupEnabled.addEventListener("change", async () => {
 adminMembers.addEventListener("click", async (event) => {
     const button = event.target.closest(".admin-toggle-member, .admin-delete-member");
     if (!button) return;
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     const deleting = button.classList.contains("admin-delete-member");
     if (deleting) {
@@ -5163,7 +5163,7 @@ async function loadMorningReportSettings(accessToken) {
 
 morningReportSettingsForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     try {
         const response = await fetch("/api/morning-report/settings", {
@@ -5219,7 +5219,7 @@ async function loadKakaoStatus(accessToken) {
 }
 
 kakaoTestButton.addEventListener("click", async () => {
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     kakaoTestButton.disabled = true;
     try {
@@ -5240,7 +5240,7 @@ kakaoTestButton.addEventListener("click", async () => {
 });
 
 kakaoDisconnectButton.addEventListener("click", async () => {
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     kakaoDisconnectButton.disabled = true;
     try {
@@ -5260,7 +5260,7 @@ kakaoDisconnectButton.addEventListener("click", async () => {
 });
 
 kakaoConnectButton.addEventListener("click", async () => {
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     kakaoConnectButton.disabled = true;
     try {
