@@ -1232,8 +1232,7 @@ class Repository:
                 if request_id:
                     existing_request = session.query(CashFlow).filter(
                         CashFlow.request_id == request_id,
-                        CashFlow.account_id == account.id,
-                    ).first()
+                        ).first()
                     if existing_request:
                         if (existing_request.flow_date != clean_flow_date
                             or existing_request.flow_type != clean_flow_type
@@ -1273,8 +1272,10 @@ class Repository:
                 existing_request = retry_session.query(CashFlow).filter(
                     CashFlow.request_id == request_id,
                 ).first()
-                if existing_request is None or existing_request.account_id != clean_account_id:
+                if existing_request is None:
                     raise
+                if existing_request.account_id != clean_account_id:
+                    raise ValueError("이미 사용된 요청 ID입니다.")
                 if (existing_request.flow_date != clean_flow_date
                     or existing_request.flow_type != clean_flow_type
                     or float(existing_request.amount) != float(clean_amount)
@@ -2210,8 +2211,7 @@ class Repository:
                 if request_id:
                     existing_request = session.query(Transaction).filter(
                         Transaction.request_id == request_id,
-                        Transaction.account_id == account.id,
-                    ).first()
+                        ).first()
                     if existing_request:
                         if (existing_request.transaction_date != tx_date
                             or existing_request.ticker != clean_ticker
@@ -2280,8 +2280,10 @@ class Repository:
                 existing_request = retry_session.query(Transaction).filter(
                     Transaction.request_id == request_id,
                 ).first()
-                if existing_request is None or existing_request.account_id != account.id:
+                if existing_request is None:
                     raise
+                if existing_request.account_id != account.id:
+                    raise ValueError("이미 사용된 요청 ID입니다.")
                 if (existing_request.transaction_date != tx_date
                     or existing_request.ticker != clean_ticker
                     or existing_request.transaction_type != tx_type
