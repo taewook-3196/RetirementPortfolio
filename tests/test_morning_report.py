@@ -8,6 +8,8 @@ import tempfile
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError
+from io import BytesIO
 
 from core.config import AppConfig, MorningReportConfig, load_config, save_config, ETFConfig
 from services.report_html_generator import ReportHtmlGenerator
@@ -439,3 +441,32 @@ def test_daily_report_service_uses_seoul_business_date():
     assert "self.repo.upsert_morning_report(\n                    report_date," in source
     assert "self.repo.mark_morning_report_kakao_sent(report_date)" in source
     assert "mark_morning_report_kakao_sent(datetime.date.today())" not in source
+
+
+
+def test_kakao_missing_message_scope_has_actionable_error():
+    cfg = AppConfig(
+        morning_report=MorningReportConfig(
+            kakao_access_token="access",
+            kakao_refresh_token="refresh",
+        )
+    )
+    error_body = (
+        b'{"msg":"insufficient scopes.","code":-402,'
+        b'"required_scopes":["talk_message"],"allowed_scopes":[]}'
+    )
+    error = HTTPError(
+        url=KakaoService.SEND_MEMO_URL,
+        code=403,
+        msg="Forbidden",
+        hdrs=None,
+        fp=BytesIO(error_body),
+    )
+
+    with patch("urllib.request.urlopen", side_effect=error):
+        ok, message = KakaoService(cfg).send_test_message("https://example.com")
+
+    assert ok is False
+    assert "카카오톡 다시 연결" in message
+    assert "카카오톡 메시지 전송" in message
+    assert "insufficient scopes" not in message
