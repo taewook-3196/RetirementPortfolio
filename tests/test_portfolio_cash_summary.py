@@ -444,3 +444,37 @@ def test_valid_market_price_exposes_source_date():
     assert position.market_price_available is True
     assert position.price_is_estimated is False
     assert position.price_date == "2026-10-07"
+
+
+def test_week_old_market_price_is_marked_stale():
+    transactions = [_transaction(1, "BUY", 10, 100, ticker="ETF")]
+    prices = {
+        "ETF": _price("ETF", 120, price_date=date(2026, 9, 30))
+    }
+    position = calculate_etf_positions(
+        transactions,
+        [],
+        prices,
+        as_of_date=date(2026, 10, 7),
+    )["ETF"]
+
+    assert position.market_price_available is True
+    assert position.price_is_stale is True
+    assert position.price_age_days == 7
+
+
+def test_recent_market_price_is_not_stale_across_weekend():
+    transactions = [_transaction(1, "BUY", 10, 100, ticker="ETF")]
+    prices = {
+        "ETF": _price("ETF", 120, price_date=date(2026, 10, 2))
+    }
+    position = calculate_etf_positions(
+        transactions,
+        [],
+        prices,
+        as_of_date=date(2026, 10, 5),
+    )["ETF"]
+
+    assert position.market_price_available is True
+    assert position.price_is_stale is False
+    assert position.price_age_days == 3
