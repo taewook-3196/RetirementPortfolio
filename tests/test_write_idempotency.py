@@ -106,3 +106,18 @@ def test_request_id_cannot_replay_different_account_same_user(repo_and_session):
         )
     with db_session() as session:
         assert session.query(CashFlow).count() == 1
+
+
+def test_database_unique_constraint_rejects_duplicate_request_id(repo_and_session):
+    repo, db_session = repo_and_session
+    write(repo, "raced-request")
+    from sqlalchemy.exc import IntegrityError
+    with pytest.raises(IntegrityError):
+        with db_session() as session:
+            session.add(CashFlow(
+                id=999, account_id=1, request_id="raced-request",
+                flow_date="2026-10-08", flow_type="DEPOSIT",
+                amount=100, currency="KRW", memo="",
+            ))
+    with db_session() as session:
+        assert session.query(CashFlow).count() == 1
