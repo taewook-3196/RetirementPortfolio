@@ -4742,6 +4742,9 @@ async function showTransactionEntryForm() {
 }
 
 openTransactionEntry.addEventListener("click", () => {
+    cashFlowEntryPanel.hidden = true;
+    cashFlowEntryAccount.value = "";
+    cashFlowEntryForm.innerHTML = "";
     transactionEntryPanel.hidden = false;
     transactionEntryPanel.scrollIntoView({behavior: "smooth", block: "start"});
 });
@@ -4817,6 +4820,10 @@ async function showCashFlowEntryForm() {
 }
 
 openCashFlowEntry.addEventListener("click", () => {
+    transactionEntryPanel.hidden = true;
+    transactionEntryForm.className = "";
+    transactionEntryForm.innerHTML = "";
+    transactionEntryAccount.value = "";
     cashFlowEntryPanel.hidden = false;
     cashFlowEntryPanel.scrollIntoView({behavior: "smooth", block: "start"});
 });
