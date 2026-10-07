@@ -92,3 +92,17 @@ def test_request_id_cannot_replay_another_users_account(repo_and_session):
         )
     with db_session() as session:
         assert session.query(CashFlow).count() == 1
+
+
+def test_request_id_cannot_replay_different_account_same_user(repo_and_session):
+    repo, db_session = repo_and_session
+    write(repo, "shared-account-id")
+    with db_session() as session:
+        session.add(Account(id=3, user_id=repo.user_id, account_name="Second", currency="KRW"))
+    with pytest.raises(ValueError, match="이미 사용된 요청 ID"):
+        repo.create_cash_flow(
+            account_id=3, flow_date="2026-10-08", flow_type="DEPOSIT",
+            amount=100, currency="KRW", request_id="shared-account-id",
+        )
+    with db_session() as session:
+        assert session.query(CashFlow).count() == 1
