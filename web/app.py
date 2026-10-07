@@ -8482,6 +8482,11 @@ function renderPositions(
                     closeButton.textContent =
                         "×";
 
+                    closeButton.setAttribute(
+                        "aria-label",
+                        "차트 닫기"
+                    );
+
 
                     closeButton.addEventListener(
                         "click",
