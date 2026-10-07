@@ -5088,7 +5088,7 @@ async function loadKakaoStatus(accessToken) {
         ? "카카오톡 다시 연결"
         : "카카오톡 연결";
     kakaoTestButton.style.display = data.connected ? "block" : "none";
-    kakaoDisconnectButton.style.display = data.connected ? "block" : "none";
+    kakaoDisconnectButton.style.display = data.connected || data.needs_reconnect ? "block" : "none";
 }
 
 kakaoTestButton.addEventListener("click", async () => {

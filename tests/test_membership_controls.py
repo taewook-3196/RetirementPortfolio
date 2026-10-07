@@ -118,6 +118,17 @@ def test_admin_can_suspend_and_reactivate_member(monkeypatch, membership_db):
     assert result["is_active"] is True
 
 
+def test_home_allows_kakao_disconnect_when_reconnect_is_required(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    html = web_app.home().body.decode("utf-8")
+    assert (
+        'kakaoDisconnectButton.style.display = data.connected || data.needs_reconnect ? "block" : "none";'
+        in html
+    )
+    assert 'kakaoTestButton.style.display = data.connected ? "block" : "none";' in html
+
+
 def test_home_has_signup_gate_and_no_invitation_ui(monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
