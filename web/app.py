@@ -655,8 +655,17 @@ def kakao_callback(code: str = "", state: str = "", error: str = ""):
 @app.get("/api/kakao/status")
 def kakao_status(authorization: str | None = Header(default=None)):
     user_id = get_verified_user_id(authorization)
-    connected = Repository(user_id=user_id).get_kakao_credential() is not None
-    return {"connected": connected}
+    credential = Repository(user_id=user_id).get_kakao_credential()
+    granted_scopes = {
+        scope.strip()
+        for scope in str(getattr(credential, "scopes", "") or "").split()
+        if scope.strip()
+    }
+    connected = credential is not None and "talk_message" in granted_scopes
+    return {
+        "connected": connected,
+        "needs_reconnect": credential is not None and not connected,
+    }
 
 
 @app.post("/api/kakao/test")
@@ -5060,8 +5069,15 @@ async function loadKakaoStatus(accessToken) {
     if (!response.ok) throw new Error(data.detail || "카카오 연결 상태를 확인하지 못했습니다.");
     kakaoStatus.textContent = data.connected
         ? "카카오톡 연결 완료"
-        : "카카오톡이 아직 연결되지 않았습니다.";
-    kakaoConnectButton.textContent = data.connected
+        : data.needs_reconnect
+            ? "카카오톡 메시지 전송 권한 확인이 필요합니다. 다시 연결해주세요."
+            : "카카오톡이 아직 연결되지 않았습니다.";
+    kakaoStatus.className = data.connected
+        ? "status-box success"
+        : data.needs_reconnect
+            ? "status-box error"
+            : "status-box";
+    kakaoConnectButton.textContent = data.connected || data.needs_reconnect
         ? "카카오톡 다시 연결"
         : "카카오톡 연결";
     kakaoTestButton.style.display = data.connected ? "block" : "none";
