@@ -460,3 +460,56 @@ def test_member_delete_auth_failure_leaves_profile_suspended(monkeypatch, member
     with membership_db() as db:
         profile = db.query(Profile).filter(Profile.id == member_id).one()
         assert profile.is_active is False
+
+
+
+def test_bootstrap_initializes_only_authenticated_active_user(monkeypatch):
+    user_id = uuid4()
+    monkeypatch.setattr(
+        web_app,
+        "get_verified_user_id",
+        lambda authorization=None: str(user_id),
+    )
+    calls = []
+
+    class FakeRepository:
+        def __init__(self, user_id):
+            calls.append(("repository", user_id))
+
+        def ensure_user_initialized(self):
+            calls.append(("initialize", str(user_id)))
+            return {"settings_created": True, "profile_created": False}
+
+    monkeypatch.setattr(web_app, "Repository", FakeRepository)
+
+    result = web_app.bootstrap_current_user("Bearer valid-token")
+
+    assert result == {
+        "initialized": True,
+        "settings_created": True,
+        "profile_created": False,
+    }
+    assert calls == [
+        ("repository", str(user_id)),
+        ("initialize", str(user_id)),
+    ]
+
+
+def test_bootstrap_does_not_initialize_when_authentication_fails(monkeypatch):
+    repository_calls = []
+
+    def reject_user(authorization=None):
+        raise HTTPException(status_code=403, detail="현재 이용 가능한 회원 계정이 아닙니다.")
+
+    monkeypatch.setattr(web_app, "get_verified_user_id", reject_user)
+    monkeypatch.setattr(
+        web_app,
+        "Repository",
+        lambda user_id: repository_calls.append(user_id),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.bootstrap_current_user("Bearer suspended-token")
+
+    assert exc.value.status_code == 403
+    assert repository_calls == []
