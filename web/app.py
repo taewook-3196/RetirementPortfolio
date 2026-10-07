@@ -5075,7 +5075,7 @@ async function loadAdminPanel(accessToken) {
 }
 
 adminSignupEnabled.addEventListener("change", async () => {
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     adminSignupEnabled.disabled = true;
     try {
@@ -5098,7 +5098,7 @@ adminSignupEnabled.addEventListener("change", async () => {
 adminMembers.addEventListener("click", async (event) => {
     const button = event.target.closest(".admin-toggle-member, .admin-delete-member");
     if (!button) return;
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     const deleting = button.classList.contains("admin-delete-member");
     if (deleting) {
@@ -5163,7 +5163,7 @@ async function loadMorningReportSettings(accessToken) {
 
 morningReportSettingsForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     try {
         const response = await fetch("/api/morning-report/settings", {
@@ -5219,7 +5219,7 @@ async function loadKakaoStatus(accessToken) {
 }
 
 kakaoTestButton.addEventListener("click", async () => {
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     kakaoTestButton.disabled = true;
     try {
@@ -5240,7 +5240,7 @@ kakaoTestButton.addEventListener("click", async () => {
 });
 
 kakaoDisconnectButton.addEventListener("click", async () => {
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     kakaoDisconnectButton.disabled = true;
     try {
@@ -5260,7 +5260,7 @@ kakaoDisconnectButton.addEventListener("click", async () => {
 });
 
 kakaoConnectButton.addEventListener("click", async () => {
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     kakaoConnectButton.disabled = true;
     try {
@@ -14195,7 +14195,7 @@ usAssetSearchForm.addEventListener(
         event.preventDefault();
 
         const accessToken =
-            sessionStorage.getItem(
+            localStorage.getItem(
                 "access_token"
             );
 
@@ -14314,7 +14314,7 @@ investmentProfileForm.addEventListener(
             );
 
         const accessToken =
-            sessionStorage.getItem(
+            localStorage.getItem(
                 "access_token"
             );
 
@@ -14438,17 +14438,6 @@ function saveAuthTokens(
         refreshToken || "";
 
 
-    sessionStorage.setItem(
-        "access_token",
-        safeAccessToken
-    );
-
-    sessionStorage.setItem(
-        "refresh_token",
-        safeRefreshToken
-    );
-
-
     localStorage.setItem(
         "access_token",
         safeAccessToken
@@ -14462,15 +14451,6 @@ function saveAuthTokens(
 
 
 function clearAuthTokens() {
-
-    sessionStorage.removeItem(
-        "access_token"
-    );
-
-    sessionStorage.removeItem(
-        "refresh_token"
-    );
-
 
     localStorage.removeItem(
         "access_token"
@@ -14921,9 +14901,8 @@ async function restoreLoginSession() {
 
 
     /*
-    기존 코드의 다른 기능들이
-    sessionStorage의 access_token을 사용하므로
-    현재 세션에도 다시 복사합니다.
+    갱신 과정에서 refresh token이 회전했을 수 있으므로
+    영구 로그인 저장소의 최신 토큰 쌍을 유지합니다.
     */
     const currentRefreshToken =
         localStorage.getItem(

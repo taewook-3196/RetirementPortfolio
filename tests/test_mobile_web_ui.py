@@ -30,6 +30,8 @@ def test_core_mobile_workflows_and_chart_features_remain(monkeypatch):
     assert "async function restoreLoginSession()" in html
     assert 'localStorage.getItem("access_token")' in html
     assert 'localStorage.getItem("refresh_token")' in html
+    assert 'sessionStorage.setItem(' not in html
+    assert 'sessionStorage.getItem(' not in html
     assert 'id="boot-screen"' in html
 
     # 계좌/보유종목/차트와 기간 선택
