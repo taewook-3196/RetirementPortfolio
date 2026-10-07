@@ -42,6 +42,16 @@ class Profile(Base):
     is_active = Column(Boolean, nullable=False, default=True)
 
 
+class DeletedMember(Base):
+    """Minimal tombstone for safely managing retained data after membership deletion."""
+
+    __tablename__ = "deleted_members"
+
+    user_id = Column(UUID(as_uuid=True), primary_key=True)
+    deleted_by = Column(UUID(as_uuid=True), nullable=False, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=False, default=datetime.now)
+
+
 class AppSetting(Base):
     """Server-managed application settings."""
 

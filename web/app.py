@@ -23,7 +23,7 @@ from core.secret_crypto import encrypt_secret
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from database.connection import get_db_session
-from database.models import Profile, AppSetting, KakaoCredential, UserSetting
+from database.models import Profile, DeletedMember, AppSetting, KakaoCredential, UserSetting
 from database.repository import Repository
 from portfolio.holdings import calculate_etf_positions
 from data.yfinance_client import YFinanceClient
@@ -335,11 +335,18 @@ def delete_member(
             status_code=502,
             detail="회원 인증 계정을 삭제하지 못했습니다. 계정 접근은 중지된 상태입니다.",
         ) from exc
-    # Portfolio rows remain user-scoped and inaccessible. Destructive data purge is
-    # intentionally separate so an accidental membership deletion cannot erase investments.
+    # Portfolio rows remain user-scoped and inaccessible. Record a minimal tombstone
+    # so a later, explicitly destructive purge can target the exact former user UUID.
     with get_db_session() as db:
         profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
         if profile is not None:
+            db.merge(
+                DeletedMember(
+                    user_id=member_id,
+                    deleted_by=UUID(str(admin["user_id"])),
+                    deleted_at=datetime.now(timezone.utc),
+                )
+            )
             db.delete(profile)
     return {
         "deleted": True,

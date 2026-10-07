@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import web.app as web_app
-from database.models import AppSetting, Profile
+from database.models import AppSetting, DeletedMember, Profile
 
 
 @pytest.fixture
@@ -16,6 +16,7 @@ def membership_db(monkeypatch):
     engine = create_engine("sqlite:///:memory:")
     Profile.__table__.create(engine)
     AppSetting.__table__.create(engine)
+    DeletedMember.__table__.create(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     @contextmanager
@@ -230,6 +231,40 @@ def test_admin_deletes_member_login_but_reports_data_retained(monkeypatch, membe
     }
     with membership_db() as db:
         assert db.query(Profile).filter(Profile.id == member_id).one_or_none() is None
+        tombstone = db.query(DeletedMember).filter(DeletedMember.user_id == member_id).one()
+        assert tombstone.deleted_by == admin_id
+        assert tombstone.deleted_at is not None
+
+
+def test_failed_auth_deletion_does_not_create_tombstone(monkeypatch, membership_db):
+    admin_id, member_id = uuid4(), uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=member_id, is_admin=False, is_active=True))
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: {"user_id": str(admin_id)},
+    )
+
+    def fail_delete(user_id):
+        raise RuntimeError("auth unavailable")
+
+    monkeypatch.setattr(
+        web_app,
+        "_get_supabase_admin_client",
+        lambda: SimpleNamespace(
+            auth=SimpleNamespace(admin=SimpleNamespace(delete_user=fail_delete))
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.delete_member(member_id, "Bearer admin")
+
+    assert exc.value.status_code == 502
+    with membership_db() as db:
+        profile = db.query(Profile).filter(Profile.id == member_id).one()
+        assert profile.is_active is False
+        assert db.query(DeletedMember).filter(DeletedMember.user_id == member_id).one_or_none() is None
 
 
 def test_admin_cannot_create_profile_for_unknown_member(monkeypatch, membership_db):
