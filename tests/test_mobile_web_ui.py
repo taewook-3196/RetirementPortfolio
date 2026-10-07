@@ -426,3 +426,13 @@ def test_logout_clears_search_and_settings_status(monkeypatch):
     assert 'kakaoStatus.textContent = "연결 상태 확인 중...";' in html
     assert 'kakaoTestButton.style.display = "none";' in html
     assert 'kakaoDisconnectButton.style.display = "none";' in html
+
+
+def test_logout_clears_private_report_and_profile_state(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'document.getElementById("investment-preference-text").value = "";' in html
+    assert 'document.getElementById("investment-profile-message").textContent = "";' in html
+    assert 'reportFrame.srcdoc = "";' in html
+    assert 'reportFrame.style.display = "none";' in html
+    assert 'reportSection.style.display = "none";' in html
