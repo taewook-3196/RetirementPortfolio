@@ -462,3 +462,11 @@ def test_transaction_and_cash_flow_labels_are_associated(monkeypatch):
     assert '"cash-flow-"' in html
     assert html.count('element.id = fieldId;') >= 4
     assert html.count('label.htmlFor =') >= 4
+
+
+def test_cash_flow_edit_labels_are_associated(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert '"cash-flow-edit-"' in html
+    assert '+ cashFlow.id' in html
+    assert html.count('label.htmlFor =') >= 5
