@@ -3133,6 +3133,12 @@ def get_account_positions_api(
                     "price_is_estimated":
                         bool(position.price_is_estimated),
 
+                    "price_is_stale":
+                        bool(position.price_is_stale),
+
+                    "price_age_days":
+                        int(position.price_age_days or 0),
+
                     "current_value":
                         native_current_value,
 
@@ -8239,6 +8245,11 @@ function renderPositions(
                         + (
                             position.price_date
                             ? " (기준 " + position.price_date + ")"
+                            : ""
+                        )
+                        + (
+                            position.price_is_stale
+                            ? " · 오래된 시세"
                             : ""
                         )
                     )
