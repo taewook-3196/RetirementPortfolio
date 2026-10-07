@@ -11888,12 +11888,30 @@ function createAccountEditor(
     }
 
 
+    let editorFieldIndex = 0;
+
     function addField(
         text,
         element
     ) {
+        editorFieldIndex += 1;
+
+        const fieldId =
+            "account-editor-"
+            + account.id
+            + "-field-"
+            + editorFieldIndex;
+
+        element.id = fieldId;
+
+        const label =
+            makeLabel(text);
+
+        label.htmlFor =
+            fieldId;
+
         editor.appendChild(
-            makeLabel(text)
+            label
         );
 
         editor.appendChild(
@@ -12195,10 +12213,18 @@ function createAccountEditor(
             account.is_default
         );
 
+    isDefault.id =
+        "account-editor-"
+        + account.id
+        + "-default";
+
     const defaultLabel =
         document.createElement(
             "label"
         );
+
+    defaultLabel.htmlFor =
+        isDefault.id;
 
     defaultLabel.textContent =
         "기본 계좌";
