@@ -4734,6 +4734,7 @@ async function showTransactionEntryForm() {
             }
         );
         transactionEntryForm.appendChild(form);
+        transactionEntryForm.scrollIntoView({behavior: "smooth", block: "nearest"});
     } catch (error) {
         transactionEntryForm.className = "error";
         transactionEntryForm.textContent = error.message || "거래 입력폼을 준비하지 못했습니다.";
@@ -4807,6 +4808,7 @@ async function showCashFlowEntryForm() {
         },
     });
     cashFlowEntryForm.appendChild(form);
+    cashFlowEntryForm.scrollIntoView({behavior: "smooth", block: "nearest"});
 }
 
 openCashFlowEntry.addEventListener("click", () => {
