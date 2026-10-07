@@ -1,5 +1,6 @@
 """Regression tests for cash-flow write idempotency."""
 from contextlib import contextmanager
+from datetime import date
 from uuid import uuid4
 
 import pytest
@@ -116,7 +117,7 @@ def test_database_unique_constraint_rejects_duplicate_request_id(repo_and_sessio
         with db_session() as session:
             session.add(CashFlow(
                 id=999, account_id=1, request_id="raced-request",
-                flow_date="2026-10-08", flow_type="DEPOSIT",
+                flow_date=date(2026, 10, 8), flow_type="DEPOSIT",
                 amount=100, currency="KRW", memo="",
             ))
     with db_session() as session:
