@@ -449,7 +449,7 @@ def test_valid_market_price_exposes_source_date():
 def test_week_old_market_price_is_marked_stale():
     transactions = [_transaction(1, "BUY", 10, 100, ticker="ETF")]
     prices = {
-        "ETF": _price("ETF", 120, price_date=date(2026, 9, 30))
+        "ETF": SimpleNamespace(close_price=120, price_date=date(2026, 9, 30))
     }
     position = calculate_etf_positions(
         transactions,
@@ -466,7 +466,7 @@ def test_week_old_market_price_is_marked_stale():
 def test_recent_market_price_is_not_stale_across_weekend():
     transactions = [_transaction(1, "BUY", 10, 100, ticker="ETF")]
     prices = {
-        "ETF": _price("ETF", 120, price_date=date(2026, 10, 2))
+        "ETF": SimpleNamespace(close_price=120, price_date=date(2026, 10, 2))
     }
     position = calculate_etf_positions(
         transactions,
