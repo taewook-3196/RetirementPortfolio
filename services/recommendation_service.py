@@ -558,6 +558,7 @@ class RecommendationService:
                 if (
                     position
                     and position.market_price_available
+                    and not position.price_is_stale
                 )
                 else 0.0
             )
