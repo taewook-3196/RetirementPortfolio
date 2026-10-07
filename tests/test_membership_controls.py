@@ -546,3 +546,54 @@ def test_kakao_callback_rejects_token_without_talk_message_scope(monkeypatch, me
     assert exc.value.status_code == 403
     assert "talk_message" in exc.value.detail
     assert "카카오톡 메시지 전송" in exc.value.detail
+
+
+
+def test_kakao_status_requires_talk_message_scope(monkeypatch):
+    user_id = uuid4()
+    monkeypatch.setattr(
+        web_app,
+        "get_verified_user_id",
+        lambda authorization=None: str(user_id),
+    )
+
+    class Credential:
+        scopes = ""
+
+    class FakeRepository:
+        def __init__(self, user_id):
+            self.user_id = user_id
+
+        def get_kakao_credential(self):
+            return Credential()
+
+    monkeypatch.setattr(web_app, "Repository", FakeRepository)
+
+    result = web_app.kakao_status("Bearer valid-token")
+
+    assert result == {"connected": False, "needs_reconnect": True}
+
+
+def test_kakao_status_accepts_talk_message_scope(monkeypatch):
+    user_id = uuid4()
+    monkeypatch.setattr(
+        web_app,
+        "get_verified_user_id",
+        lambda authorization=None: str(user_id),
+    )
+
+    class Credential:
+        scopes = "profile_nickname talk_message"
+
+    class FakeRepository:
+        def __init__(self, user_id):
+            self.user_id = user_id
+
+        def get_kakao_credential(self):
+            return Credential()
+
+    monkeypatch.setattr(web_app, "Repository", FakeRepository)
+
+    result = web_app.kakao_status("Bearer valid-token")
+
+    assert result == {"connected": True, "needs_reconnect": False}
