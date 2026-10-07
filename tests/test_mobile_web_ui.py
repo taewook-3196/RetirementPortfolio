@@ -493,3 +493,16 @@ def test_admin_member_actions_recover_from_request_errors(monkeypatch):
     assert 'adminMemberActionMessage.textContent = "";' in html
     assert 'throw new Error(data.detail || (deleting' in html
     assert 'button.disabled = false;' in html
+
+
+def test_home_response_has_browser_security_headers(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-key")
+    response = app_module.home()
+
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    assert "base-uri 'none'" in response.headers["content-security-policy"]
