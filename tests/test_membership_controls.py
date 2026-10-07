@@ -513,3 +513,36 @@ def test_bootstrap_does_not_initialize_when_authentication_fails(monkeypatch):
 
     assert exc.value.status_code == 403
     assert repository_calls == []
+
+
+
+def test_kakao_callback_rejects_token_without_talk_message_scope(monkeypatch, membership_db):
+    user_id = uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=user_id, is_admin=False, is_active=True))
+
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "rest-key")
+    monkeypatch.setenv("OAUTH_TOKEN_ENCRYPTION_KEY", "test-secret")
+    monkeypatch.setenv("RETIREMENT_PORTFOLIO_WEB_URL", "https://example.com")
+
+    state = web_app._kakao_state_serializer().dumps({
+        "user_id": str(user_id),
+        "purpose": "kakao-connect",
+    })
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self):
+            return b'{"access_token":"access","refresh_token":"refresh","scope":""}'
+
+    monkeypatch.setattr(web_app.urllib.request, "urlopen", lambda *args, **kwargs: FakeResponse())
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.kakao_callback(code="one-time-code", state=state)
+
+    assert exc.value.status_code == 403
+    assert "talk_message" in exc.value.detail
+    assert "카카오톡 메시지 전송" in exc.value.detail
