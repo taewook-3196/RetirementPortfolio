@@ -4759,6 +4759,7 @@ const cashFlowEntryPanel = document.getElementById("cash-flow-entry-panel");
 const cashFlowEntryAccount = document.getElementById("cash-flow-entry-account");
 const cashFlowEntryForm = document.getElementById("cash-flow-entry-form");
 const allCashFlowsList = document.getElementById("all-cash-flows-list");
+const cashFlowVisibleCounts = new Map();
 
 async function loadCashFlowTab(accounts, accessToken) {
     cashFlowEntryAccount.innerHTML = '<option value="">계좌를 선택하세요</option>';
@@ -4782,6 +4783,10 @@ async function loadCashFlowTab(accounts, accessToken) {
         allCashFlowsList.appendChild(heading);
         const list = document.createElement("div");
         renderCashFlows(list, group.cashFlows, group.account, accessToken, {
+            visibleCount: cashFlowVisibleCounts.get(String(group.account.id)) || 20,
+            onVisibleCountChange: (visibleCount) => {
+                cashFlowVisibleCounts.set(String(group.account.id), visibleCount);
+            },
             onChanged: async () => {
                 await loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken);
                 await refreshPortfolioAfterTransactionChange();
@@ -8593,7 +8598,10 @@ function renderTransactions(
         [...transactions].reverse();
 
     const pageSize = 20;
-    let visibleCount = Math.min(pageSize, newestFirst.length);
+    let visibleCount = Math.min(
+        Number(options.visibleCount || pageSize),
+        newestFirst.length
+    );
 
     const list =
         document.createElement("div");
@@ -9652,6 +9660,9 @@ function renderCashFlows(
 
     moreButton.addEventListener("click", () => {
         visibleCount = Math.min(visibleCount + pageSize, newestFirst.length);
+        if (typeof options.onVisibleCountChange === "function") {
+            options.onVisibleCountChange(visibleCount);
+        }
         drawVisibleCashFlows();
     });
 
