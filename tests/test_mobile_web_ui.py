@@ -402,3 +402,10 @@ def test_entry_panels_prefill_filtered_or_single_account(monkeypatch):
     assert 'cashFlowEntryAccount.value = preferredAccountId;' in html
     assert 'await showTransactionEntryForm();' in html
     assert 'await showCashFlowEntryForm();' in html
+
+
+def test_account_creation_form_opens_without_forced_mobile_keyboard(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'createForm.scrollIntoView({' in html
+    assert 'accountNameInput.focus();' not in html
