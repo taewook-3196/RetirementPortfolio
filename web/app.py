@@ -12603,14 +12603,27 @@ async function renderAccountCreator(accounts, accessToken) {
         "none";
 
 
+    let createFieldIndex = 0;
+
     function appendCreateField(
         labelText,
         element
     ) {
+        createFieldIndex += 1;
+
+        const fieldId =
+            "account-create-field-"
+            + createFieldIndex;
+
+        element.id = fieldId;
+
         const label =
             document.createElement(
                 "label"
             );
+
+        label.htmlFor =
+            fieldId;
 
         label.textContent =
             labelText;
