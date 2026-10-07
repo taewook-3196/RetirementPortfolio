@@ -453,3 +453,12 @@ def test_account_editor_labels_are_associated_with_fields(monkeypatch):
     assert 'label.htmlFor =' in html
     assert 'defaultLabel.htmlFor =' in html
     assert 'isDefault.id =' in html
+
+
+def test_transaction_and_cash_flow_labels_are_associated(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert '"transaction-"' in html
+    assert '"cash-flow-"' in html
+    assert html.count('element.id = fieldId;') >= 4
+    assert html.count('label.htmlFor =') >= 4
