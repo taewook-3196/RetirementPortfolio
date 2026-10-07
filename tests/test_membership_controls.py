@@ -145,7 +145,9 @@ def test_home_has_signup_gate_and_no_invitation_ui(monkeypatch):
     assert '"/api/bootstrap"' in html
     assert "await showAuthenticatedApp(data.access_token)" in html
     assert '회원 계정 삭제' in html
-    assert '투자 데이터와 기존 리포트는 서버에 보존되지만, 새 계정을 만들어도 자동으로 연결되지는 않습니다.' in html
+    assert '투자 데이터와 기존 리포트도 함께 영구 삭제됩니다.' in html
+    assert '이 작업은 되돌릴 수 없습니다.' in html
+    assert '투자 데이터와 기존 리포트는 서버에 보존' not in html
 
 
 def _mock_authenticated_user(monkeypatch, user_id):
@@ -753,5 +755,7 @@ def test_non_admin_cannot_list_deleted_members(monkeypatch, membership_db):
     with pytest.raises(HTTPException) as exc:
         web_app.list_deleted_members("Bearer member")
     assert exc.value.status_code == 403
+
+
 
 

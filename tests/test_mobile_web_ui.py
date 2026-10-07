@@ -85,7 +85,7 @@ def test_generated_browser_script_has_no_statement_newline_escapes(monkeypatch):
 def test_generated_admin_confirm_keeps_newlines_inside_js_string(monkeypatch):
     html = _html(monkeypatch)
 
-    assert "로그인 계정을 삭제하시겠습니까?\\n\\n앱 로그인" in html
+    assert "회원 계정을 삭제하시겠습니까?\\n\\n앱 로그인" in html
     assert "삭제하시겠습니까?\n\n앱 로그인" not in html
 
 
