@@ -12,6 +12,7 @@ import os
 import sys
 import logging
 import datetime
+import time
 from datetime import date
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -1689,7 +1690,38 @@ class DailyReportService:
                     if not ok:
                         return False, f"리포트 HTML은 생성되었으나 카카오톡 전송에 실패했습니다: {msg}", html_file
                     if self.repo.user_id:
-                        self.repo.mark_morning_report_kakao_sent(report_date)
+                        delivery_recorded = False
+                        last_record_error = None
+                        for attempt in range(3):
+                            try:
+                                delivery_recorded = bool(
+                                    self.repo.mark_morning_report_kakao_sent(report_date)
+                                )
+                                if delivery_recorded:
+                                    break
+                            except Exception as exc:
+                                last_record_error = exc
+                                logger.warning(
+                                    "카카오 발송 성공 후 완료 기록 실패 (%d/3): %s",
+                                    attempt + 1,
+                                    exc,
+                                )
+                            if attempt < 2:
+                                time.sleep(1)
+
+                        if not delivery_recorded:
+                            logger.error(
+                                "카카오 메시지는 전송됐지만 완료 기록을 저장하지 못했습니다. "
+                                "다음 스케줄에서 중복 발송될 수 있습니다. user_id=%s error=%s",
+                                self.repo.user_id,
+                                last_record_error,
+                            )
+                            return (
+                                False,
+                                "카카오톡 전송은 성공했지만 발송 완료 기록 저장에 실패했습니다. "
+                                "자동 재시도 시 중복 발송 가능성이 있습니다.",
+                                html_file,
+                            )
                     kakao_status = "카카오톡 발송 성공!"
                 else:
                     kakao_status = "카카오톡 미발송 (설정에서 모닝 리포트 발송 기능이 꺼져 있음)"
