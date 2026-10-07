@@ -145,7 +145,9 @@ def test_transactions_tab_is_independent_and_filterable(monkeypatch):
     assert 'id="transaction-account-filter"' in html
     assert 'id="transaction-type-filter"' in html
     assert 'id="transaction-search-filter"' in html
-    assert "async function loadTransactionTab(accounts, accessToken)" in html
+    assert "async function loadTransactionTab(accounts, accessToken, options = {})" in html
+    assert "if (!options.preserveVisibleCount)" in html
+    assert "{preserveVisibleCount: true}" in html
     assert "transactionTabVisibleCount = 20;" in html
     assert '"20건 더 보기"' in html
 
