@@ -141,7 +141,9 @@ class KakaoService:
         self,
         text_content: str,
         web_url: str,
-        button_title: str = "📊 모바일 리포트 열기"
+        button_title: str = "📊 모바일 리포트 열기",
+        *,
+        allow_token_refresh: bool = True,
     ) -> Tuple[bool, str]:
         """
         카카오 '나에게 보내기' API로 텍스트 + 웹 링크 버튼 메시지를 전송합니다.
@@ -194,12 +196,21 @@ class KakaoService:
                     return False, f"API 응답 코드 이상: {resp_data}"
         except urllib.error.HTTPError as e:
             # 토큰 만료(401)인 경우 1회 자동 갱신 시도
-            if e.code == 401 and self.morning_cfg.kakao_refresh_token.strip():
+            if (
+                e.code == 401
+                and allow_token_refresh
+                and self.morning_cfg.kakao_refresh_token.strip()
+            ):
                 logger.warning("Access Token 만료 감지, Refresh Token으로 자동 갱신 시도...")
                 refreshed, ref_msg = self.refresh_access_token()
                 if refreshed:
                     # 갱신된 토큰으로 재전송
-                    return self.send_memo_text_button(text_content, web_url, button_title)
+                    return self.send_memo_text_button(
+                        text_content,
+                        web_url,
+                        button_title,
+                        allow_token_refresh=False,
+                    )
                 else:
                     return False, f"토큰 만료 및 자동 갱신 실패: {ref_msg}"
 
