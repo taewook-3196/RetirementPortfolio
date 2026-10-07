@@ -800,9 +800,9 @@ def test_admin_delete_removes_all_user_owned_root_data(monkeypatch, membership_d
     with membership_db() as db:
         db.add(Profile(id=member_id, is_admin=False, is_active=True))
         db.add(Account(id=9001, user_id=member_id, account_name="Private", account_type="ISA", currency="KRW"))
-        db.add(InvestmentProfile(user_id=member_id))
-        db.add(UserSetting(user_id=member_id, morning_report_time=datetime.now().time()))
-        db.add(KakaoCredential(user_id=member_id, access_token_encrypted="a", refresh_token_encrypted="r"))
+        db.add(InvestmentProfile(id=9002, user_id=member_id))
+        db.add(UserSetting(id=9003, user_id=member_id, morning_report_time=datetime.now().time()))
+        db.add(KakaoCredential(id=9004, user_id=member_id, access_token_encrypted="a", refresh_token_encrypted="r"))
         db.add(MorningReport(user_id=member_id, report_date=datetime.now().date(), html_content="private"))
 
     monkeypatch.setattr(web_app, "require_admin", lambda authorization=None: {"user_id": str(admin_id)})
