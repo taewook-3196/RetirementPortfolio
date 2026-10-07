@@ -215,7 +215,7 @@ def test_admin_cannot_delete_another_admin(monkeypatch, membership_db):
     assert exc.value.status_code == 400
 
 
-def test_admin_deletes_member_login_but_reports_data_retained(monkeypatch, membership_db):
+def test_admin_deletes_member_and_reports_cascade_data_deletion(monkeypatch, membership_db):
     admin_id, member_id = uuid4(), uuid4()
     deleted_auth_users = []
     with membership_db() as db:
@@ -240,7 +240,7 @@ def test_admin_deletes_member_login_but_reports_data_retained(monkeypatch, membe
     assert result == {
         "deleted": True,
         "user_id": str(member_id),
-        "portfolio_data_deleted": False,
+        "portfolio_data_deleted": True,
     }
     with membership_db() as db:
         assert db.query(Profile).filter(Profile.id == member_id).one_or_none() is None
