@@ -281,6 +281,47 @@ def list_admin_members(
     }
 
 
+def _has_retained_member_data(user_id: UUID) -> bool:
+    """Return only whether deleted-member private data remains, never its contents."""
+    from database.models import (
+        Account, InvestmentProfile, Watchlist, MorningReport, RecommendationLog,
+    )
+
+    with get_db_session() as db:
+        checks = (
+            db.query(Account.id).filter(Account.user_id == user_id).first(),
+            db.query(InvestmentProfile.id).filter(InvestmentProfile.user_id == user_id).first(),
+            db.query(Watchlist.id).filter(Watchlist.user_id == user_id).first(),
+            db.query(UserSetting.id).filter(UserSetting.user_id == user_id).first(),
+            db.query(KakaoCredential.id).filter(KakaoCredential.user_id == user_id).first(),
+            db.query(MorningReport.id).filter(MorningReport.user_id == user_id).first(),
+            db.query(RecommendationLog.id).filter(RecommendationLog.user_id == user_id).first(),
+        )
+    return any(item is not None for item in checks)
+
+
+@app.get("/api/admin/deleted-members")
+def list_deleted_members(
+    authorization: str | None = Header(default=None),
+):
+    """List deletion tombstones without exposing retained portfolio contents."""
+    require_admin(authorization)
+    with get_db_session() as db:
+        tombstones = db.query(DeletedMember).order_by(DeletedMember.deleted_at.desc()).all()
+
+    return {
+        "deleted_members": [
+            {
+                "user_id": str(row.user_id),
+                "deleted_at": row.deleted_at.isoformat() if row.deleted_at else None,
+                "has_retained_data": _has_retained_member_data(row.user_id),
+            }
+            for row in tombstones
+        ],
+        "privacy_scope": "탈퇴 회원의 보존 데이터 내용이나 투자금액은 표시하지 않습니다.",
+    }
+
+
 class MemberAccessRequest(BaseModel):
     active: bool
 
