@@ -485,3 +485,11 @@ def test_chart_close_button_has_accessible_name(monkeypatch):
 
     assert '"aria-label",' in html
     assert '"차트 닫기"' in html
+
+
+def test_admin_member_actions_recover_from_request_errors(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'id="admin-member-action-message"' in html
+    assert 'adminMemberActionMessage.textContent = "";' in html
+    assert 'throw new Error(data.detail || (deleting' in html
+    assert 'button.disabled = false;' in html
