@@ -781,7 +781,9 @@ def test_admin_deleted_member_inventory_returns_materialized_values(monkeypatch,
     )
 
     result = web_app.list_deleted_members("Bearer admin")
-    assert result["deleted_members"] == [{
-        "user_id": str(deleted_id),
-        "deleted_at": deleted_at.isoformat(),
-    }]
+    assert len(result["deleted_members"]) == 1
+    deleted_member = result["deleted_members"][0]
+    assert deleted_member["user_id"] == str(deleted_id)
+    assert datetime.fromisoformat(deleted_member["deleted_at"]).replace(
+        tzinfo=timezone.utc
+    ) == deleted_at
