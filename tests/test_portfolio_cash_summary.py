@@ -412,3 +412,35 @@ def test_overall_summary_sums_each_account_cash_in_krw():
     assert summary.currency == "KRW"
     assert summary.remaining_cash == 1_000_000 + (1_000 + 100) * 1_350
     assert repo.get_cash_flows.call_count == 2
+
+
+def test_missing_market_price_is_explicitly_marked_as_estimated():
+    tx = _transaction(1, "ETF", "BUY", 10, 100)
+    positions = calculate_etf_positions([tx], [], {})
+    position = positions["ETF"]
+
+    assert position.current_price == 100.0
+    assert position.current_value == 1_000.0
+    assert position.market_price_available is False
+    assert position.price_is_estimated is True
+    assert position.price_date == ""
+
+
+def test_valid_market_price_exposes_source_date():
+    tx = _transaction(1, "ETF", "BUY", 10, 100)
+    market_price = SimpleNamespace(
+        close_price=120,
+        price_date=date(2026, 10, 7),
+    )
+    positions = calculate_etf_positions(
+        [tx],
+        [],
+        {"ETF": market_price},
+    )
+    position = positions["ETF"]
+
+    assert position.current_price == 120.0
+    assert position.current_value == 1_200.0
+    assert position.market_price_available is True
+    assert position.price_is_estimated is False
+    assert position.price_date == "2026-10-07"
