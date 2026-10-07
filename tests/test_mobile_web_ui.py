@@ -391,3 +391,14 @@ def test_transaction_and_cash_flow_entry_panels_are_mutually_exclusive(monkeypat
     assert 'cashFlowEntryAccount.value = "";' in html
     assert 'transactionEntryPanel.hidden = true;' in html
     assert 'transactionEntryAccount.value = "";' in html
+
+
+def test_entry_panels_prefill_filtered_or_single_account(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'const preferredAccountId = transactionAccountFilter.value' in html
+    assert 'transactionTabAccounts.length === 1' in html
+    assert 'transactionEntryAccount.value = preferredAccountId;' in html
+    assert 'cashFlowEntryAccount.value = preferredAccountId;' in html
+    assert 'await showTransactionEntryForm();' in html
+    assert 'await showCashFlowEntryForm();' in html
