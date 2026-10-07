@@ -415,7 +415,7 @@ def test_overall_summary_sums_each_account_cash_in_krw():
 
 
 def test_missing_market_price_is_explicitly_marked_as_estimated():
-    tx = _transaction(1, "ETF", "BUY", 10, 100)
+    tx = _transaction(1, "BUY", 10, 100, ticker="ETF")
     positions = calculate_etf_positions([tx], [], {})
     position = positions["ETF"]
 
@@ -427,7 +427,7 @@ def test_missing_market_price_is_explicitly_marked_as_estimated():
 
 
 def test_valid_market_price_exposes_source_date():
-    tx = _transaction(1, "ETF", "BUY", 10, 100)
+    tx = _transaction(1, "BUY", 10, 100, ticker="ETF")
     market_price = SimpleNamespace(
         close_price=120,
         price_date=date(2026, 10, 7),
