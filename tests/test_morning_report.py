@@ -478,3 +478,28 @@ def test_kakao_delivery_completion_record_is_retried():
     assert "mark_morning_report_kakao_sent(report_date)" in source
     assert "time.sleep(1)" in source
     assert "카카오톡 전송은 성공했지만 발송 완료 기록 저장에 실패했습니다." in source
+
+
+def test_report_news_rejects_non_web_link_schemes():
+    generator = ReportHtmlGenerator()
+    html_output = generator._render_news_section([
+        {
+            "title": "unsafe",
+            "media": "test",
+            "date": "now",
+            "link": "javascript:alert(1)",
+            "tag": "증시",
+        },
+        {
+            "title": "safe",
+            "media": "test",
+            "date": "now",
+            "link": "https://example.com/news",
+            "tag": "증시",
+        },
+    ])
+
+    assert 'href="javascript:' not in html_output
+    assert 'href="#"' in html_output
+    assert 'href="https://example.com/news"' in html_output
+    assert 'rel="noopener noreferrer"' in html_output
