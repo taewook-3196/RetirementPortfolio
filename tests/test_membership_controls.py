@@ -799,7 +799,7 @@ def test_admin_delete_removes_all_user_owned_root_data(monkeypatch, membership_d
     admin_id, member_id = uuid4(), uuid4()
     with membership_db() as db:
         db.add(Profile(id=member_id, is_admin=False, is_active=True))
-        db.add(Account(user_id=member_id, account_name="Private", account_type="ISA", currency="KRW"))
+        db.add(Account(id=9001, user_id=member_id, account_name="Private", account_type="ISA", currency="KRW"))
         db.add(InvestmentProfile(user_id=member_id))
         db.add(UserSetting(user_id=member_id, morning_report_time=datetime.now().time()))
         db.add(KakaoCredential(user_id=member_id, access_token_encrypted="a", refresh_token_encrypted="r"))
