@@ -343,3 +343,13 @@ def test_account_filter_applies_to_cash_flow_history(monkeypatch):
     assert "String(group.account.id) !== selectedAccountId" in cash_tab
     assert 'transactionAccountFilter.addEventListener("change", async () =>' in html
     assert "await loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken);" in html
+
+
+
+def test_bottom_navigation_supports_admin_fifth_tab(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert "grid-auto-flow: column;" in html
+    assert "grid-auto-columns: minmax(0, 1fr);" in html
+    assert "grid-template-columns: repeat(4, 1fr);" not in html
+    assert 'data-app-tab="members"' in html
