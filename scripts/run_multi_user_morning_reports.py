@@ -88,15 +88,23 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
             combined_repo = _CombinedMarketRepository(
                 [repo for _, repo, _ in due_users]
             )
-            update_market_prices(
+            sync_result = update_market_prices(
                 config=config,
                 repo=combined_repo,
                 days=5,
             )
-            logger.info(
-                "다중 사용자 공용 시장 가격 동기화 완료: 사용자 %d명",
-                len(due_users),
-            )
+            if str(sync_result.get("status", "")).lower() != "success":
+                logger.warning(
+                    "공용 시장 가격 동기화가 최신 데이터를 저장하지 못했습니다. "
+                    "기존 DB 시세로 리포트를 계속 생성합니다: %s",
+                    sync_result,
+                )
+            else:
+                logger.info(
+                    "다중 사용자 공용 시장 가격 동기화 완료: 사용자 %d명 / 저장 %s건",
+                    len(due_users),
+                    sync_result.get("saved_count", 0),
+                )
         except Exception:
             logger.exception(
                 "공용 시장 가격 동기화 실패 (기존 DB 캐시로 계속 진행)"

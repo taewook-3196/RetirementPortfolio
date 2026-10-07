@@ -524,3 +524,60 @@ def test_existing_unsent_report_without_kakao_scope_is_not_reprocessed(monkeypat
         datetime(2026, 10, 2, 8, 0, tzinfo=SEOUL)
     ) == 0
     assert calls == []
+
+
+def test_price_sync_warning_still_generates_due_report(monkeypatch, caplog):
+    user_id = uuid4()
+    calls = []
+
+    class FakeRepo:
+        def __init__(self, user_id):
+            self.user_id = user_id
+        @staticmethod
+        def get_morning_report_user_ids():
+            return [user_id]
+        def get_user_settings(self):
+            return SimpleNamespace(
+                morning_report_enabled=True,
+                morning_report_time=time(7, 0),
+                kakao_enabled=False,
+            )
+        def get_morning_report_for_date(self, report_date):
+            return None
+        def get_account_targets(self, account_id=None):
+            return []
+        def get_transactions(self):
+            return []
+        def get_etf_master(self, ticker):
+            return None
+        def save_etf_master(self, items):
+            return len(items)
+        def upsert_prices(self, items):
+            return len(items)
+
+    class FakeService:
+        def __init__(self, config, repo):
+            self.repo = repo
+        def generate_and_send(self, **kwargs):
+            calls.append(self.repo.user_id)
+            return True, "ok", None
+
+    monkeypatch.setattr(runner, "init_db", lambda: None)
+    monkeypatch.setattr(runner, "load_config", lambda: object())
+    monkeypatch.setattr(runner, "Repository", FakeRepo)
+    monkeypatch.setattr(runner, "DailyReportService", FakeService)
+    monkeypatch.setattr(
+        runner,
+        "update_market_prices",
+        lambda **kwargs: {
+            "status": "warning",
+            "saved_count": 0,
+            "message": "no fresh prices",
+        },
+    )
+
+    assert runner.run_all_users(
+        datetime(2026, 10, 2, 8, 0, tzinfo=SEOUL)
+    ) == 0
+    assert calls == [user_id]
+    assert "최신 데이터를 저장하지 못했습니다" in caplog.text
