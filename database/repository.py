@@ -17,6 +17,7 @@ from datetime import date, datetime, timedelta
 import math
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
+from sqlalchemy.exc import IntegrityError
 
 from core.config import ETFConfig, load_config
 from database.connection import get_db_session, init_db
@@ -1202,67 +1203,79 @@ class Repository:
                 "지원하지 않는 통화입니다."
             )
 
-        with get_db_session() as session:
-            account = (
-                session.query(Account)
-                .filter(
-                    Account.id
-                    == clean_account_id,
-                    Account.user_id
-                    == self.user_id,
-                )
-                .first()
-            )
-
-            if account is None:
-                raise ValueError(
-                    "계좌를 찾을 수 없습니다."
+        try:
+            with get_db_session() as session:
+                account = (
+                    session.query(Account)
+                    .filter(
+                        Account.id
+                        == clean_account_id,
+                        Account.user_id
+                        == self.user_id,
+                    )
+                    .first()
                 )
 
-            account_currency = str(
-                account.currency or "KRW"
-            ).strip().upper()
-            if clean_currency != account_currency:
-                raise ValueError(
-                    "입출금 통화는 계좌 통화와 같아야 합니다."
+                if account is None:
+                    raise ValueError(
+                        "계좌를 찾을 수 없습니다."
+                    )
+
+                account_currency = str(
+                    account.currency or "KRW"
+                ).strip().upper()
+                if clean_currency != account_currency:
+                    raise ValueError(
+                        "입출금 통화는 계좌 통화와 같아야 합니다."
+                    )
+
+                if request_id:
+                    existing_request = session.query(CashFlow).filter(
+                        CashFlow.request_id == request_id,
+                        CashFlow.account_id == account.id,
+                    ).first()
+                    if existing_request:
+                        if (existing_request.flow_date != clean_flow_date
+                            or existing_request.flow_type != clean_flow_type
+                            or float(existing_request.amount) != float(clean_amount)
+                            or existing_request.currency != clean_currency
+                            or existing_request.memo != str(memo or "").strip()):
+                            raise ValueError("동일 요청 ID에 다른 저장 내용이 전달되었습니다.")
+                        return existing_request
+
+                cash_flow = CashFlow(
+                    account_id=clean_account_id,
+                    request_id=request_id,
+                    flow_date=clean_flow_date,
+                    flow_type=clean_flow_type,
+                    amount=clean_amount,
+                    currency=clean_currency,
+                    memo=str(
+                        memo or ""
+                    ).strip(),
                 )
 
-            if request_id:
-                existing_request = session.query(CashFlow).filter(
+                session.add(
+                    cash_flow
+                )
+
+                session.flush()
+                session.refresh(
+                    cash_flow
+                )
+
+                return cash_flow
+
+        except IntegrityError:
+            if not request_id:
+                raise
+            with get_db_session() as retry_session:
+                existing_request = retry_session.query(CashFlow).filter(
                     CashFlow.request_id == request_id,
-                    CashFlow.account_id == account.id,
                 ).first()
-                if existing_request:
-                    if (existing_request.flow_date != clean_flow_date
-                        or existing_request.flow_type != clean_flow_type
-                        or float(existing_request.amount) != float(clean_amount)
-                        or existing_request.currency != clean_currency
-                        or existing_request.memo != str(memo or "").strip()):
-                        raise ValueError("동일 요청 ID에 다른 저장 내용이 전달되었습니다.")
-                    return existing_request
-
-            cash_flow = CashFlow(
-                account_id=clean_account_id,
-                request_id=request_id,
-                flow_date=clean_flow_date,
-                flow_type=clean_flow_type,
-                amount=clean_amount,
-                currency=clean_currency,
-                memo=str(
-                    memo or ""
-                ).strip(),
-            )
-
-            session.add(
-                cash_flow
-            )
-
-            session.flush()
-            session.refresh(
-                cash_flow
-            )
-
-            return cash_flow
+                if existing_request is None or existing_request.account_id != clean_account_id:
+                    raise
+                return existing_request
 
     def update_cash_flow(
         self,
@@ -2141,29 +2154,17 @@ class Repository:
         clean_tax = self._non_negative_number(tax, "세금")
         tx_date = self._parse_input_date(transaction_date, "거래 날짜")
 
-        with get_db_session() as session:
-            if account_id is None:
-                account = (
-                    session.query(Account)
-                    .filter(
-                        Account.user_id
-                        == self.user_id,
-                        Account.is_default.is_(
-                            True
-                        ),
-                    )
-                    .order_by(
-                        Account.id.asc()
-                    )
-                    .first()
-                )
-
-                if not account:
+        try:
+            with get_db_session() as session:
+                if account_id is None:
                     account = (
                         session.query(Account)
                         .filter(
                             Account.user_id
-                            == self.user_id
+                            == self.user_id,
+                            Account.is_default.is_(
+                                True
+                            ),
                         )
                         .order_by(
                             Account.id.asc()
@@ -2171,87 +2172,111 @@ class Repository:
                         .first()
                     )
 
-            else:
-                account = (
-                    session.query(Account)
+                    if not account:
+                        account = (
+                            session.query(Account)
+                            .filter(
+                                Account.user_id
+                                == self.user_id
+                            )
+                            .order_by(
+                                Account.id.asc()
+                            )
+                            .first()
+                        )
+
+                else:
+                    account = (
+                        session.query(Account)
+                        .filter(
+                            Account.id == account_id,
+                            Account.user_id
+                            == self.user_id,
+                        )
+                        .first()
+                    )
+
+                if not account:
+                    raise ValueError(
+                        "거래를 저장할 계좌를 찾을 수 없습니다."
+                    )
+
+                if request_id:
+                    existing_request = session.query(Transaction).filter(
+                        Transaction.request_id == request_id,
+                        Transaction.account_id == account.id,
+                    ).first()
+                    if existing_request:
+                        if (existing_request.transaction_date != tx_date
+                            or existing_request.ticker != clean_ticker
+                            or existing_request.transaction_type != tx_type
+                            or float(existing_request.quantity) != float(clean_quantity)
+                            or float(existing_request.price) != float(clean_price)
+                            or float(existing_request.fee) != float(clean_fee)
+                            or float(existing_request.tax) != float(clean_tax)
+                            or existing_request.memo != str(memo or "").strip()):
+                            raise ValueError("동일 요청 ID에 다른 저장 내용이 전달되었습니다.")
+                        return existing_request
+
+                existing_transactions = (
+                    session.query(Transaction)
+                    .filter(Transaction.account_id == account.id)
+                    .all()
+                )
+                self._ensure_sell_quantity(
+                    existing_transactions,
+                    ticker=clean_ticker,
+                    transaction_type=tx_type,
+                    quantity=clean_quantity,
+                    transaction_date=tx_date,
+                )
+
+                asset = (
+                    session.query(AssetMaster)
                     .filter(
-                        Account.id == account_id,
-                        Account.user_id
-                        == self.user_id,
+                        AssetMaster.ticker
+                        == clean_ticker
                     )
                     .first()
                 )
 
-            if not account:
-                raise ValueError(
-                    "거래를 저장할 계좌를 찾을 수 없습니다."
+                if not asset:
+                    raise ValueError(
+                        "asset_master에 등록되지 않은 "
+                        f"종목입니다: {clean_ticker}"
+                    )
+
+                transaction = Transaction(
+                    account_id=account.id,
+                    request_id=request_id,
+                    transaction_date=tx_date,
+                    ticker=clean_ticker,
+                    transaction_type=tx_type,
+                    quantity=clean_quantity,
+                    price=clean_price,
+                    fee=clean_fee,
+                    tax=clean_tax,
+                    memo=str(
+                        memo or ""
+                    ).strip(),
                 )
 
-            if request_id:
-                existing_request = session.query(Transaction).filter(
+                session.add(transaction)
+                session.flush()
+                session.refresh(transaction)
+
+                return transaction
+
+        except IntegrityError:
+            if not request_id:
+                raise
+            with get_db_session() as retry_session:
+                existing_request = retry_session.query(Transaction).filter(
                     Transaction.request_id == request_id,
-                    Transaction.account_id == account.id,
                 ).first()
-                if existing_request:
-                    if (existing_request.transaction_date != tx_date
-                        or existing_request.ticker != clean_ticker
-                        or existing_request.transaction_type != tx_type
-                        or float(existing_request.quantity) != float(clean_quantity)
-                        or float(existing_request.price) != float(clean_price)
-                        or float(existing_request.fee) != float(clean_fee)
-                        or float(existing_request.tax) != float(clean_tax)
-                        or existing_request.memo != str(memo or "").strip()):
-                        raise ValueError("동일 요청 ID에 다른 저장 내용이 전달되었습니다.")
-                    return existing_request
-
-            existing_transactions = (
-                session.query(Transaction)
-                .filter(Transaction.account_id == account.id)
-                .all()
-            )
-            self._ensure_sell_quantity(
-                existing_transactions,
-                ticker=clean_ticker,
-                transaction_type=tx_type,
-                quantity=clean_quantity,
-                transaction_date=tx_date,
-            )
-
-            asset = (
-                session.query(AssetMaster)
-                .filter(
-                    AssetMaster.ticker
-                    == clean_ticker
-                )
-                .first()
-            )
-
-            if not asset:
-                raise ValueError(
-                    "asset_master에 등록되지 않은 "
-                    f"종목입니다: {clean_ticker}"
-                )
-
-            transaction = Transaction(
-                account_id=account.id,
-                request_id=request_id,
-                transaction_date=tx_date,
-                ticker=clean_ticker,
-                transaction_type=tx_type,
-                quantity=clean_quantity,
-                price=clean_price,
-                fee=clean_fee,
-                tax=clean_tax,
-                memo=str(
-                    memo or ""
-                ).strip(),
-            )
-
-            session.add(transaction)
-            session.flush()
-            session.refresh(transaction)
-
-            return transaction
+                if existing_request is None or existing_request.account_id != account.id:
+                    raise
+                return existing_request
 
     def get_transactions(
         self,
