@@ -11368,11 +11368,14 @@ function createTransactionForm(
     );
 
 
+    let writePending = false;
+
     form.addEventListener(
         "submit",
         async (event) => {
 
             event.preventDefault();
+            if (writePending) return;
 
 
             if (!tickerSelect.value) {
@@ -11387,6 +11390,7 @@ function createTransactionForm(
             }
 
 
+            writePending = true;
             button.disabled =
                 true;
 
@@ -11489,6 +11493,7 @@ function createTransactionForm(
 
             } finally {
 
+                writePending = false;
                 button.disabled =
                     tickerSelect.options.length
                     === 0;
@@ -11771,11 +11776,14 @@ function createCashFlowForm(
     저장
     */
 
+    let writePending = false;
+
     form.addEventListener(
         "submit",
         async (event) => {
 
             event.preventDefault();
+            if (writePending) return;
 
 
             const amount =
@@ -11801,6 +11809,7 @@ function createCashFlowForm(
             }
 
 
+            writePending = true;
             button.disabled =
                 true;
 
@@ -11901,6 +11910,7 @@ function createCashFlowForm(
 
             } finally {
 
+                writePending = false;
                 button.disabled =
                     false;
 
