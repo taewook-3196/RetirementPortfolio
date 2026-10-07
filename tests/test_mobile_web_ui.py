@@ -436,3 +436,11 @@ def test_logout_clears_private_report_and_profile_state(monkeypatch):
     assert 'reportFrame.srcdoc = "";' in html
     assert 'reportFrame.style.display = "none";' in html
     assert 'reportSection.style.display = "none";' in html
+
+
+def test_account_creation_labels_are_associated_with_fields(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert '"account-create-field-"' in html
+    assert 'element.id = fieldId;' in html
+    assert 'label.htmlFor =' in html
