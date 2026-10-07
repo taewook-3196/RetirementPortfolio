@@ -1137,6 +1137,7 @@ class Repository:
         amount: float,
         currency: str,
         memo: str = "",
+        request_id: Optional[str] = None,
     ) -> CashFlow:
         """
         현재 사용자의 계좌에
@@ -1226,8 +1227,17 @@ class Repository:
                     "입출금 통화는 계좌 통화와 같아야 합니다."
                 )
 
+            if request_id:
+                existing_request = session.query(CashFlow).filter(
+                    CashFlow.request_id == request_id,
+                    CashFlow.account_id == account.id,
+                ).first()
+                if existing_request:
+                    return existing_request
+
             cash_flow = CashFlow(
                 account_id=clean_account_id,
+                request_id=request_id,
                 flow_date=clean_flow_date,
                 flow_type=clean_flow_type,
                 amount=clean_amount,
@@ -2094,6 +2104,7 @@ class Repository:
         fee: float = 0.0,
         tax: float = 0.0,
         memo: str = "",
+        request_id: Optional[str] = None,
         account_id: Optional[int] = None,
     ) -> Transaction:
         """현재 사용자의 거래 내역을 추가합니다."""
@@ -2170,6 +2181,14 @@ class Repository:
                     "거래를 저장할 계좌를 찾을 수 없습니다."
                 )
 
+            if request_id:
+                existing_request = session.query(Transaction).filter(
+                    Transaction.request_id == request_id,
+                    Transaction.account_id == account.id,
+                ).first()
+                if existing_request:
+                    return existing_request
+
             existing_transactions = (
                 session.query(Transaction)
                 .filter(Transaction.account_id == account.id)
@@ -2200,6 +2219,7 @@ class Repository:
 
             transaction = Transaction(
                 account_id=account.id,
+                request_id=request_id,
                 transaction_date=tx_date,
                 ticker=clean_ticker,
                 transaction_type=tx_type,
