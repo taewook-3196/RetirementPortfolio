@@ -14326,6 +14326,7 @@ logoutButton.addEventListener("click", () => {
     transactionTabAccessToken = "";
     transactionTabRows = [];
     transactionTabVisibleCount = 20;
+    cashFlowVisibleCounts.clear();
     transactionAccountFilter.innerHTML = '<option value="">전체 계좌</option>';
     transactionTypeFilter.value = "";
     transactionSearchFilter.value = "";

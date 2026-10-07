@@ -409,3 +409,9 @@ def test_account_creation_form_opens_without_forced_mobile_keyboard(monkeypatch)
 
     assert 'createForm.scrollIntoView({' in html
     assert 'accountNameInput.focus();' not in html
+
+
+def test_logout_clears_cash_flow_visible_counts(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'cashFlowVisibleCounts.clear();' in html
