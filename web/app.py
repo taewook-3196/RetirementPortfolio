@@ -11116,15 +11116,29 @@ function createTransactionForm(
         "선택사항";
 
 
+    let transactionFieldIndex = 0;
+
     function appendField(
         labelText,
         element
     ) {
+        transactionFieldIndex += 1;
+
+        const fieldId =
+            "transaction-"
+            + account.id
+            + "-field-"
+            + transactionFieldIndex;
+
+        element.id = fieldId;
 
         const label =
             document.createElement(
                 "label"
             );
+
+        label.htmlFor =
+            fieldId;
 
         label.textContent =
             labelText;
@@ -11544,14 +11558,29 @@ function createCashFlowForm(
     입력 필드 추가 함수
     */
 
+    let cashFlowFieldIndex = 0;
+
     function appendField(
         labelText,
         element
     ) {
+        cashFlowFieldIndex += 1;
+
+        const fieldId =
+            "cash-flow-"
+            + account.id
+            + "-field-"
+            + cashFlowFieldIndex;
+
+        element.id = fieldId;
+
         const label =
             document.createElement(
                 "label"
             );
+
+        label.htmlFor =
+            fieldId;
 
         label.textContent =
             labelText;
