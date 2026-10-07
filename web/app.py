@@ -23,7 +23,10 @@ from core.secret_crypto import encrypt_secret
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from database.connection import get_db_session
-from database.models import Profile, DeletedMember, AppSetting, KakaoCredential, UserSetting
+from database.models import (
+    Profile, DeletedMember, AppSetting, KakaoCredential, UserSetting,
+    Account, InvestmentProfile, Watchlist, RecommendationLog, MorningReport,
+)
 from database.repository import Repository
 from portfolio.holdings import calculate_etf_positions
 from data.yfinance_client import YFinanceClient
@@ -357,20 +360,32 @@ def delete_member(
             status_code=502,
             detail="회원 인증 계정을 삭제하지 못했습니다. 계정 접근은 중지된 상태입니다.",
         ) from exc
-    # Production Supabase foreign keys cascade auth.users deletion through the
-    # user's private rows. Record the audit tombstone after Auth deletion succeeds;
-    # the Profile may already have been removed by that cascade.
-    with get_db_session() as db:
-        db.merge(
-            DeletedMember(
-                user_id=member_id,
-                deleted_by=UUID(str(admin["user_id"])),
-                deleted_at=datetime.now(timezone.utc),
+    # Application user tables are not all constrained to auth.users in the
+    # production schema, so Auth deletion alone cannot be trusted to remove
+    # private portfolio data. Delete every user-owned root explicitly. Child
+    # transaction/target/cash-flow/dividend rows are removed with each account.
+    try:
+        with get_db_session() as db:
+            db.query(Account).filter(Account.user_id == member_id).delete(synchronize_session=False)
+            db.query(InvestmentProfile).filter(InvestmentProfile.user_id == member_id).delete(synchronize_session=False)
+            db.query(Watchlist).filter(Watchlist.user_id == member_id).delete(synchronize_session=False)
+            db.query(UserSetting).filter(UserSetting.user_id == member_id).delete(synchronize_session=False)
+            db.query(KakaoCredential).filter(KakaoCredential.user_id == member_id).delete(synchronize_session=False)
+            db.query(MorningReport).filter(MorningReport.user_id == member_id).delete(synchronize_session=False)
+            db.query(RecommendationLog).filter(RecommendationLog.user_id == member_id).delete(synchronize_session=False)
+            db.query(Profile).filter(Profile.id == member_id).delete(synchronize_session=False)
+            db.merge(
+                DeletedMember(
+                    user_id=member_id,
+                    deleted_by=UUID(str(admin["user_id"])),
+                    deleted_at=datetime.now(timezone.utc),
+                )
             )
-        )
-        profile = db.query(Profile).filter(Profile.id == member_id).one_or_none()
-        if profile is not None:
-            db.delete(profile)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="인증 계정은 삭제되었지만 투자 데이터 정리에 실패했습니다. 관리자 확인이 필요합니다.",
+        ) from exc
     return {
         "deleted": True,
         "user_id": str(member_id),
