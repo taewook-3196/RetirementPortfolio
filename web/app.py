@@ -4317,6 +4317,7 @@ body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
 </div>
 
 <h3>회원</h3>
+<div id="admin-member-action-message" class="transaction-message" aria-live="polite"></div>
 <div id="admin-members">불러오는 중...</div>
 </section>
 
@@ -5013,6 +5014,7 @@ const accountsList =
 const adminSection = document.getElementById("admin-section");
 const memberManagementTabButton = document.getElementById("member-management-tab-button");
 const adminMembers = document.getElementById("admin-members");
+const adminMemberActionMessage = document.getElementById("admin-member-action-message");
 const adminSignupEnabled = document.getElementById("admin-signup-enabled");
 const adminSignupStatus = document.getElementById("admin-signup-status");
 
@@ -5083,26 +5085,48 @@ adminMembers.addEventListener("click", async (event) => {
     if (!button) return;
     const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
     if (!accessToken) return;
-    if (button.classList.contains("admin-delete-member")) {
+    const deleting = button.classList.contains("admin-delete-member");
+    if (deleting) {
         const email = button.dataset.email || "이 회원";
         if (!window.confirm(email + " 회원 계정을 삭제하시겠습니까?\\n\\n앱 로그인과 서비스 이용은 즉시 차단되며, 투자 데이터와 기존 리포트도 함께 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")) return;
-        button.disabled = true;
-        const response = await fetch("/api/admin/members/" + encodeURIComponent(button.dataset.id), {
-            method: "DELETE", headers: {"Authorization": "Bearer " + accessToken},
-        });
-        if (response.ok) await loadAdminPanel(accessToken);
-        else button.disabled = false;
-        return;
     }
     const currentlyActive = button.dataset.active === "true";
     button.disabled = true;
-    const response = await fetch("/api/admin/members/" + encodeURIComponent(button.dataset.id) + "/access", {
-        method: "PUT",
-        headers: {"Authorization": "Bearer " + accessToken, "Content-Type": "application/json"},
-        body: JSON.stringify({active: !currentlyActive}),
-    });
-    if (response.ok) await loadAdminPanel(accessToken);
-    else button.disabled = false;
+    adminMemberActionMessage.textContent = "";
+    try {
+        const response = await fetch(
+            "/api/admin/members/" + encodeURIComponent(button.dataset.id)
+                + (deleting ? "" : "/access"),
+            deleting ? {
+                method: "DELETE",
+                headers: {"Authorization": "Bearer " + accessToken},
+            } : {
+                method: "PUT",
+                headers: {
+                    "Authorization": "Bearer " + accessToken,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({active: !currentlyActive}),
+            },
+        );
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (_) {
+            data = {};
+        }
+        if (!response.ok) {
+            throw new Error(data.detail || (deleting
+                ? "회원 계정을 삭제하지 못했습니다."
+                : "회원 이용 상태를 변경하지 못했습니다."));
+        }
+        await loadAdminPanel(accessToken);
+    } catch (error) {
+        adminMemberActionMessage.textContent = error.message || (deleting
+            ? "회원 계정을 삭제하지 못했습니다."
+            : "회원 이용 상태를 변경하지 못했습니다.");
+        button.disabled = false;
+    }
 });
 
 const morningReportSettingsForm = document.getElementById("morning-report-settings-form");
