@@ -481,7 +481,7 @@ def test_kakao_delivery_completion_record_is_retried():
 
 
 def test_report_news_rejects_non_web_link_schemes():
-    generator = ReportHTMLGenerator()
+    generator = ReportHtmlGenerator()
     html_output = generator._render_news_section([
         {
             "title": "unsafe",
