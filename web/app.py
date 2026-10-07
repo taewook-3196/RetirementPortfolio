@@ -10093,14 +10093,29 @@ async function showTransactionEditor(
         transaction.memo || "";
 
 
+    let editFieldIndex = 0;
+
     function appendField(
         labelText,
         element
     ) {
+        editFieldIndex += 1;
+
+        const fieldId =
+            "transaction-edit-"
+            + transaction.id
+            + "-field-"
+            + editFieldIndex;
+
+        element.id = fieldId;
+
         const label =
             document.createElement(
                 "label"
             );
+
+        label.htmlFor =
+            fieldId;
 
         label.textContent =
             labelText;
