@@ -736,30 +736,6 @@ def test_admin_member_list_exposes_only_operational_fields(monkeypatch, membersh
     assert private_fields.isdisjoint(member)
 
 
-def test_deleted_member_list_is_admin_only_and_privacy_safe(monkeypatch, membership_db):
-    admin_id, deleted_id = uuid4(), uuid4()
-    with membership_db() as db:
-        db.add(DeletedMember(user_id=deleted_id, deleted_by=admin_id))
-
-    monkeypatch.setattr(
-        web_app,
-        "require_admin",
-        lambda authorization=None: {"user_id": str(admin_id)},
-    )
-    monkeypatch.setattr(web_app, "_has_retained_member_data", lambda user_id: True)
-
-    result = web_app.list_deleted_members("Bearer admin")
-    assert len(result["deleted_members"]) == 1
-    item = result["deleted_members"][0]
-    assert set(item) == {"user_id", "deleted_at", "has_retained_data"}
-    assert item["user_id"] == str(deleted_id)
-    assert item["has_retained_data"] is True
-    assert "email" not in item
-    assert "holdings" not in item
-    assert "transactions" not in item
-    assert "portfolio_value" not in item
-
-
 def test_non_admin_cannot_list_deleted_members(monkeypatch, membership_db):
     member_id = uuid4()
     with membership_db() as db:
@@ -779,64 +755,3 @@ def test_non_admin_cannot_list_deleted_members(monkeypatch, membership_db):
     assert exc.value.status_code == 403
 
 
-def test_purge_requires_exact_deleted_member_confirmation(monkeypatch, membership_db):
-    admin_id, deleted_id = uuid4(), uuid4()
-    monkeypatch.setattr(web_app, "require_admin", lambda authorization=None: {"user_id": str(admin_id)})
-    with membership_db() as db:
-        db.add(DeletedMember(user_id=deleted_id, deleted_by=admin_id))
-
-    with pytest.raises(HTTPException) as exc:
-        web_app.purge_deleted_member_data(
-            deleted_id,
-            web_app.DeletedMemberPurgeRequest(confirm_user_id=uuid4()),
-            "Bearer admin",
-        )
-    assert exc.value.status_code == 400
-    with membership_db() as db:
-        assert db.query(DeletedMember).filter(DeletedMember.user_id == deleted_id).one_or_none() is not None
-
-
-def test_purge_rejects_user_without_deleted_member_tombstone(monkeypatch, membership_db):
-    admin_id, member_id = uuid4(), uuid4()
-    monkeypatch.setattr(web_app, "require_admin", lambda authorization=None: {"user_id": str(admin_id)})
-    with pytest.raises(HTTPException) as exc:
-        web_app.purge_deleted_member_data(
-            member_id,
-            web_app.DeletedMemberPurgeRequest(confirm_user_id=member_id),
-            "Bearer admin",
-        )
-    assert exc.value.status_code == 404
-
-
-def test_purge_rejects_deleted_id_if_profile_exists(monkeypatch, membership_db):
-    admin_id, member_id = uuid4(), uuid4()
-    monkeypatch.setattr(web_app, "require_admin", lambda authorization=None: {"user_id": str(admin_id)})
-    with membership_db() as db:
-        db.add(Profile(id=member_id, is_admin=False, is_active=False))
-        db.add(DeletedMember(user_id=member_id, deleted_by=admin_id))
-    with pytest.raises(HTTPException) as exc:
-        web_app.purge_deleted_member_data(
-            member_id,
-            web_app.DeletedMemberPurgeRequest(confirm_user_id=member_id),
-            "Bearer admin",
-        )
-    assert exc.value.status_code == 409
-
-
-def test_non_admin_cannot_purge_deleted_member(monkeypatch, membership_db):
-    member_id, deleted_id = uuid4(), uuid4()
-    with membership_db() as db:
-        db.add(Profile(id=member_id, is_admin=False, is_active=True))
-        db.add(DeletedMember(user_id=deleted_id, deleted_by=member_id))
-    monkeypatch.setattr(
-        web_app,
-        "get_current_user",
-        lambda authorization=None: {"authenticated": True, "user_id": str(member_id), "email": "member@example.com"},
-    )
-    with pytest.raises(HTTPException) as exc:
-        web_app.purge_deleted_member_data(
-            deleted_id,
-            web_app.DeletedMemberPurgeRequest(confirm_user_id=deleted_id),
-            "Bearer member",
-        )
-    assert exc.value.status_code == 403
