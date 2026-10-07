@@ -205,6 +205,20 @@ class KakaoService:
 
             err_body = e.read().decode("utf-8", errors="ignore")
             logger.error(f"카카오톡 전송 실패 HTTP {e.code}: {err_body}")
+
+            if e.code == 403:
+                try:
+                    error_data = json.loads(err_body)
+                except (TypeError, ValueError):
+                    error_data = {}
+                required_scopes = error_data.get("required_scopes") or []
+                if error_data.get("code") == -402 and "talk_message" in required_scopes:
+                    return False, (
+                        "카카오톡 메시지 전송 권한이 없습니다. "
+                        "'카카오톡 다시 연결'을 눌러 "
+                        "'카카오톡 메시지 전송' 항목에 동의해주세요."
+                    )
+
             return False, f"카카오 API 오류 (HTTP {e.code}): {err_body}"
         except Exception as e:
             logger.error(f"카카오톡 전송 중 예외 발생: {e}")
