@@ -382,3 +382,12 @@ def test_logout_clears_previous_users_rendered_data(monkeypatch):
     assert 'accountsList.innerHTML = "";' in html
     assert 'accountCreator.innerHTML = "";' in html
     assert 'accountManagementList.innerHTML = "";' in html
+
+
+def test_transaction_and_cash_flow_entry_panels_are_mutually_exclusive(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'cashFlowEntryPanel.hidden = true;' in html
+    assert 'cashFlowEntryAccount.value = "";' in html
+    assert 'transactionEntryPanel.hidden = true;' in html
+    assert 'transactionEntryAccount.value = "";' in html
