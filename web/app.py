@@ -4741,11 +4741,17 @@ async function showTransactionEntryForm() {
     }
 }
 
-openTransactionEntry.addEventListener("click", () => {
+openTransactionEntry.addEventListener("click", async () => {
     cashFlowEntryPanel.hidden = true;
     cashFlowEntryAccount.value = "";
     cashFlowEntryForm.innerHTML = "";
     transactionEntryPanel.hidden = false;
+    const preferredAccountId = transactionAccountFilter.value
+        || (transactionTabAccounts.length === 1 ? String(transactionTabAccounts[0].id) : "");
+    if (preferredAccountId) {
+        transactionEntryAccount.value = preferredAccountId;
+        await showTransactionEntryForm();
+    }
     transactionEntryPanel.scrollIntoView({behavior: "smooth", block: "start"});
 });
 closeTransactionEntry.addEventListener("click", () => {
@@ -4819,12 +4825,18 @@ async function showCashFlowEntryForm() {
     cashFlowEntryForm.scrollIntoView({behavior: "smooth", block: "nearest"});
 }
 
-openCashFlowEntry.addEventListener("click", () => {
+openCashFlowEntry.addEventListener("click", async () => {
     transactionEntryPanel.hidden = true;
     transactionEntryForm.className = "";
     transactionEntryForm.innerHTML = "";
     transactionEntryAccount.value = "";
     cashFlowEntryPanel.hidden = false;
+    const preferredAccountId = transactionAccountFilter.value
+        || (transactionTabAccounts.length === 1 ? String(transactionTabAccounts[0].id) : "");
+    if (preferredAccountId) {
+        cashFlowEntryAccount.value = preferredAccountId;
+        await showCashFlowEntryForm();
+    }
     cashFlowEntryPanel.scrollIntoView({behavior: "smooth", block: "start"});
 });
 closeCashFlowEntry.addEventListener("click", () => {
