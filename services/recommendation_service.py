@@ -555,7 +555,10 @@ class RecommendationService:
                     position.current_price
                     or 0
                 )
-                if position
+                if (
+                    position
+                    and position.market_price_available
+                )
                 else 0.0
             )
 

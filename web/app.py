@@ -3124,6 +3124,15 @@ def get_account_positions_api(
                             or 0
                         ),
 
+                    "market_price_available":
+                        bool(position.market_price_available),
+
+                    "price_date":
+                        str(position.price_date or ""),
+
+                    "price_is_estimated":
+                        bool(position.price_is_estimated),
+
                     "current_value":
                         native_current_value,
 
@@ -8219,10 +8228,27 @@ function renderPositions(
 
         row.appendChild(
             createDetail(
-                "현재가 "
-                + formatMoney(
-                    position.current_price,
-                    assetCurrency
+                (
+                    position.market_price_available
+                    ? (
+                        "현재가 "
+                        + formatMoney(
+                            position.current_price,
+                            assetCurrency
+                        )
+                        + (
+                            position.price_date
+                            ? " (기준 " + position.price_date + ")"
+                            : ""
+                        )
+                    )
+                    : (
+                        "시장가격 없음 · 평단가 기준 임시평가 "
+                        + formatMoney(
+                            position.current_price,
+                            assetCurrency
+                        )
+                    )
                 )
                 + " · 평가금액 "
                 + formatMoney(
