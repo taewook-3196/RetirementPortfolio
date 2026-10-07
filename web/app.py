@@ -14336,6 +14336,15 @@ logoutButton.addEventListener("click", () => {
     accountCreator.innerHTML = "";
     accountManagementList.innerHTML = "";
     adminMembers.innerHTML = "불러오는 중...";
+    usAssetTickerInput.value = "";
+    usAssetSearchResult.innerHTML = "";
+    usAssetSearchResult.className = "transaction-message";
+    morningReportSettingsMessage.textContent = "";
+    kakaoStatus.textContent = "연결 상태 확인 중...";
+    kakaoStatus.className = "status-box";
+    kakaoTestButton.style.display = "none";
+    kakaoDisconnectButton.style.display = "none";
+    kakaoConnectButton.textContent = "카카오톡 연결";
     activeSettingsPanel = "accounts";
     setAppTab("home", {scroll: false});
     appArea.style.display = "none";

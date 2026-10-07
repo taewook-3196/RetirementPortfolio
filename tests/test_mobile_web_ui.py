@@ -415,3 +415,14 @@ def test_logout_clears_cash_flow_visible_counts(monkeypatch):
     html = _html(monkeypatch)
 
     assert 'cashFlowVisibleCounts.clear();' in html
+
+
+def test_logout_clears_search_and_settings_status(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert 'usAssetTickerInput.value = "";' in html
+    assert 'usAssetSearchResult.innerHTML = "";' in html
+    assert 'morningReportSettingsMessage.textContent = "";' in html
+    assert 'kakaoStatus.textContent = "연결 상태 확인 중...";' in html
+    assert 'kakaoTestButton.style.display = "none";' in html
+    assert 'kakaoDisconnectButton.style.display = "none";' in html
