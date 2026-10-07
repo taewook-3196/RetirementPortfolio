@@ -470,3 +470,11 @@ def test_kakao_missing_message_scope_has_actionable_error():
     assert "카카오톡 다시 연결" in message
     assert "카카오톡 메시지 전송" in message
     assert "insufficient scopes" not in message
+
+
+def test_kakao_delivery_completion_record_is_retried():
+    source = Path("services/daily_report_service.py").read_text(encoding="utf-8")
+    assert "for attempt in range(3):" in source
+    assert "mark_morning_report_kakao_sent(report_date)" in source
+    assert "time.sleep(1)" in source
+    assert "카카오톡 전송은 성공했지만 발송 완료 기록 저장에 실패했습니다." in source
