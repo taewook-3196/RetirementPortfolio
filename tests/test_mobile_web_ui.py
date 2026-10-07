@@ -498,7 +498,7 @@ def test_admin_member_actions_recover_from_request_errors(monkeypatch):
 def test_home_response_has_browser_security_headers(monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-key")
-    response = app_module.home()
+    response = home()
 
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["referrer-policy"] == "no-referrer"
