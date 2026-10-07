@@ -40,8 +40,12 @@ class ETFPosition:
     # 이동평균 매수가
     average_buy_price: float = 0.0
 
-    # 최근 시장 가격
+    # 최근 시장 가격. 시장가격이 없을 때는 평가 안정성을 위해
+    # 평단가가 사용될 수 있으므로 아래 상태 필드를 반드시 함께 확인합니다.
     current_price: float = 0.0
+    market_price_available: bool = False
+    price_date: str = ""
+    price_is_estimated: bool = False
 
     # 현재 평가금액
     current_value: float = 0.0
@@ -300,16 +304,31 @@ def calculate_etf_positions(
             )
         )
 
+        market_price_available = False
+        price_date = ""
+        price_is_estimated = False
+
         if price_object:
             current_price = _to_float(
                 price_object.close_price
             )
+
+            raw_price_date = getattr(price_object, "price_date", None)
+            if raw_price_date is not None:
+                price_date = (
+                    raw_price_date.isoformat()
+                    if hasattr(raw_price_date, "isoformat")
+                    else str(raw_price_date)
+                )
+
+            market_price_available = current_price > 0
 
             # 가격 데이터가 NaN, Infinity, 0 이하 등
             # 정상적인 시장 가격이 아니라면
             # 평가금액이 0으로 급락하지 않도록
             # 현재 보유분의 평단가를 임시 사용합니다.
             if current_price <= 0:
+                price_is_estimated = True
                 current_price = (
                     average_price
                     if average_price > 0
@@ -317,6 +336,7 @@ def calculate_etf_positions(
                 )
 
         else:
+            price_is_estimated = True
             # 아직 시장 가격이 없다면 평단가를 임시 사용하여
             # 평가금액이 갑자기 0원이 되는 것을 방지
             current_price = (
@@ -373,6 +393,9 @@ def calculate_etf_positions(
             current_price,
             4,
         )
+        position.market_price_available = market_price_available
+        position.price_date = price_date
+        position.price_is_estimated = price_is_estimated
 
         position.current_value = round(
             current_value,
