@@ -15205,5 +15205,26 @@ restoreLoginSession().finally(() => {
     )
 
     return HTMLResponse(
-        content=html
+        content=html,
+        headers={
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+            "Permissions-Policy": (
+                "camera=(), microphone=(), geolocation=(), "
+                "payment=(), usb=()"
+            ),
+            "Content-Security-Policy": (
+                "default-src 'none'; "
+                "style-src 'unsafe-inline'; "
+                "script-src 'unsafe-inline'; "
+                "connect-src 'self' https:; "
+                "img-src 'self' data: https:; "
+                "font-src 'self' data:; "
+                "frame-ancestors 'none'; "
+                "base-uri 'none'; "
+                "form-action 'self'"
+            ),
+        },
     )
