@@ -366,3 +366,17 @@ def test_settings_has_logout_that_clears_session_and_app_state(monkeypatch):
     assert 'appArea.style.display = "none";' in html
     assert 'loginCard.style.display = "block";' in html
     assert "loginForm.reset();" in html
+
+
+
+def test_logout_clears_previous_users_rendered_data(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert "transactionTabRows = [];" in html
+    assert 'transactionAccountFilter.innerHTML = \'<option value="">전체 계좌</option>\';' in html
+    assert 'transactionSearchFilter.value = "";' in html
+    assert 'allTransactionsList.innerHTML = "";' in html
+    assert 'allCashFlowsList.innerHTML = "";' in html
+    assert 'accountsList.innerHTML = "";' in html
+    assert 'accountCreator.innerHTML = "";' in html
+    assert 'accountManagementList.innerHTML = "";' in html
