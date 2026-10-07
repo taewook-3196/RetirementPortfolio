@@ -3976,7 +3976,8 @@ button:disabled {
     display: grid;
     width: min(920px, 100%);
     transform: translateX(-50%);
-    grid-template-columns: repeat(4, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     padding: 7px max(8px, env(safe-area-inset-right)) max(7px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
     border-top: 1px solid #e1e4e8;
     background: rgba(255,255,255,0.96);
