@@ -30,6 +30,15 @@ def repo_and_session(monkeypatch):
             session.close()
 
     monkeypatch.setattr(repository_module, "init_db", lambda: None)
+    next_id = {"value": 0}
+    from sqlalchemy import event
+    from sqlalchemy.orm import Session
+    @event.listens_for(Session, "before_flush")
+    def assign_sqlite_id(session, flush_context, instances):
+        for obj in session.new:
+            if isinstance(obj, CashFlow) and obj.id is None:
+                next_id["value"] += 1
+                obj.id = next_id["value"]
     monkeypatch.setattr(repository_module, "get_db_session", db_session)
     user_id = uuid4()
     with db_session() as session:
