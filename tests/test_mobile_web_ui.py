@@ -478,3 +478,10 @@ def test_transaction_edit_labels_are_associated(monkeypatch):
     assert '"transaction-edit-"' in html
     assert '+ transaction.id' in html
     assert html.count('label.htmlFor =') >= 6
+
+
+def test_chart_close_button_has_accessible_name(monkeypatch):
+    html = _html(monkeypatch)
+
+    assert '"aria-label",' in html
+    assert '"차트 닫기"' in html
