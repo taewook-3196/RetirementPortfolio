@@ -34,6 +34,9 @@ def test_one_user_failure_does_not_stop_next_user(monkeypatch):
                 morning_report_time=time(7, 0),
                 kakao_enabled=False,
             )
+        def get_kakao_credential(self):
+            return SimpleNamespace(scopes="talk_message")
+
         def get_morning_report_for_date(self, report_date):
             return None
 
@@ -70,6 +73,9 @@ def test_existing_report_skips_duplicate_send(monkeypatch):
                 morning_report_time=time(7, 0),
                 kakao_enabled=True,
             )
+        def get_kakao_credential(self):
+            return SimpleNamespace(scopes="talk_message")
+
         def get_morning_report_for_date(self, report_date):
             return SimpleNamespace(kakao_sent_at=datetime(2026, 10, 2, 7, 5, tzinfo=SEOUL))
 
@@ -102,6 +108,9 @@ def test_unsent_kakao_report_is_retried(monkeypatch):
                 morning_report_time=time(7, 0),
                 kakao_enabled=True,
             )
+        def get_kakao_credential(self):
+            return SimpleNamespace(scopes="talk_message")
+
         def get_morning_report_for_date(self, report_date):
             return SimpleNamespace(kakao_sent_at=None)
 
@@ -137,6 +146,9 @@ def test_force_resend_bypasses_existing_sent_report(monkeypatch):
                 morning_report_time=time(7, 0),
                 kakao_enabled=True,
             )
+        def get_kakao_credential(self):
+            return SimpleNamespace(scopes="talk_message")
+
         def get_morning_report_for_date(self, report_date):
             return SimpleNamespace(kakao_sent_at=datetime(2026, 10, 2, 7, 5, tzinfo=SEOUL))
 
@@ -175,6 +187,9 @@ def test_force_resend_bypasses_scheduled_time(monkeypatch):
                 morning_report_time=time(7, 0),
                 kakao_enabled=True,
             )
+        def get_kakao_credential(self):
+            return SimpleNamespace(scopes="talk_message")
+
         def get_morning_report_for_date(self, report_date):
             return None
 
@@ -215,6 +230,9 @@ def test_due_users_share_one_market_price_sync(monkeypatch):
                 morning_report_time=time(7, 0),
                 kakao_enabled=False,
             )
+        def get_kakao_credential(self):
+            return SimpleNamespace(scopes="talk_message")
+
         def get_morning_report_for_date(self, report_date):
             return None
         def get_account_targets(self, account_id=None):
@@ -281,6 +299,9 @@ def test_multi_user_delivery_states_are_isolated(monkeypatch):
                 kakao_enabled=self.user_id != no_kakao,
             )
 
+        def get_kakao_credential(self):
+            return SimpleNamespace(scopes="talk_message")
+
         def get_morning_report_for_date(self, report_date):
             return existing[self.user_id]
 
@@ -343,6 +364,9 @@ def test_one_kakao_delivery_failure_does_not_block_other_user(monkeypatch):
                 kakao_enabled=True,
             )
 
+        def get_kakao_credential(self):
+            return SimpleNamespace(scopes="talk_message")
+
         def get_morning_report_for_date(self, report_date):
             return None
 
@@ -381,3 +405,66 @@ def test_one_kakao_delivery_failure_does_not_block_other_user(monkeypatch):
         datetime(2026, 10, 2, 8, 0, tzinfo=SEOUL)
     ) == 1
     assert calls == [failing, succeeding]
+
+
+
+def test_missing_kakao_scope_generates_report_without_delivery(monkeypatch):
+    user_id = uuid4()
+    calls = []
+
+    class FakeRepo:
+        def __init__(self, user_id):
+            self.user_id = user_id
+
+        @staticmethod
+        def get_morning_report_user_ids():
+            return [user_id]
+
+        def get_user_settings(self):
+            return SimpleNamespace(
+                morning_report_enabled=True,
+                morning_report_time=time(7, 0),
+                kakao_enabled=True,
+            )
+
+        def get_kakao_credential(self):
+            return SimpleNamespace(scopes="")
+
+        def get_morning_report_for_date(self, report_date):
+            return None
+
+        def get_account_targets(self, account_id=None):
+            return []
+
+        def get_transactions(self):
+            return []
+
+        def get_etf_master(self, ticker):
+            return None
+
+        def save_etf_master(self, items):
+            return len(items)
+
+        def upsert_prices(self, items):
+            return len(items)
+
+    class FakeService:
+        def __init__(self, config, repo):
+            self.repo = repo
+
+        def generate_and_send(self, **kwargs):
+            calls.append(kwargs)
+            return True, "ok", None
+
+    monkeypatch.setattr(runner, "init_db", lambda: None)
+    monkeypatch.setattr(runner, "load_config", lambda: object())
+    monkeypatch.setattr(runner, "Repository", FakeRepo)
+    monkeypatch.setattr(runner, "DailyReportService", FakeService)
+    monkeypatch.setattr(runner, "update_market_prices", lambda **kwargs: {"saved": 0})
+
+    assert runner.run_all_users(
+        datetime(2026, 10, 2, 8, 0, tzinfo=SEOUL)
+    ) == 0
+    assert len(calls) == 1
+    assert calls[0]["send_kakao"] is False
+    assert calls[0]["force_kakao"] is False
