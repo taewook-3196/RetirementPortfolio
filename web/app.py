@@ -13129,7 +13129,10 @@ async function renderAccountCreator(accounts, accessToken) {
                 openCreateButton.style.display =
                     "none";
 
-                accountNameInput.focus();
+                createForm.scrollIntoView({
+                    behavior: "smooth",
+                    block: "nearest"
+                });
             }
         );
 
