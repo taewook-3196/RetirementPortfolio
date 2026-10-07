@@ -4893,7 +4893,7 @@ function renderTransactionTab() {
                     null,
                     {
                         onSaved: async () => {
-                            await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);
+                            await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken, {preserveVisibleCount: true});
                             await refreshPortfolioAfterTransactionChange();
                         },
                         onCancel: () => renderTransactionTab(),
@@ -4915,7 +4915,7 @@ function renderTransactionTab() {
                     transactionTabAccessToken,
                     {method: "DELETE"}
                 );
-                await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);
+                await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken, {preserveVisibleCount: true});
                 await refreshPortfolioAfterTransactionChange();
             } catch (error) {
                 window.alert(error.message || "거래 삭제에 실패했습니다.");
@@ -4940,7 +4940,7 @@ function renderTransactionTab() {
     allTransactionsList.appendChild(controls);
 }
 
-async function loadTransactionTab(accounts, accessToken) {
+async function loadTransactionTab(accounts, accessToken, options = {}) {
     transactionTabAccounts = accounts;
     transactionTabAccessToken = accessToken;
     transactionAccountFilter.innerHTML = '<option value="">전체 계좌</option>';
@@ -4954,7 +4954,9 @@ async function loadTransactionTab(accounts, accessToken) {
         return transactions.map((transaction) => ({account, transaction}));
     }));
     transactionTabRows = rows.flat().sort((a, b) => String(b.transaction.transaction_date).localeCompare(String(a.transaction.transaction_date)) || Number(b.transaction.id || 0) - Number(a.transaction.id || 0));
-    transactionTabVisibleCount = 20;
+    if (!options.preserveVisibleCount) {
+        transactionTabVisibleCount = 20;
+    }
     renderTransactionTab();
     await loadCashFlowTab(accounts, accessToken);
 }
