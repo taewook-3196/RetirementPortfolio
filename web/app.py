@@ -617,13 +617,28 @@ def kakao_callback(code: str = "", state: str = "", error: str = ""):
     if not access_token or not refresh_token:
         raise HTTPException(status_code=502, detail="카카오 토큰 응답이 올바르지 않습니다.")
 
+    granted_scopes = {
+        scope.strip()
+        for scope in str(token_data.get("scope", "")).split()
+        if scope.strip()
+    }
+    if "talk_message" not in granted_scopes:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "카카오톡 메시지 전송 권한(talk_message)에 동의되지 않았습니다. "
+                "카카오 개발자 앱의 카카오 로그인 > 동의항목에서 "
+                "'카카오톡 메시지 전송'을 사용 가능하게 설정한 뒤 다시 연결해주세요."
+            ),
+        )
+
     now = datetime.now(timezone.utc)
     Repository(user_id=user_id).save_kakao_credential(
         access_token_encrypted=encrypt_secret(access_token),
         refresh_token_encrypted=encrypt_secret(refresh_token),
         access_token_expires_at=now + timedelta(seconds=int(token_data.get("expires_in", 0) or 0)),
         refresh_token_expires_at=now + timedelta(seconds=int(token_data.get("refresh_token_expires_in", 0) or 0)),
-        scopes=str(token_data.get("scope", "")),
+        scopes=" ".join(sorted(granted_scopes)),
     )
     settings = Repository(user_id=user_id).get_user_settings()
     if settings is not None and not settings.kakao_enabled:
