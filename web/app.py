@@ -5075,7 +5075,7 @@ async function loadAdminPanel(accessToken) {
 }
 
 adminSignupEnabled.addEventListener("change", async () => {
-    const accessToken = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
     if (!accessToken) return;
     adminSignupEnabled.disabled = true;
     try {
@@ -14438,17 +14438,6 @@ function saveAuthTokens(
         refreshToken || "";
 
 
-    sessionStorage.setItem(
-        "access_token",
-        safeAccessToken
-    );
-
-    sessionStorage.setItem(
-        "refresh_token",
-        safeRefreshToken
-    );
-
-
     localStorage.setItem(
         "access_token",
         safeAccessToken
@@ -14462,15 +14451,6 @@ function saveAuthTokens(
 
 
 function clearAuthTokens() {
-
-    sessionStorage.removeItem(
-        "access_token"
-    );
-
-    sessionStorage.removeItem(
-        "refresh_token"
-    );
-
 
     localStorage.removeItem(
         "access_token"
@@ -14921,9 +14901,8 @@ async function restoreLoginSession() {
 
 
     /*
-    기존 코드의 다른 기능들이
-    sessionStorage의 access_token을 사용하므로
-    현재 세션에도 다시 복사합니다.
+    갱신 과정에서 refresh token이 회전했을 수 있으므로
+    영구 로그인 저장소의 최신 토큰 쌍을 유지합니다.
     */
     const currentRefreshToken =
         localStorage.getItem(
