@@ -759,3 +759,28 @@ def test_non_admin_cannot_list_deleted_members(monkeypatch, membership_db):
 
 
 
+
+
+def test_admin_deleted_member_inventory_returns_materialized_values(monkeypatch, membership_db):
+    admin_id = uuid4()
+    deleted_id = uuid4()
+    deleted_at = datetime.now(timezone.utc)
+    with membership_db() as db:
+        db.add(Profile(id=admin_id, is_admin=True, is_active=True))
+        db.add(DeletedMember(user_id=deleted_id, deleted_by=admin_id, deleted_at=deleted_at))
+
+    monkeypatch.setattr(
+        web_app,
+        "get_current_user",
+        lambda authorization=None: {
+            "authenticated": True,
+            "user_id": str(admin_id),
+            "email": "admin@example.com",
+        },
+    )
+
+    result = web_app.list_deleted_members("Bearer admin")
+    assert result["deleted_members"] == [{
+        "user_id": str(deleted_id),
+        "deleted_at": deleted_at.isoformat(),
+    }]
