@@ -289,15 +289,16 @@ def list_deleted_members(
     require_admin(authorization)
     with get_db_session() as db:
         tombstones = db.query(DeletedMember).order_by(DeletedMember.deleted_at.desc()).all()
-
-    return {
-        "deleted_members": [
+        deleted_members = [
             {
                 "user_id": str(row.user_id),
                 "deleted_at": row.deleted_at.isoformat() if row.deleted_at else None,
             }
             for row in tombstones
-        ],
+        ]
+
+    return {
+        "deleted_members": deleted_members,
         "privacy_scope": "삭제된 회원의 사용자 UUID와 삭제 시각만 표시합니다.",
     }
 
