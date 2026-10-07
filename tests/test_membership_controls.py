@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import web.app as web_app
-from database.models import AppSetting, DeletedMember, KakaoCredential, Profile, UserSetting
+from database.models import AppSetting, DeletedMember, KakaoCredential, Profile, UserSetting, Account, InvestmentProfile, Watchlist, RecommendationLog, MorningReport, AssetMaster
 
 
 @pytest.fixture
@@ -20,6 +20,12 @@ def membership_db(monkeypatch):
     DeletedMember.__table__.create(engine)
     KakaoCredential.__table__.create(engine)
     UserSetting.__table__.create(engine)
+    AssetMaster.__table__.create(engine)
+    Account.__table__.create(engine)
+    InvestmentProfile.__table__.create(engine)
+    Watchlist.__table__.create(engine)
+    RecommendationLog.__table__.create(engine)
+    MorningReport.__table__.create(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     @contextmanager
@@ -787,3 +793,32 @@ def test_admin_deleted_member_inventory_returns_materialized_values(monkeypatch,
     assert datetime.fromisoformat(deleted_member["deleted_at"]).replace(
         tzinfo=timezone.utc
     ) == deleted_at
+
+
+def test_admin_delete_removes_all_user_owned_root_data(monkeypatch, membership_db):
+    admin_id, member_id = uuid4(), uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=member_id, is_admin=False, is_active=True))
+        db.add(Account(user_id=member_id, account_name="Private", account_type="ISA", currency="KRW"))
+        db.add(InvestmentProfile(user_id=member_id))
+        db.add(UserSetting(user_id=member_id, morning_report_time=datetime.now().time()))
+        db.add(KakaoCredential(user_id=member_id, access_token_encrypted="a", refresh_token_encrypted="r"))
+        db.add(MorningReport(user_id=member_id, report_date=datetime.now().date(), html_content="private"))
+
+    monkeypatch.setattr(web_app, "require_admin", lambda authorization=None: {"user_id": str(admin_id)})
+    monkeypatch.setattr(
+        web_app,
+        "_get_supabase_admin_client",
+        lambda: SimpleNamespace(auth=SimpleNamespace(admin=SimpleNamespace(delete_user=lambda value: None))),
+    )
+
+    result = web_app.delete_member(member_id, "Bearer admin")
+    assert result["portfolio_data_deleted"] is True
+    with membership_db() as db:
+        assert db.query(Profile).filter(Profile.id == member_id).count() == 0
+        assert db.query(Account).filter(Account.user_id == member_id).count() == 0
+        assert db.query(InvestmentProfile).filter(InvestmentProfile.user_id == member_id).count() == 0
+        assert db.query(UserSetting).filter(UserSetting.user_id == member_id).count() == 0
+        assert db.query(KakaoCredential).filter(KakaoCredential.user_id == member_id).count() == 0
+        assert db.query(MorningReport).filter(MorningReport.user_id == member_id).count() == 0
+        assert db.query(DeletedMember).filter(DeletedMember.user_id == member_id).count() == 1
