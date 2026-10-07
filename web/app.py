@@ -939,6 +939,7 @@ class InvestmentProfileRequest(BaseModel):
 class TransactionCreateRequest(BaseModel):
     """매수/매도 거래 등록 및 수정 요청."""
 
+    request_id: str | None = Field(default=None, max_length=80)
     transaction_date: date
 
     ticker: str = Field(
@@ -962,6 +963,7 @@ class TransactionCreateRequest(BaseModel):
     )
 
 class CashFlowRequest(BaseModel):
+    request_id: str | None = Field(default=None, max_length=80)
     flow_date: date
     flow_type: str = Field(min_length=7, max_length=10)
     amount: float = Field(gt=0)
@@ -2315,6 +2317,7 @@ def create_transaction_api(
             memo=
                 request.memo,
 
+            request_id=request.request_id,
             account_id=
                 account_id,
         )
@@ -2690,6 +2693,7 @@ def create_cash_flow_api(
             flow_type=request.flow_type,
             amount=request.amount,
             currency=request.currency,
+            request_id=request.request_id,
             memo=request.memo,
         )
 
@@ -11369,6 +11373,7 @@ function createTransactionForm(
 
 
     let writePending = false;
+    let pendingRequestId = null;
 
     form.addEventListener(
         "submit",
@@ -11398,7 +11403,9 @@ function createTransactionForm(
                 "저장 중...";
 
 
+            if (!pendingRequestId) pendingRequestId = crypto.randomUUID();
             const payload = {
+                request_id: pendingRequestId,
 
                 transaction_date:
                     dateInput.value,
@@ -11463,6 +11470,7 @@ function createTransactionForm(
 
                 result.className =
                     "transaction-message success";
+                pendingRequestId = null;
 
 
                 quantityInput.value = "";
@@ -11777,6 +11785,7 @@ function createCashFlowForm(
     */
 
     let writePending = false;
+    let pendingRequestId = null;
 
     form.addEventListener(
         "submit",
@@ -11820,7 +11829,9 @@ function createCashFlowForm(
                 "";
 
 
+            if (!pendingRequestId) pendingRequestId = crypto.randomUUID();
             const payload = {
+                request_id: pendingRequestId,
 
                 flow_date:
                     dateInput.value,
@@ -11873,6 +11884,7 @@ function createCashFlowForm(
 
                 result.className =
                     "transaction-message success";
+                pendingRequestId = null;
 
 
                 amountInput.value =
