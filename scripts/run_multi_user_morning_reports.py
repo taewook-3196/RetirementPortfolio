@@ -121,12 +121,27 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
             if force and existing_report is not None:
                 logger.info("수동 강제 재생성·재발송: %s", user_id)
 
+            send_kakao = bool(settings.kakao_enabled)
+            if send_kakao:
+                credential = repo.get_kakao_credential()
+                granted_scopes = {
+                    scope.strip()
+                    for scope in str(getattr(credential, "scopes", "") or "").split()
+                    if scope.strip()
+                }
+                if credential is None or "talk_message" not in granted_scopes:
+                    send_kakao = False
+                    logger.warning(
+                        "카카오 메시지 권한이 없어 발송을 건너뜀: %s",
+                        user_id,
+                    )
+
             logger.info("사용자별 모닝 리포트 생성 시작: %s", user_id)
             service = DailyReportService(config=config, repo=repo)
             ok, message, _ = service.generate_and_send(
-                send_kakao=bool(settings.kakao_enabled),
+                send_kakao=send_kakao,
                 update_prices=False,
-                force_kakao=bool(settings.kakao_enabled),
+                force_kakao=send_kakao,
             )
             if ok:
                 logger.info("사용자별 모닝 리포트 완료: %s", user_id)
