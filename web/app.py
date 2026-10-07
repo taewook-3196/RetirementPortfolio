@@ -3751,6 +3751,35 @@ button:disabled {
     line-height: 1.6;
 }
 
+.admin-member-card {
+    min-width: 0;
+}
+
+.admin-member-email {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.admin-member-meta {
+    margin-top: 5px;
+    color: #666;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.admin-member-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.admin-member-actions .small-button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    white-space: normal;
+}
+
 .settings-summary {
     margin-top: 10px;
     padding: 11px;
@@ -4097,6 +4126,14 @@ body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
     .small-button,
     .asset-chart-period-button {
         min-height: 44px;
+    }
+
+    .admin-member-actions {
+        flex-direction: column;
+    }
+
+    .admin-member-actions .small-button {
+        width: 100%;
     }
 
     .transaction-actions {
@@ -4980,12 +5017,12 @@ async function loadAdminPanel(accessToken) {
     }
     if (membersResponse.ok) {
         adminMembers.innerHTML = (membersData.members || []).map((m) =>
-            "<div class='status-box'><strong>" + escapeAdminText(m.email || "이메일 없음") + "</strong><br>"
-            + "가입: " + escapeAdminText(m.created_at || "-") + " · "
+            "<div class='status-box admin-member-card'><strong class='admin-member-email'>" + escapeAdminText(m.email || "이메일 없음") + "</strong>"
+            + "<div class='admin-member-meta'>가입: " + escapeAdminText(m.created_at || "-") + " · "
             + (m.is_admin ? "관리자" : "일반회원") + " · "
-            + (m.is_active ? "사용중" : "사용중지")
-            + (m.is_admin ? "" : "<br><button type='button' class='small-button admin-toggle-member' data-id='" + escapeAdminText(m.user_id) + "' data-active='" + (m.is_active ? "true" : "false") + "'>" + (m.is_active ? "사용 중지" : "다시 활성화") + "</button> "
-                + "<button type='button' class='small-button admin-delete-member' data-id='" + escapeAdminText(m.user_id) + "' data-email='" + escapeAdminText(m.email || "") + "'>로그인 계정 삭제</button>")
+            + (m.is_active ? "사용중" : "사용중지") + "</div>"
+            + (m.is_admin ? "" : "<div class='admin-member-actions'><button type='button' class='small-button admin-toggle-member' data-id='" + escapeAdminText(m.user_id) + "' data-active='" + (m.is_active ? "true" : "false") + "'>" + (m.is_active ? "사용 중지" : "다시 활성화") + "</button>"
+                + "<button type='button' class='small-button admin-delete-member' data-id='" + escapeAdminText(m.user_id) + "' data-email='" + escapeAdminText(m.email || "") + "'>회원 계정 삭제</button></div>")
             + "</div>"
         ).join("") || "등록된 회원이 없습니다.";
     }
