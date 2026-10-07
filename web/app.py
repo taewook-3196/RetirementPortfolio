@@ -11374,6 +11374,7 @@ function createTransactionForm(
 
     let writePending = false;
     let pendingRequestId = null;
+    let pendingPayloadSignature = null;
 
     form.addEventListener(
         "submit",
@@ -11403,9 +11404,7 @@ function createTransactionForm(
                 "저장 중...";
 
 
-            if (!pendingRequestId) pendingRequestId = crypto.randomUUID();
             const payload = {
-                request_id: pendingRequestId,
 
                 transaction_date:
                     dateInput.value,
@@ -11441,6 +11440,13 @@ function createTransactionForm(
             };
 
 
+            const signature = JSON.stringify(payload);
+            if (signature !== pendingPayloadSignature) {
+                pendingRequestId = crypto.randomUUID();
+                pendingPayloadSignature = signature;
+            }
+            payload.request_id = pendingRequestId;
+
             try {
 
                 await apiRequest(
@@ -11471,6 +11477,7 @@ function createTransactionForm(
                 result.className =
                     "transaction-message success";
                 pendingRequestId = null;
+                pendingPayloadSignature = null;
 
 
                 quantityInput.value = "";
@@ -11786,6 +11793,7 @@ function createCashFlowForm(
 
     let writePending = false;
     let pendingRequestId = null;
+    let pendingPayloadSignature = null;
 
     form.addEventListener(
         "submit",
@@ -11829,9 +11837,7 @@ function createCashFlowForm(
                 "";
 
 
-            if (!pendingRequestId) pendingRequestId = crypto.randomUUID();
             const payload = {
-                request_id: pendingRequestId,
 
                 flow_date:
                     dateInput.value,
@@ -11851,6 +11857,13 @@ function createCashFlowForm(
                     .trim()
             };
 
+
+            const signature = JSON.stringify(payload);
+            if (signature !== pendingPayloadSignature) {
+                pendingRequestId = crypto.randomUUID();
+                pendingPayloadSignature = signature;
+            }
+            payload.request_id = pendingRequestId;
 
             try {
 
@@ -11885,6 +11898,7 @@ function createCashFlowForm(
                 result.className =
                     "transaction-message success";
                 pendingRequestId = null;
+                pendingPayloadSignature = null;
 
 
                 amountInput.value =
