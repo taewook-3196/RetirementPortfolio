@@ -643,3 +643,92 @@ def test_kakao_status_accepts_talk_message_scope(monkeypatch):
     result = web_app.kakao_status("Bearer valid-token")
 
     assert result == {"connected": True, "needs_reconnect": False}
+
+
+def test_non_admin_is_rejected_by_admin_guard(monkeypatch, membership_db):
+    member_id = uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=member_id, is_admin=False, is_active=True))
+    monkeypatch.setattr(
+        web_app,
+        "get_current_user",
+        lambda authorization=None: {
+            "authenticated": True,
+            "user_id": str(member_id),
+            "email": "member@example.com",
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.require_admin("Bearer member")
+
+    assert exc.value.status_code == 403
+
+
+def test_non_admin_cannot_reach_admin_member_operations(monkeypatch, membership_db):
+    member_id, target_id = uuid4(), uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=member_id, is_admin=False, is_active=True))
+        db.add(Profile(id=target_id, is_admin=False, is_active=True))
+    monkeypatch.setattr(
+        web_app,
+        "get_current_user",
+        lambda authorization=None: {
+            "authenticated": True,
+            "user_id": str(member_id),
+            "email": "member@example.com",
+        },
+    )
+
+    operations = [
+        lambda: web_app.set_signup_status(
+            web_app.SignupControlRequest(enabled=True), "Bearer member"
+        ),
+        lambda: web_app.list_admin_members("Bearer member"),
+        lambda: web_app.set_member_access(
+            target_id, web_app.MemberAccessRequest(active=False), "Bearer member"
+        ),
+        lambda: web_app.delete_member(target_id, "Bearer member"),
+    ]
+    for operation in operations:
+        with pytest.raises(HTTPException) as exc:
+            operation()
+        assert exc.value.status_code == 403
+
+    with membership_db() as db:
+        assert db.query(AppSetting).filter(AppSetting.key == web_app.SIGNUP_ENABLED_KEY).one_or_none() is None
+        assert db.query(Profile).filter(Profile.id == target_id).one().is_active is True
+
+
+def test_admin_member_list_exposes_only_operational_fields(monkeypatch, membership_db):
+    admin_id, member_id = uuid4(), uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=admin_id, is_admin=True, is_active=True))
+        db.add(Profile(id=member_id, is_admin=False, is_active=True))
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: {"user_id": str(admin_id)},
+    )
+    auth_user = SimpleNamespace(id=member_id, email="member@example.com", created_at=None)
+    monkeypatch.setattr(
+        web_app,
+        "_get_supabase_admin_client",
+        lambda: SimpleNamespace(
+            auth=SimpleNamespace(
+                admin=SimpleNamespace(list_users=lambda: SimpleNamespace(users=[auth_user]))
+            )
+        ),
+    )
+
+    result = web_app.list_admin_members("Bearer admin")
+    member = result["members"][0]
+    assert set(member) == {
+        "user_id", "email", "created_at", "is_admin", "is_active",
+        "kakao_connected", "morning_report_enabled",
+    }
+    private_fields = {
+        "holdings", "transactions", "cash_balance", "portfolio_value",
+        "investment_profile", "morning_report", "account_number",
+    }
+    assert private_fields.isdisjoint(member)
