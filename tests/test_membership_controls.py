@@ -734,3 +734,46 @@ def test_admin_member_list_exposes_only_operational_fields(monkeypatch, membersh
         "investment_profile", "morning_report", "account_number",
     }
     assert private_fields.isdisjoint(member)
+
+
+def test_deleted_member_list_is_admin_only_and_privacy_safe(monkeypatch, membership_db):
+    admin_id, deleted_id = uuid4(), uuid4()
+    with membership_db() as db:
+        db.add(DeletedMember(user_id=deleted_id, deleted_by=admin_id))
+
+    monkeypatch.setattr(
+        web_app,
+        "require_admin",
+        lambda authorization=None: {"user_id": str(admin_id)},
+    )
+    monkeypatch.setattr(web_app, "_has_retained_member_data", lambda user_id: True)
+
+    result = web_app.list_deleted_members("Bearer admin")
+    assert len(result["deleted_members"]) == 1
+    item = result["deleted_members"][0]
+    assert set(item) == {"user_id", "deleted_at", "has_retained_data"}
+    assert item["user_id"] == str(deleted_id)
+    assert item["has_retained_data"] is True
+    assert "email" not in item
+    assert "holdings" not in item
+    assert "transactions" not in item
+    assert "portfolio_value" not in item
+
+
+def test_non_admin_cannot_list_deleted_members(monkeypatch, membership_db):
+    member_id = uuid4()
+    with membership_db() as db:
+        db.add(Profile(id=member_id, is_admin=False, is_active=True))
+    monkeypatch.setattr(
+        web_app,
+        "get_current_user",
+        lambda authorization=None: {
+            "authenticated": True,
+            "user_id": str(member_id),
+            "email": "member@example.com",
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        web_app.list_deleted_members("Bearer member")
+    assert exc.value.status_code == 403
