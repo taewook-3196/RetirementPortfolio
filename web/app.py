@@ -4796,6 +4796,19 @@ async function showTransactionEntryForm() {
                 onSaved: async () => {
                     await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);
                     await refreshPortfolioAfterTransactionChange();
+                    const savedAccountId = transactionEntryAccount.value;
+                    const selectedType = transactionTypeFilter.value;
+                    const searchText = transactionSearchFilter.value.trim();
+                    const hiddenByFilter =
+                        (transactionAccountFilter.value && transactionAccountFilter.value !== savedAccountId)
+                        || (selectedType && selectedType !== form.querySelector("select").value)
+                        || Boolean(searchText);
+                    if (hiddenByFilter) {
+                        const note = document.createElement("div");
+                        note.className = "transaction-message";
+                        note.textContent = "거래가 저장되었습니다. 현재 필터 때문에 목록에서 보이지 않을 수 있습니다.";
+                        allTransactionsList.prepend(note);
+                    }
                     transactionEntryPanel.hidden = true;
                     transactionEntryAccount.value = "";
                     transactionEntryForm.className = "";
@@ -11525,13 +11538,24 @@ function createTransactionForm(
                 memoInput.value = "";
 
 
-                await refreshPortfolioData(
-                    account,
-                    targets,
-                    accessToken,
-                    transactionsList,
-                    positionsList
-                );
+                try {
+                    if (typeof options.onSaved === "function") {
+                        await options.onSaved();
+                    } else if (transactionsList && positionsList) {
+                        await refreshPortfolioData(
+                            account,
+                            targets,
+                            accessToken,
+                            transactionsList,
+                            positionsList
+                        );
+                    }
+                } catch (refreshError) {
+                    result.textContent =
+                        "거래는 저장되었습니다. 목록 갱신에 실패했으니 새로고침하여 확인하세요.";
+                    result.className = "transaction-message error";
+                    console.error("거래 저장 후 화면 갱신 오류:", refreshError);
+                }
 
 
             } catch (error) {
