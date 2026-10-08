@@ -478,3 +478,49 @@ def test_recent_market_price_is_not_stale_across_weekend():
     assert position.market_price_available is True
     assert position.price_is_stale is False
     assert position.price_age_days == 3
+
+
+@pytest.mark.parametrize(
+    ("include_initial_capital", "expected_cash"),
+    [(True, 10_732.0), (False, 732.0)],
+    ids=["with-initial-capital", "cash-movements-only"],
+)
+def test_mixed_cash_ledger_does_not_double_count_components(
+    include_initial_capital, expected_cash
+):
+    """입출금, 매수/매도, 수수료/세금, 배당을 각각 한 번만 반영한다."""
+    account = SimpleNamespace(id=1, initial_capital=10_000.0, currency="KRW")
+    repo = _repo_with_accounts([account])
+    repo.get_cash_flows.return_value = [
+        SimpleNamespace(amount=2_000.0, currency="KRW", flow_type="DEPOSIT"),
+        SimpleNamespace(amount=500.0, currency="KRW", flow_type="WITHDRAWAL"),
+    ]
+    repo.get_transactions.return_value = [
+        _transaction(1, "BUY", 10, 100, fee=10, tax=5),
+        _transaction(2, "SELL", 4, 50, fee=4, tax=2),
+    ]
+    repo.get_dividends.return_value = [_dividend(53.0)]
+    repo.get_etf_master.return_value = SimpleNamespace(currency="KRW")
+    service = PortfolioService(repo, get_default_config())
+
+    # 2,000 - 500 - (1,000 + 10 + 5) + (200 - 4 - 2) + 53 = 732
+    assert service.get_cash_balance(
+        account.id, include_initial_capital=include_initial_capital
+    ) == expected_cash
+
+
+def test_cash_balance_converts_foreign_currency_flows_and_dividends_once():
+    """원화 계좌의 외화 입출금/배당은 지정 환율로 한 번만 환산한다."""
+    account = SimpleNamespace(id=1, initial_capital=100_000.0, currency="KRW")
+    repo = _repo_with_accounts([account], exchange_rate=1_350.0)
+    repo.get_cash_flows.return_value = [
+        SimpleNamespace(amount=10.0, currency="USD", flow_type="DEPOSIT"),
+        SimpleNamespace(amount=2.0, currency="USD", flow_type="WITHDRAWAL"),
+    ]
+    repo.get_dividends.return_value = [_dividend(3.0, currency="USD")]
+    service = PortfolioService(repo, get_default_config())
+
+    assert service.get_cash_balance(account.id) == 114_850.0
+    assert service.get_cash_balance(
+        account.id, include_initial_capital=False
+    ) == 14_850.0
