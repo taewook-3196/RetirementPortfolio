@@ -3436,6 +3436,13 @@ textarea {
     background: white;
     font-size: 16px;
     color: #202124;
+    color-scheme: light;
+}
+
+/* Keep native iOS Safari option text legible in dark device appearance. */
+select option {
+    background-color: #ffffff;
+    color: #202124;
 }
 
 input:focus-visible,
@@ -5003,11 +5010,15 @@ function renderTransactionTab() {
 async function loadTransactionTab(accounts, accessToken, options = {}) {
     transactionTabAccounts = accounts;
     transactionTabAccessToken = accessToken;
+    const previousAccountFilter = transactionAccountFilter.value;
     transactionAccountFilter.innerHTML = '<option value="">전체 계좌</option>';
     transactionEntryAccount.innerHTML = '<option value="">계좌를 선택하세요</option>';
     for (const account of accounts) {
         const option = document.createElement("option"); option.value = String(account.id); option.textContent = account.name; transactionAccountFilter.appendChild(option);
         const entryOption = option.cloneNode(true); transactionEntryAccount.appendChild(entryOption);
+    }
+    if (Array.from(transactionAccountFilter.options).some((option) => option.value === previousAccountFilter)) {
+        transactionAccountFilter.value = previousAccountFilter;
     }
     const rows = await Promise.all(accounts.map(async (account) => {
         const transactions = await loadTransactions(accessToken, account.id);
