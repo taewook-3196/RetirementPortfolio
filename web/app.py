@@ -10492,16 +10492,25 @@ async function showTransactionEditor(
                 );
 
 
-                if (typeof options.onSaved === "function") {
-                    await options.onSaved();
-                } else {
-                    await refreshPortfolioData(
-                        account,
-                        targets,
-                        accessToken,
-                        transactionsList,
-                        positionsList
-                    );
+                try {
+                    if (typeof options.onSaved === "function") {
+                        await options.onSaved();
+                    } else {
+                        await refreshPortfolioData(
+                            account,
+                            targets,
+                            accessToken,
+                            transactionsList,
+                            positionsList
+                        );
+                    }
+                } catch (refreshError) {
+                    result.textContent =
+                        "거래 수정은 저장되었습니다. 목록 갱신에 실패했으니 새로고침하여 확인하세요.";
+                    result.className = "transaction-message error";
+                    console.error("거래 수정 후 화면 갱신 오류:", refreshError);
+                    saveButton.disabled = false;
+                    saveButton.textContent = "수정 저장";
                 }
 
 
