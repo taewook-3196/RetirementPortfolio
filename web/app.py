@@ -4795,7 +4795,6 @@ async function showTransactionEntryForm() {
             {
                 onSaved: async () => {
                     await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken);
-                    await refreshPortfolioAfterTransactionChange();
                     const savedAccountId = transactionEntryAccount.value;
                     const selectedType = transactionTypeFilter.value;
                     const searchText = transactionSearchFilter.value.trim();
@@ -4813,6 +4812,11 @@ async function showTransactionEntryForm() {
                     transactionEntryAccount.value = "";
                     transactionEntryForm.className = "";
                     transactionEntryForm.innerHTML = "";
+                    // Refresh account summaries independently: a summary API failure must
+                    // never prevent the saved trade from appearing in the list.
+                    refreshPortfolioAfterTransactionChange().catch((error) => {
+                        console.error("거래 저장 후 계좌 요약 갱신 오류:", error);
+                    });
                 },
             }
         );
