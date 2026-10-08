@@ -4885,7 +4885,9 @@ async function loadCashFlowTab(accounts, accessToken) {
             },
             onChanged: async () => {
                 await loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken);
-                await refreshPortfolioAfterTransactionChange();
+                refreshPortfolioAfterTransactionChange().catch((error) => {
+                    console.error("입출금 변경 후 계좌 요약 갱신 오류:", error);
+                });
             },
         });
         allCashFlowsList.appendChild(list);
@@ -4902,10 +4904,12 @@ async function showCashFlowEntryForm() {
     const form = createCashFlowForm(account, transactionTabAccessToken, allCashFlowsList, {
         onSaved: async () => {
             await loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken);
-            await refreshPortfolioAfterTransactionChange();
             cashFlowEntryPanel.hidden = true;
             cashFlowEntryAccount.value = "";
             cashFlowEntryForm.innerHTML = "";
+            refreshPortfolioAfterTransactionChange().catch((error) => {
+                console.error("입출금 저장 후 계좌 요약 갱신 오류:", error);
+            });
         },
     });
     cashFlowEntryForm.appendChild(form);
@@ -5027,7 +5031,9 @@ function renderTransactionTab() {
                     {method: "DELETE"}
                 );
                 await loadTransactionTab(transactionTabAccounts, transactionTabAccessToken, {preserveVisibleCount: true});
-                await refreshPortfolioAfterTransactionChange();
+                refreshPortfolioAfterTransactionChange().catch((error) => {
+                    console.error("거래 삭제 후 계좌 요약 갱신 오류:", error);
+                });
             } catch (error) {
                 window.alert(error.message || "거래 삭제에 실패했습니다.");
                 deleteButton.disabled = false;
