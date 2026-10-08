@@ -3445,6 +3445,33 @@ select option {
     color: #202124;
 }
 
+
+/* Safari can render native option sheets with invisible labels in some themes.
+   These account selectors use an HTML picker instead. */
+.account-picker-host { position: relative; min-width: 0; }
+.account-picker-host > select { display: none; }
+.account-picker-button {
+    margin: 0; width: 100%; min-height: 48px; padding: 12px;
+    background: #fff; color: #202124; border: 1px solid #d5d9df;
+    border-radius: 10px; text-align: left; font-size: 16px;
+    font-weight: 400; overflow-wrap: anywhere;
+}
+.account-picker-options {
+    position: absolute; z-index: 50; left: 0; right: 0; top: calc(100% + 4px);
+    max-height: 260px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    background: #fff; border: 1px solid #c8cdd5; border-radius: 10px;
+    box-shadow: 0 8px 22px rgba(0,0,0,.18);
+}
+.account-picker-options[hidden] { display: none; }
+.account-picker-options button {
+    display: block; width: 100%; margin: 0; min-height: 46px;
+    background: #fff; color: #202124; text-align: left; font-size: 15px;
+    font-weight: 400; border-radius: 0; border-bottom: 1px solid #e9ebef;
+}
+.account-picker-options button[aria-selected="true"] {
+    background: #eaf2ff; font-weight: 700;
+}
+
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
@@ -4931,7 +4958,7 @@ function renderTransactionTab() {
         amount.textContent = formatMoney(Number(transaction.quantity) * Number(transaction.price), currency);
         main.append(left, amount);
         row.appendChild(main);
-        row.appendChild(createDetail(item.account.name + " · 수량 " + formatNumber(transaction.quantity) + " · 체결가 " + formatMoney(transaction.price, currency)));
+        row.appendChild(createDetail((item.account.name || item.account.account_name || "계좌") + " · 수량 " + formatNumber(transaction.quantity) + " · 체결가 " + formatMoney(transaction.price, currency)));
 
         const actions = document.createElement("div");
         actions.className = "transaction-actions";
@@ -15217,6 +15244,65 @@ async function loadPublicSignupStatus() {
         showSignupButton.style.display = "none";
     }
 }
+
+
+/* HTML account pickers avoid native iOS option-sheet contrast bugs. */
+function installAccountPicker(select) {
+    const host = document.createElement("div");
+    host.className = "account-picker-host";
+    select.parentNode.insertBefore(host, select);
+    host.appendChild(select);
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "account-picker-button";
+    trigger.setAttribute("aria-label", select.getAttribute("aria-label") || "계좌 선택");
+    trigger.setAttribute("aria-expanded", "false");
+    const menu = document.createElement("div");
+    menu.className = "account-picker-options";
+    menu.hidden = true;
+    host.append(trigger, menu);
+
+    function close() {
+        menu.hidden = true;
+        trigger.setAttribute("aria-expanded", "false");
+    }
+    function sync() {
+        const selected = select.selectedOptions[0] || select.options[0];
+        trigger.textContent = (selected ? selected.textContent : "계좌를 선택하세요") + " ▾";
+        menu.replaceChildren();
+        Array.from(select.options).forEach((option) => {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.textContent = option.textContent;
+            item.disabled = option.disabled;
+            item.setAttribute("aria-selected", String(option.value === select.value));
+            item.addEventListener("click", () => {
+                select.value = option.value;
+                close();
+                sync();
+                select.dispatchEvent(new Event("change", {bubbles: true}));
+            });
+            menu.appendChild(item);
+        });
+    }
+    trigger.addEventListener("click", () => {
+        sync();
+        menu.hidden = !menu.hidden;
+        trigger.setAttribute("aria-expanded", String(!menu.hidden));
+    });
+    document.addEventListener("click", (event) => {
+        if (!host.contains(event.target)) close();
+    });
+    select.addEventListener("change", sync);
+    new MutationObserver(sync).observe(select, {childList: true, subtree: true, characterData: true});
+    sync();
+    return sync;
+}
+const accountPickerSyncs = [
+    "transaction-account-filter",
+    "transaction-entry-account",
+    "cash-flow-entry-account"
+].map((id) => installAccountPicker(document.getElementById(id)));
 
 loadPublicSignupStatus();
 
