@@ -4852,13 +4852,13 @@ async function loadCashFlowTab(accounts, accessToken) {
     for (const group of groups) {
         const option = document.createElement("option");
         option.value = String(group.account.id);
-        option.textContent = group.account.name;
+        option.textContent = group.account.account_name || "계좌 " + group.account.id;
         cashFlowEntryAccount.appendChild(option);
         if (selectedAccountId && String(group.account.id) !== selectedAccountId) continue;
         if (!group.cashFlows.length) continue;
         const heading = document.createElement("div");
         heading.className = "section-title";
-        heading.textContent = group.account.name;
+        heading.textContent = group.account.account_name || "계좌 " + group.account.id;
         allCashFlowsList.appendChild(heading);
         const list = document.createElement("div");
         renderCashFlows(list, group.cashFlows, group.account, accessToken, {
@@ -5041,7 +5041,7 @@ async function loadTransactionTab(accounts, accessToken, options = {}) {
     transactionAccountFilter.innerHTML = '<option value="">전체 계좌</option>';
     transactionEntryAccount.innerHTML = '<option value="">계좌를 선택하세요</option>';
     for (const account of accounts) {
-        const option = document.createElement("option"); option.value = String(account.id); option.textContent = account.name; transactionAccountFilter.appendChild(option);
+        const option = document.createElement("option"); option.value = String(account.id); option.textContent = account.account_name || "계좌 " + account.id; transactionAccountFilter.appendChild(option);
         const entryOption = option.cloneNode(true); transactionEntryAccount.appendChild(entryOption);
     }
     if (Array.from(transactionAccountFilter.options).some((option) => option.value === previousAccountFilter)) {
