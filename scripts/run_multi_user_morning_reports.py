@@ -65,6 +65,7 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
     config = load_config()
     current = now.astimezone(SEOUL) if now else datetime.now(SEOUL)
     user_ids = Repository.get_morning_report_user_ids()
+    logger.info("모닝 리포트 실행: KST=%s / 활성 사용자=%d명 / 강제=%s", current.isoformat(), len(user_ids), force)
 
     if not user_ids:
         logger.info("모닝 리포트 활성 사용자가 없습니다.")
@@ -77,12 +78,14 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
             repo = Repository(user_id=user_id)
             settings = repo.get_user_settings()
             if not force and not _is_due(settings, current):
+                logger.info("발송 시각 전 또는 비활성 사용자 건너뜀: %s / 설정시각=%s / 활성=%s", user_id, getattr(settings, "morning_report_time", None), getattr(settings, "morning_report_enabled", False))
                 continue
             due_users.append((user_id, repo, settings))
         except Exception:
             failures += 1
             logger.exception("모닝 리포트 대상 사용자 확인 예외: %s", user_id)
 
+    logger.info("이번 실행의 발송 대상: %d명", len(due_users))
     if due_users:
         try:
             combined_repo = _CombinedMarketRepository(
