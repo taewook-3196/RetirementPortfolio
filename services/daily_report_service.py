@@ -8,6 +8,8 @@ services/daily_report_service.py
 """
 
 from __future__ import annotations
+
+from types import SimpleNamespace
 import os
 import sys
 import logging
@@ -1386,7 +1388,7 @@ class DailyReportService:
                 feed = self.news_service.get_news_feed(
                     mode=getattr(self.config, "news_filter_mode", "all"),
                     etfs=all_registered_objs,
-                    watchlist=self.config.watchlist,
+                    watchlist=[SimpleNamespace(**item) for item in self.repo.get_watchlist()],
                 )
                 for item in feed[:8]:
                     news_items.append({

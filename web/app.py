@@ -1889,6 +1889,37 @@ def search_assets_api(
         )
 
 
+class WatchlistSaveRequest(BaseModel):
+    ticker: str
+    memo: str = ""
+
+
+@app.get("/api/watchlist")
+def get_user_watchlist(authorization: str | None = Header(default=None)):
+    user_id = get_verified_user_id(authorization)
+    return {"items": Repository(user_id=user_id).get_watchlist()}
+
+
+@app.post("/api/watchlist")
+def save_user_watchlist(payload: WatchlistSaveRequest, authorization: str | None = Header(default=None)):
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    try:
+        repo.add_watchlist(ticker=payload.ticker.strip().upper(), memo=payload.memo[:500])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"items": repo.get_watchlist()}
+
+
+@app.delete("/api/watchlist/{ticker}")
+def delete_user_watchlist(ticker: str, authorization: str | None = Header(default=None)):
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    if not repo.remove_watchlist(ticker.strip().upper()):
+        raise HTTPException(status_code=404, detail="관심종목을 찾을 수 없습니다.")
+    return {"items": repo.get_watchlist()}
+
+
 @app.get(
     "/api/accounts/{account_id}/assets/{ticker}/chart"
 )
@@ -4534,6 +4565,20 @@ Gemini AI 투자 가이드 사용
 </section>
 
 
+<section id="watchlist-section" class="card">
+<h2>관심종목</h2>
+<p class="subtitle">종목명이나 티커를 검색하여 관심종목에 추가하세요. 등록한 종목은 맞춤 모닝 리포트 뉴스에도 반영됩니다.</p>
+<form id="watchlist-search-form">
+<label for="watchlist-query">종목 검색</label>
+<input id="watchlist-query" type="search" placeholder="예: 삼성전자, AAPL, QQQ" autocomplete="off" required>
+<button type="submit">검색</button>
+</form>
+<div id="watchlist-search-results" aria-live="polite"></div>
+<h3>등록한 관심종목</h3>
+<div id="watchlist-items" aria-live="polite">불러오는 중...</div>
+<div id="watchlist-status" class="transaction-message" role="status"></div>
+</section>
+
 <section id="asset-search-section" class="card">
 
 <h2>미국 종목 검색</h2>
@@ -4693,7 +4738,7 @@ const appArea =
 const appBottomNav = document.getElementById("app-bottom-nav");
 const appTabSections = {
     home: ["app-header", "report-section"],
-    portfolio: ["portfolio-section", "asset-search-section"],
+    portfolio: ["portfolio-section", "watchlist-section", "asset-search-section"],
     transactions: ["transactions-section"],
     settings: ["settings-navigation-section", "account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section"],
     members: ["admin-section"],
@@ -4742,6 +4787,7 @@ function setAppTab(tabName, options = {}) {
         section.hidden = !appTabSections[nextTab].includes(id);
     }
     if (nextTab === "settings") applySettingsPanel();
+    if (nextTab === "portfolio" && typeof refreshWatchlist === "function") refreshWatchlist();
     for (const button of appBottomNav.querySelectorAll("[data-app-tab]")) {
         const active = button.dataset.appTab === nextTab;
         button.classList.toggle("active", active);
@@ -7685,6 +7731,71 @@ async function lookupUsAsset(
         accessToken
     );
 }
+
+const watchlistSearchForm = document.getElementById("watchlist-search-form");
+const watchlistSearchResults = document.getElementById("watchlist-search-results");
+const watchlistItems = document.getElementById("watchlist-items");
+const watchlistStatus = document.getElementById("watchlist-status");
+function watchlistToken() { return localStorage.getItem("access_token") || ""; }
+function watchlistNode(tag, text) { const el = document.createElement(tag); el.textContent = String(text || ""); return el; }
+async function refreshWatchlist() {
+    const token = watchlistToken();
+    if (!token) return;
+    try {
+        const data = await apiRequest("/api/watchlist", token);
+        watchlistItems.replaceChildren();
+        if (!data.items.length) watchlistItems.append(watchlistNode("p", "등록한 관심종목이 없습니다."));
+        for (const item of data.items) {
+            const row = document.createElement("div");
+            row.className = "status-box";
+            row.append(watchlistNode("strong", item.name || item.ticker));
+            row.append(watchlistNode("span", " (" + item.ticker + ") "));
+            const remove = watchlistNode("button", "삭제");
+            remove.type = "button";
+            remove.className = "secondary-button";
+            remove.setAttribute("aria-label", (item.name || item.ticker) + " 관심종목 삭제");
+            remove.addEventListener("click", async () => {
+                remove.disabled = true;
+                try {
+                    await apiRequest("/api/watchlist/" + encodeURIComponent(item.ticker), token, {method: "DELETE"});
+                    watchlistStatus.textContent = "관심종목을 삭제했습니다.";
+                    await refreshWatchlist();
+                } catch (error) { watchlistStatus.textContent = error.message; remove.disabled = false; }
+            });
+            row.append(remove);
+            watchlistItems.append(row);
+        }
+    } catch (error) { watchlistStatus.textContent = error.message; }
+}
+watchlistSearchForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const token = watchlistToken();
+    if (!token) { watchlistStatus.textContent = "로그인이 필요합니다."; return; }
+    watchlistSearchResults.replaceChildren(watchlistNode("p", "검색 중..."));
+    try {
+        const assets = await searchRegisteredAssets(token, document.getElementById("watchlist-query").value);
+        watchlistSearchResults.replaceChildren();
+        if (!assets.length) watchlistSearchResults.append(watchlistNode("p", "검색 결과가 없습니다."));
+        for (const asset of assets.slice(0, 30)) {
+            const row = document.createElement("div");
+            row.className = "status-box";
+            row.append(watchlistNode("span", (asset.name || asset.ticker) + " (" + asset.ticker + ") "));
+            const add = watchlistNode("button", "관심종목 추가");
+            add.type = "button";
+            add.addEventListener("click", async () => {
+                add.disabled = true;
+                try {
+                    await apiRequest("/api/watchlist", token, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ticker: asset.ticker})});
+                    watchlistStatus.textContent = "관심종목을 등록했습니다.";
+                    await refreshWatchlist();
+                } catch (error) { watchlistStatus.textContent = error.message; }
+                finally { add.disabled = false; }
+            });
+            row.append(add);
+            watchlistSearchResults.append(row);
+        }
+    } catch (error) { watchlistSearchResults.replaceChildren(); watchlistStatus.textContent = error.message; }
+});
 
 async function searchRegisteredAssets(
     accessToken,
