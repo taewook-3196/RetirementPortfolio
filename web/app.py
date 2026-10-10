@@ -7772,7 +7772,7 @@ async function lookupUsAsset(
 let activeIndexPeriod = "1y";
 let marketIndexLoadVersion = 0;
 async function refreshMarketIndex() {
-    const token = localStorage.getItem("access_token");
+    const token = watchlistToken();
     if (!token) return;
     const version = ++marketIndexLoadVersion;
     const index = document.getElementById("market-index-select").value;
