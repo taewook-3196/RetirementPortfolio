@@ -1889,6 +1889,37 @@ def search_assets_api(
         )
 
 
+class WatchlistSaveRequest(BaseModel):
+    ticker: str
+    memo: str = ""
+
+
+@app.get("/api/watchlist")
+def get_user_watchlist(authorization: str | None = Header(default=None)):
+    user_id = get_verified_user_id(authorization)
+    return {"items": Repository(user_id=user_id).get_watchlist()}
+
+
+@app.post("/api/watchlist")
+def save_user_watchlist(payload: WatchlistSaveRequest, authorization: str | None = Header(default=None)):
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    try:
+        repo.add_watchlist(ticker=payload.ticker.strip().upper(), memo=payload.memo[:500])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"items": repo.get_watchlist()}
+
+
+@app.delete("/api/watchlist/{ticker}")
+def delete_user_watchlist(ticker: str, authorization: str | None = Header(default=None)):
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    if not repo.remove_watchlist(ticker.strip().upper()):
+        raise HTTPException(status_code=404, detail="관심종목을 찾을 수 없습니다.")
+    return {"items": repo.get_watchlist()}
+
+
 @app.get(
     "/api/accounts/{account_id}/assets/{ticker}/chart"
 )
