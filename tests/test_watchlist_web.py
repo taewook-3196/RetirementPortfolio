@@ -61,7 +61,7 @@ def test_watchlist_mobile_controls_and_safe_dom(monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "public-anon-key")
     html = home().body.decode("utf-8")
-    for marker in ('id="watchlist-section"', 'id="watchlist-search-form"', 'id="watchlist-items"', 'id="watchlist-status"', 'portfolio: ["portfolio-section", "watchlist-section", "asset-search-section"]'):
+    for marker in ('id="watchlist-section"', 'id="watchlist-search-form"', 'id="watchlist-items"', 'id="watchlist-status"', 'portfolio: ["portfolio-section", "market-index-section", "watchlist-section", "asset-search-section"]'):
         assert marker in html
     assert 'watchlistNode("strong", item.name || item.ticker)' in html
     assert 'watchlistSearchResults.replaceChildren()' in html

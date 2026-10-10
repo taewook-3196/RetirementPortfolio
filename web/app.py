@@ -1894,6 +1894,22 @@ class WatchlistSaveRequest(BaseModel):
     memo: str = ""
 
 
+@app.get("/api/market-indices/{index}/chart")
+def get_market_index_chart_api(
+    index: str,
+    period: str = "1y",
+    authorization: str | None = Header(default=None),
+):
+    get_verified_user_id(authorization)
+    from services.market_index_service import load_index_series
+    try:
+        return load_index_series(index, period)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=503, detail="지수 데이터를 일시적으로 가져올 수 없습니다.")
+
+
 @app.get("/api/watchlist")
 def get_user_watchlist(authorization: str | None = Header(default=None)):
     user_id = get_verified_user_id(authorization)
@@ -4565,6 +4581,26 @@ Gemini AI 투자 가이드 사용
 </section>
 
 
+<section id="market-index-section" class="card">
+<h2>주요 시장지수</h2>
+<p class="subtitle">지수를 선택하면 기간별 가격, 이동평균선, 수익률과 최대 낙폭을 확인할 수 있습니다.</p>
+<label for="market-index-select">시장지수</label>
+<select id="market-index-select">
+<option value="sp500">S&amp;P 500</option><option value="nasdaq100">나스닥 100</option>
+<option value="nasdaq">나스닥 종합</option><option value="dow">다우존스</option>
+<option value="russell2000">러셀 2000</option><option value="kospi">코스피</option>
+<option value="kosdaq">코스닥</option>
+</select>
+<div id="market-index-periods" class="asset-chart-period-buttons" aria-label="지수 조회 기간">
+<button type="button" data-index-period="1m">1개월</button><button type="button" data-index-period="3m">3개월</button>
+<button type="button" data-index-period="6m">6개월</button><button type="button" data-index-period="1y" aria-pressed="true">1년</button>
+<button type="button" data-index-period="5y">5년</button>
+</div>
+<div id="market-index-summary" aria-live="polite"></div>
+<div style="overflow-x:auto"><svg id="market-index-chart" viewBox="0 0 700 280" role="img" aria-label="시장지수 가격 및 이동평균선 차트" style="width:100%;min-width:280px;max-height:360px"></svg></div>
+<p class="subtitle">가격 데이터는 Yahoo Finance 기준이며 지연되거나 일시적으로 제공되지 않을 수 있습니다.</p>
+</section>
+
 <section id="watchlist-section" class="card">
 <h2>관심종목</h2>
 <p class="subtitle">종목명이나 티커를 검색하여 관심종목에 추가하세요. 등록한 종목은 맞춤 모닝 리포트 뉴스에도 반영됩니다.</p>
@@ -4738,7 +4774,7 @@ const appArea =
 const appBottomNav = document.getElementById("app-bottom-nav");
 const appTabSections = {
     home: ["app-header", "report-section"],
-    portfolio: ["portfolio-section", "watchlist-section", "asset-search-section"],
+    portfolio: ["portfolio-section", "market-index-section", "watchlist-section", "asset-search-section"],
     transactions: ["transactions-section"],
     settings: ["settings-navigation-section", "account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section"],
     members: ["admin-section"],
@@ -4788,6 +4824,7 @@ function setAppTab(tabName, options = {}) {
     }
     if (nextTab === "settings") applySettingsPanel();
     if (nextTab === "portfolio" && typeof refreshWatchlist === "function") refreshWatchlist();
+    if (nextTab === "portfolio" && typeof refreshMarketIndex === "function") refreshMarketIndex();
     for (const button of appBottomNav.querySelectorAll("[data-app-tab]")) {
         const active = button.dataset.appTab === nextTab;
         button.classList.toggle("active", active);
@@ -7731,6 +7768,76 @@ async function lookupUsAsset(
         accessToken
     );
 }
+
+let activeIndexPeriod = "1y";
+let marketIndexLoadVersion = 0;
+async function refreshMarketIndex() {
+    const token = watchlistToken();
+    if (!token) return;
+    const version = ++marketIndexLoadVersion;
+    const index = document.getElementById("market-index-select").value;
+    const summary = document.getElementById("market-index-summary");
+    const svg = document.getElementById("market-index-chart");
+    summary.textContent = "지수 데이터를 불러오는 중...";
+    svg.replaceChildren();
+    try {
+        const data = await apiRequest("/api/market-indices/" + encodeURIComponent(index) + "/chart?period=" + encodeURIComponent(activeIndexPeriod), token);
+        if (version !== marketIndexLoadVersion) return;
+        summary.textContent = data.name + " · 기간 수익률 " + data.change_pct.toFixed(2) + "% · 최대 낙폭 " + data.max_drawdown_pct.toFixed(2) + "%";
+        const points = data.points || [];
+        if (points.length < 2) { summary.textContent = "차트 데이터가 부족합니다."; return; }
+        const all = points.flatMap(p => [p.close, p.ma20, p.ma60]).filter(v => typeof v === "number" && Number.isFinite(v));
+        let min = Math.min(...all), max = Math.max(...all);
+        if (min === max) { min -= 1; max += 1; }
+        const ns = "http://www.w3.org/2000/svg";
+        const draw = (key, color) => {
+            let path = "";
+            points.forEach((p, i) => {
+                const value = p[key];
+                if (value === null || !Number.isFinite(value)) return;
+                const x = 42 + (i / (points.length - 1)) * 640;
+                const y = 240 - (value - min) / (max - min) * 205;
+                path += (path ? " L" : "M") + x.toFixed(1) + " " + y.toFixed(1);
+            });
+            if (!path) return;
+            const line = document.createElementNS(ns, "path");
+            line.setAttribute("d", path);
+            line.setAttribute("fill", "none");
+            line.setAttribute("stroke", color);
+            line.setAttribute("stroke-width", key === "close" ? "2.5" : "1.5");
+            svg.append(line);
+        };
+        for (let i = 0; i <= 4; i++) {
+            const y = 35 + i * 51.25;
+            const grid = document.createElementNS(ns, "line");
+            grid.setAttribute("x1", "42"); grid.setAttribute("x2", "682");
+            grid.setAttribute("y1", String(y)); grid.setAttribute("y2", String(y));
+            grid.setAttribute("stroke", "currentColor"); grid.setAttribute("opacity", "0.12");
+            svg.append(grid);
+            const label = document.createElementNS(ns, "text");
+            label.setAttribute("x", "4"); label.setAttribute("y", String(y + 4));
+            label.setAttribute("font-size", "11"); label.setAttribute("fill", "currentColor");
+            label.textContent = (max - i * (max - min) / 4).toLocaleString(undefined, {maximumFractionDigits: 0});
+            svg.append(label);
+        }
+        draw("close", "#2563eb"); draw("ma20", "#e68a2e"); draw("ma60", "#16a085");
+        const legend = document.createElementNS(ns, "text");
+        legend.setAttribute("x", "42"); legend.setAttribute("y", "269");
+        legend.setAttribute("font-size", "12"); legend.setAttribute("fill", "currentColor");
+        legend.textContent = "파랑: 종가   주황: 20일선   초록: 60일선";
+        svg.append(legend);
+    } catch (error) {
+        if (version === marketIndexLoadVersion) summary.textContent = error.message;
+    }
+}
+document.getElementById("market-index-select").addEventListener("change", refreshMarketIndex);
+document.getElementById("market-index-periods").addEventListener("click", event => {
+    const button = event.target.closest("[data-index-period]");
+    if (!button) return;
+    activeIndexPeriod = button.dataset.indexPeriod;
+    for (const item of document.querySelectorAll("[data-index-period]")) item.setAttribute("aria-pressed", String(item === button));
+    refreshMarketIndex();
+});
 
 const watchlistSearchForm = document.getElementById("watchlist-search-form");
 const watchlistSearchResults = document.getElementById("watchlist-search-results");
