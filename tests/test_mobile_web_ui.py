@@ -219,7 +219,7 @@ def test_app_navigation_remains_available_above_phone_width(monkeypatch):
     nav_css = html[html.index(".app-bottom-nav {"):html.index(".app-bottom-nav button {")]
     assert "display: grid;" in nav_css
     assert "display: none;" not in nav_css
-    assert 'portfolio: ["portfolio-section", "asset-search-section"]' in html
+    assert 'portfolio: ["portfolio-section", "watchlist-section", "asset-search-section"]' in html
     assert 'transactions: ["transactions-section"]' in html
     assert 'settings: ["settings-navigation-section", "account-management-section", "morning-report-settings-section"' in html
 
