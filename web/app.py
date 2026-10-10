@@ -1894,6 +1894,22 @@ class WatchlistSaveRequest(BaseModel):
     memo: str = ""
 
 
+@app.get("/api/market-indices/{index}/chart")
+def get_market_index_chart_api(
+    index: str,
+    period: str = "1y",
+    authorization: str | None = Header(default=None),
+):
+    get_verified_user_id(authorization)
+    from services.market_index_service import load_index_series
+    try:
+        return load_index_series(index, period)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=503, detail="지수 데이터를 일시적으로 가져올 수 없습니다.")
+
+
 @app.get("/api/watchlist")
 def get_user_watchlist(authorization: str | None = Header(default=None)):
     user_id = get_verified_user_id(authorization)
