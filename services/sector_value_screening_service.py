@@ -29,6 +29,15 @@ UNIVERSE = {
         "healthcare": ["207940.KS", "068270.KS", "128940.KS", "000100.KS", "326030.KS", "196170.KQ", "145020.KQ", "302440.KS", "091990.KQ", "141080.KQ"],
     },
 }
+# Sector-specific primary metrics; unsupported financial inputs trigger review.
+SECTOR_POLICIES = {
+    "financials": {"primary": "pbr_roe", "automatic_valuation": False},
+    "banks": {"primary": "pbr_roe", "automatic_valuation": False},
+    "real_estate": {"primary": "p_affo", "automatic_valuation": False},
+    "semiconductors": {"primary": "normalized_earnings", "automatic_valuation": False},
+}
+DEFAULT_POLICY = {"primary": "forward_pe", "automatic_valuation": True}
+
 CACHE = {}
 TTL_SECONDS = 1800
 FIELDS = ("trailingPE", "forwardPE", "priceToBook", "returnOnEquity",
@@ -87,6 +96,7 @@ def screen_sector(market, sector):
     cached = CACHE.get(key)
     if cached and time.monotonic() - cached[0] < TTL_SECONDS:
         return cached[1]
+    policy = SECTOR_POLICIES.get(sector, DEFAULT_POLICY)
     results, failures, records = [], {}, []
     for ticker in UNIVERSE[market][sector]:
         try:
@@ -114,7 +124,7 @@ def screen_sector(market, sector):
         roe = assessment["metrics"]["roe"]
         margin = assessment["metrics"]["profit_margin"]
         healthy = all(value is not None for value in (growth, roe, margin)) and growth >= 0 and roe > 0 and margin > 0
-        if discount is None or not healthy:
+        if not policy['automatic_valuation'] or discount is None or not healthy:
             valuation = "평가 보류"
         elif discount >= 20:
             valuation = "상대 저평가 후보"
@@ -128,7 +138,7 @@ def screen_sector(market, sector):
             valuation = "상대 고평가 가능성"
         results.append({
             "valuation_label": valuation,
-            "valuation_basis": "표본 Forward PER 및 최소 성장·수익성 검증",
+            "valuation_basis": ("표본 Forward PER 및 최소 성장·수익성 검증" if policy["automatic_valuation"] else "업종 전용 재무지표 미검증"),
             "ticker": ticker,
             "name": str(info.get("shortName") or ticker)[:120],
             "currency": str(info.get("currency") or ""),
@@ -140,7 +150,7 @@ def screen_sector(market, sector):
         item["ticker"],
     ))
     result = {
-        "market": market, "sector": sector, "as_of": datetime.now(timezone.utc).isoformat(),
+        "market": market, "sector": sector, "valuation_policy": policy, "as_of": datetime.now(timezone.utc).isoformat(),
         "sample_size": len(UNIVERSE[market][sector]),
         "results": results, "failures": failures,
         "pe_benchmark": {"type": "curated_sample", "median": sector_pe_median,
