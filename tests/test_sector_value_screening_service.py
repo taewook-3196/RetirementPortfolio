@@ -31,8 +31,10 @@ def test_screen_handles_partial_provider_failures():
         result = screen_sector("us", "technology")
     assert "AAPL" in result["failures"]
     assert result["results"][0]["eligible"]
-    assert result["pe_benchmark"]["median"] == 15
+    assert result["pe_benchmark"]["median"] is None
     assert result["pe_benchmark"]["valid_count"] == 3
+    assert result["pe_benchmark"]["minimum_count"] == 5
+    assert all(row["valuation_label"] == "평가 보류" for row in result["results"])
     assert result["results"][0]["score"] == 100
 
 
@@ -46,3 +48,14 @@ def test_sector_relative_pe_and_insufficient_sample():
     assert _score({"forwardPE": 18}, sector_pe_median=10)["checks"]["reasonable_pe"] is False
     assert _score({"forwardPE": 18})["checks"]["reasonable_pe"] is None
     assert _score({"forwardPE": 22}, sector_pe_median=30)["metrics"]["pe_discount_pct"] == 26.67
+
+
+def test_forward_pe_only_and_profitability_gate():
+    CACHE.clear()
+    def fake_info(ticker):
+        return {"shortName": ticker, "trailingPE": 12, "returnOnEquity": .2,
+                "revenueGrowth": .1, "profitMargins": .2}
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "financials")
+    assert result["pe_benchmark"]["valid_count"] == 0
+    assert all(row["valuation_label"] == "평가 보류" for row in result["results"])
