@@ -57,3 +57,20 @@ def test_sec_shares_are_dated_and_do_not_infer_current_valuation():
     ]}}}}}
     assert _shares_outstanding(facts) == (80.0, "2025-12-31")
     assert _shares_outstanding({"facts": {}}) == (None, None)
+
+
+def test_fiscal_end_share_count_requires_matching_date():
+    from services.sec_edgar_fundamentals import fetch_sec_fundamentals
+    def flow(val):
+        return {"units": {"USD": [{"form": "10-K", "fy": 2025, "fp": "FY", "start": "2025-01-01", "end": "2025-12-31", "val": val}]}}
+    facts = {"facts": {
+        "us-gaap": {"Revenues": flow(100), "NetIncomeLoss": flow(20)},
+        "dei": {"EntityCommonStockSharesOutstanding": {"units": {"shares": [
+            {"form": "10-K", "end": "2026-02-01", "val": 10}
+        ]}}},
+    }}
+    with patch("services.sec_edgar_fundamentals._cik_for_ticker", return_value=123), patch("services.sec_edgar_fundamentals._cached", return_value=facts):
+        result = fetch_sec_fundamentals("TEST")
+        assert result["shares_outstanding"] == 10
+        assert result["shares_match_fiscal_end"] is False
+        assert result["fiscal_end_shares"] is None
