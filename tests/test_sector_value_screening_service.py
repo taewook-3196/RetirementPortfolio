@@ -34,7 +34,7 @@ def test_screen_handles_partial_provider_failures():
     assert result["pe_benchmark"]["median"] == 15
     assert result["pe_benchmark"]["valid_count"] == 11
     assert result["pe_benchmark"]["minimum_count"] == 5
-    assert all(row["valuation_label"] == "평가 보류" for row in result["results"])
+    assert all(row["valuation_label"] == "상대 적정" for row in result["results"])
     assert result["results"][0]["score"] == 100
 
 
