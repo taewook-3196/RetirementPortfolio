@@ -1894,6 +1894,23 @@ class WatchlistSaveRequest(BaseModel):
     memo: str = ""
 
 
+@app.get("/api/sector-value/{market}/{sector}")
+def get_sector_value_api(
+    market: str,
+    sector: str,
+    authorization: str | None = Header(default=None),
+):
+    """Authenticated, read-only preliminary valuation research."""
+    get_verified_user_id(authorization)
+    from services.sector_value_screening_service import screen_sector
+    try:
+        return screen_sector(market, sector)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=503, detail="기업 가치평가 데이터를 일시적으로 가져올 수 없습니다.")
+
+
 @app.get("/api/sector-momentum/{market}")
 def get_sector_momentum_api(
     market: str,
