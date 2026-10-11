@@ -64,7 +64,17 @@ def _fetch_info(ticker):
     # Annual SEC figures do not replace forecasts or live prices.
     if not ticker.endswith((".KS", ".KQ")):
         from services.sec_edgar_fundamentals import fetch_sec_fundamentals
-        return {**info, **fetch_sec_fundamentals(ticker)}
+        fundamentals = fetch_sec_fundamentals(ticker)
+        # Price history is separate from Yahoo's restricted company-info API.
+        try:
+            history = yf.Ticker(ticker).history(period="1y", auto_adjust=True)
+            closes = history["Close"].dropna()
+            if len(closes) >= 2 and float(closes.iloc[0]) > 0:
+                fundamentals["fiftyTwoWeekChange"] = float(closes.iloc[-1] / closes.iloc[0] - 1)
+                fundamentals["price_as_of"] = str(closes.index[-1].date())
+        except Exception:
+            pass
+        return {**info, **fundamentals}
     return info
 
 
