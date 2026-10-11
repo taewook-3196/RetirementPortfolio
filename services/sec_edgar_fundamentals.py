@@ -123,7 +123,12 @@ def fetch_sec_fundamentals(ticker):
     if equity_date != income_date or equity is None or equity <= 0:
         equity, equity_date = None, None
     shares, shares_date = _shares_outstanding(facts)
+    # SEC DEI outstanding shares are often measured after fiscal year end.
+    # A matching fiscal-end snapshot is required before ratios use this count.
+    matched_shares = shares if shares_date == income_date else None
     return {
+        "shares_match_fiscal_end": matched_shares is not None,
+        "fiscal_end_shares": matched_shares,
         "shares_outstanding": shares,
         "shares_as_of": shares_date,
         "annual_equity_usd": equity,
