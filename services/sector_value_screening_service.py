@@ -120,7 +120,7 @@ def screen_sector(market, sector):
         if pe is not None and 0 < pe <= 200:
             valid_pe.append(pe)
     sector_pe_median = statistics.median(valid_pe) if len(valid_pe) >= 5 else None
-    sector_pe_mean = statistics.mean(valid_pe) if len(valid_pe) >= 3 else None
+    sector_pe_mean = statistics.mean(valid_pe) if len(valid_pe) >= 5 else None
     # Cyclical semiconductor multiples are informational only until normalized
     # multi-year earnings are sourced and verified (never infer them from PE).
     semiconductor_cycle = {"status": "not_verified", "normalized_earnings": None} if sector == "semiconductors" else None
@@ -141,7 +141,14 @@ def screen_sector(market, sector):
         roe = assessment["metrics"]["roe"]
         margin = assessment["metrics"]["profit_margin"]
         healthy = all(value is not None for value in (growth, roe, margin)) and growth >= 0 and roe > 0 and margin > 0
-        if not policy['automatic_valuation'] or discount is None or not healthy:
+        pb = _finite(info.get("priceToBook"))
+        roe_value = _finite(info.get("returnOnEquity"))
+        bank_discount = (100 * (1 - (pb / roe_value) / bank_median)
+                         if bank_median is not None and pb is not None and pb > 0
+                         and roe_value is not None and roe_value > 0 else None)
+        if policy["primary"] == "pbr_roe":
+            valuation = "은행 상대가치 참고" if bank_discount is not None else "평가 보류"
+        elif not policy["automatic_valuation"] or discount is None or not healthy:
             valuation = "평가 보류"
         elif discount >= 20:
             valuation = "상대 저평가 후보"
