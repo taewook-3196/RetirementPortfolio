@@ -4624,6 +4624,18 @@ Gemini AI 투자 가이드 사용
 <div id="sector-momentum-results" style="overflow-x:auto"></div>
 </section>
 
+<section id="sector-value-section" class="card">
+<h2>섹터별 상대가치 탐색</h2>
+<p class="subtitle">선정된 표본의 재무지표 비교입니다. 저평가 확정이나 매수 추천이 아닙니다.</p>
+<label for="sector-value-market">시장</label>
+<select id="sector-value-market"><option value="us">미국</option><option value="kr">한국</option></select>
+<label for="sector-value-sector">섹터</label>
+<select id="sector-value-sector"></select>
+<button id="sector-value-load" type="button">종목 분석하기</button>
+<div id="sector-value-status" role="status" aria-live="polite"></div>
+<div id="sector-value-results" style="overflow-x:auto"></div>
+</section>
+
 <section id="market-index-section" class="card">
 <h2>주요 시장지수</h2>
 <p class="subtitle">지수를 선택하면 기간별 가격, 이동평균선, 수익률과 최대 낙폭을 확인할 수 있습니다.</p>
@@ -7864,6 +7876,87 @@ async function refreshSectorMomentum() {
 }
 document.getElementById("sector-market-select").addEventListener("change", refreshSectorMomentum);
 document.getElementById("sector-period-select").addEventListener("change", refreshSectorMomentum);
+
+
+const sectorValueOptions = {
+    us: {technology:"정보기술", financials:"금융", healthcare:"헬스케어",
+         industrials:"산업재", consumer_discretionary:"경기소비재",
+         consumer_staples:"필수소비재", energy:"에너지", utilities:"유틸리티",
+         materials:"소재", real_estate:"부동산", communication:"커뮤니케이션"},
+    kr: {semiconductors:"반도체", banks:"은행", automobiles:"자동차", healthcare:"헬스케어"}
+};
+let sectorValueVersion = 0;
+function syncSectorValueSectors() {
+    const market = document.getElementById("sector-value-market").value;
+    const select = document.getElementById("sector-value-sector");
+    select.replaceChildren();
+    for (const [key, label] of Object.entries(sectorValueOptions[market])) {
+        const option = document.createElement("option");
+        option.value = key;
+        option.textContent = label;
+        select.appendChild(option);
+    }
+    ++sectorValueVersion;
+    document.getElementById("sector-value-status").textContent = "섹터를 선택하고 분석하기를 누르세요.";
+    document.getElementById("sector-value-results").replaceChildren();
+}
+function sectorValueMetric(value, suffix = "") {
+    return typeof value === "number" && Number.isFinite(value)
+        ? value.toFixed(2) + suffix : "자료 없음";
+}
+async function refreshSectorValue() {
+    const token = localStorage.getItem("access_token") || "";
+    if (!token) return;
+    const version = ++sectorValueVersion;
+    const market = document.getElementById("sector-value-market").value;
+    const sector = document.getElementById("sector-value-sector").value;
+    const status = document.getElementById("sector-value-status");
+    const container = document.getElementById("sector-value-results");
+    status.textContent = "재무 데이터를 조회하고 있습니다. 최초 조회는 시간이 걸릴 수 있습니다.";
+    container.replaceChildren();
+    try {
+        const data = await apiRequest("/api/sector-value/" + encodeURIComponent(market)
+            + "/" + encodeURIComponent(sector), token);
+        if (version !== sectorValueVersion) return;
+        const table = document.createElement("table");
+        const header = document.createElement("tr");
+        for (const label of ["종목", "평가", "PER", "PBR", "ROE", "PER 할인율", "참고 점수"]) {
+            const th = document.createElement("th");
+            th.textContent = label;
+            header.appendChild(th);
+        }
+        table.appendChild(header);
+        for (const item of data.results || []) {
+            const tr = document.createElement("tr");
+            const metrics = item.metrics || {};
+            for (const label of [
+                item.name + " (" + item.ticker + ")",
+                item.valuation_label || "평가 보류",
+                sectorValueMetric(metrics.pe),
+                sectorValueMetric(metrics.pb),
+                sectorValueMetric(metrics.roe == null ? null : metrics.roe * 100, "%"),
+                sectorValueMetric(metrics.pe_discount_pct, "%"),
+                sectorValueMetric(item.score)
+            ]) {
+                const td = document.createElement("td");
+                td.textContent = label;
+                tr.appendChild(td);
+            }
+            table.appendChild(tr);
+        }
+        container.appendChild(table);
+        const benchmark = data.pe_benchmark || {};
+        status.textContent = "분석 표본 " + (data.sample_size || 0) + "개 · Forward PER 유효 "
+            + (benchmark.valid_count || 0) + "개 · 중앙값 "
+            + sectorValueMetric(benchmark.median) + " · " + (data.disclaimer || "")
+            + (Object.keys(data.failures || {}).length ? " · 일부 종목 조회 실패" : "");
+    } catch (error) {
+        if (version === sectorValueVersion) status.textContent = error.message;
+    }
+}
+document.getElementById("sector-value-market").addEventListener("change", syncSectorValueSectors);
+document.getElementById("sector-value-load").addEventListener("click", refreshSectorValue);
+syncSectorValueSectors();
 
 let marketIndexLoadVersion = 0;
 async function refreshMarketIndex() {
