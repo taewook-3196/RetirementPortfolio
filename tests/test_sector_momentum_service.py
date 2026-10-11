@@ -12,8 +12,14 @@ from web.app import home
 def test_period_returns_require_baseline_and_newer_data():
     today = date.today()
     values = [(today - timedelta(days=100), 100), (today, 120)]
-    assert _return_for_period(values, today - timedelta(days=90)) == 20.0
-    assert _return_for_period(values, today - timedelta(days=110)) is None
+    assert _return_for_period(values, today - timedelta(days=90)) == 0.0
+    assert _return_for_period(values, today - timedelta(days=110)) == 20.0
+
+
+def test_non_trading_boundary_uses_next_available_close():
+    today = date.today()
+    values = [(today - timedelta(days=95), 100), (today - timedelta(days=88), 110), (today, 121)]
+    assert _return_for_period(values, today - timedelta(days=90)) == 10.0
 
 
 def test_invalid_market_rejected():
