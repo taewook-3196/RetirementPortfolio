@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import math
 import statistics
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 UNIVERSE = {
     "us": {
@@ -98,14 +99,19 @@ def screen_sector(market, sector):
         return cached[1]
     policy = SECTOR_POLICIES.get(sector, DEFAULT_POLICY)
     results, failures, records = [], {}, []
-    for ticker in UNIVERSE[market][sector]:
-        try:
-            info = _fetch_info(ticker)
-            if not isinstance(info, dict) or not info:
-                raise ValueError("기업 정보 없음")
-            records.append((ticker, info))
-        except Exception:
-            failures[ticker] = "기업 정보 조회 실패"
+    # Bound concurrent requests to avoid sequential latency and provider overload.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(_fetch_info, ticker): ticker for ticker in UNIVERSE[market][sector]}
+        for future in as_completed(futures):
+            ticker = futures[future]
+            try:
+                info = future.result()
+                if not isinstance(info, dict) or not info:
+                    raise ValueError("기업 정보 없음")
+                records.append((ticker, info))
+            except Exception:
+                failures[ticker] = "기업 정보 조회 실패"
+    records.sort(key=lambda item: item[0])
     # Curated sample: never claim an industry-wide benchmark. Require 5
     # comparable positive forward PEs before allowing valuation labels.
     valid_pe = []
@@ -115,6 +121,9 @@ def screen_sector(market, sector):
             valid_pe.append(pe)
     sector_pe_median = statistics.median(valid_pe) if len(valid_pe) >= 5 else None
     sector_pe_mean = statistics.mean(valid_pe) if len(valid_pe) >= 3 else None
+    # Cyclical semiconductor multiples are informational only until normalized
+    # multi-year earnings are sourced and verified (never infer them from PE).
+    semiconductor_cycle = {"status": "not_verified", "normalized_earnings": None} if sector == "semiconductors" else None
     bank_ratios = []
     if policy["primary"] == "pbr_roe":
         for _, company in records:
@@ -162,6 +171,7 @@ def screen_sector(market, sector):
         "market": market, "sector": sector, "valuation_policy": policy, "as_of": datetime.now(timezone.utc).isoformat(),
         "sample_size": len(UNIVERSE[market][sector]),
         "results": results, "failures": failures,
+        "semiconductor_cycle": semiconductor_cycle,
         "bank_pbr_roe_benchmark": {"median": round(bank_median, 4) if bank_median is not None else None,
                                    "valid_count": len(bank_ratios), "minimum_count": 5},
         "pe_benchmark": {"type": "curated_sample", "median": sector_pe_median,
