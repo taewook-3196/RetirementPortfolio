@@ -104,8 +104,12 @@ def fetch_sec_fundamentals(ticker):
     if revenue is None or income is None or revenue_date != income_date or revenue <= 0:
         raise ValueError("Comparable annual sales and net income are unavailable")
     equity, equity_date = _instant_facts(facts, ("StockholdersEquity",))
+    # Equity is a balance-sheet snapshot: compare only with matching FY income.
+    if equity_date != income_date or equity is None or equity <= 0:
+        equity, equity_date = None, None
     return {
         "annual_equity_usd": equity,
+        "returnOnEquity": income / equity if equity else None,
         "equity_as_of": equity_date,
         "shortName": facts.get("entityName", ticker),
         "annual_revenue_usd": revenue,
