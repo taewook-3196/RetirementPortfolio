@@ -7918,33 +7918,28 @@ async function refreshSectorValue() {
         const data = await apiRequest("/api/sector-value/" + encodeURIComponent(market)
             + "/" + encodeURIComponent(sector), token);
         if (version !== sectorValueVersion) return;
-        const table = document.createElement("table");
-        const header = document.createElement("tr");
-        for (const label of ["종목", "평가", "PER", "PBR", "ROE", "PER 할인율", "참고 점수"]) {
-            const th = document.createElement("th");
-            th.textContent = label;
-            header.appendChild(th);
-        }
-        table.appendChild(header);
+        // Compact cards avoid seven squeezed table columns on narrow phones.
         for (const item of data.results || []) {
-            const tr = document.createElement("tr");
             const metrics = item.metrics || {};
-            for (const label of [
-                item.name + " (" + item.ticker + ")",
-                item.valuation_label || "평가 보류",
-                sectorValueMetric(metrics.pe),
-                sectorValueMetric(metrics.pb),
-                sectorValueMetric(metrics.roe == null ? null : metrics.roe * 100, "%"),
-                sectorValueMetric(metrics.pe_discount_pct, "%"),
-                sectorValueMetric(item.score)
-            ]) {
-                const td = document.createElement("td");
-                td.textContent = label;
-                tr.appendChild(td);
-            }
-            table.appendChild(tr);
+            const card = document.createElement("article");
+            card.style.cssText = "border:1px solid #d1d5db;border-radius:12px;padding:12px;margin:10px 0;overflow-wrap:anywhere";
+            const heading = document.createElement("strong");
+            heading.textContent = (item.name || item.ticker) + " (" + item.ticker + ")";
+            card.appendChild(heading);
+            const label = document.createElement("p");
+            label.style.cssText = "margin:6px 0;font-weight:600";
+            label.textContent = item.valuation_label || "평가 보류";
+            card.appendChild(label);
+            const details = document.createElement("p");
+            details.style.cssText = "margin:6px 0;line-height:1.7";
+            details.textContent = "PER " + sectorValueMetric(metrics.pe)
+                + " · PBR " + sectorValueMetric(metrics.pb)
+                + " · ROE " + sectorValueMetric(metrics.roe == null ? null : metrics.roe * 100, "%")
+                + " · PER 할인율 " + sectorValueMetric(metrics.pe_discount_pct, "%")
+                + " · 참고 점수 " + sectorValueMetric(item.score);
+            card.appendChild(details);
+            container.appendChild(card);
         }
-        container.appendChild(table);
         const benchmark = data.pe_benchmark || {};
         status.textContent = "분석 표본 " + (data.sample_size || 0) + "개 · Forward PER 유효 "
             + (benchmark.valid_count || 0) + "개 · 중앙값 "
