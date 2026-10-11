@@ -90,6 +90,8 @@ def fetch_sec_fundamentals(ticker):
         raise ValueError("Comparable annual sales and net income are unavailable")
     return {
         "shortName": facts.get("entityName", ticker),
+        "annual_revenue_usd": revenue,
+        "annual_net_income_usd": income,
         "profitMargins": income / revenue,
         "source": "SEC EDGAR companyfacts",
         "financials_as_of": revenue_date,
