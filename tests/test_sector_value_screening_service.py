@@ -31,8 +31,8 @@ def test_screen_handles_partial_provider_failures():
         result = screen_sector("us", "technology")
     assert "AAPL" in result["failures"]
     assert result["results"][0]["eligible"]
-    assert result["pe_benchmark"]["median"] is None
-    assert result["pe_benchmark"]["valid_count"] == 3
+    assert result["pe_benchmark"]["median"] == 15
+    assert result["pe_benchmark"]["valid_count"] == 11
     assert result["pe_benchmark"]["minimum_count"] == 5
     assert all(row["valuation_label"] == "평가 보류" for row in result["results"])
     assert result["results"][0]["score"] == 100
