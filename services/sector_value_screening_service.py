@@ -96,20 +96,39 @@ def screen_sector(market, sector):
             records.append((ticker, info))
         except Exception:
             failures[ticker] = "기업 정보 조회 실패"
-    # The curated sample is too small to claim an industry-wide benchmark.
-    # Require at least 3 valid positive PE observations for a sample comparison.
+    # Curated sample: never claim an industry-wide benchmark. Require 5
+    # comparable positive forward PEs before allowing valuation labels.
     valid_pe = []
     for _, info in records:
         pe = _finite(info.get("forwardPE"))
-        if pe is None or pe <= 0:
-            pe = _finite(info.get("trailingPE"))
         if pe is not None and 0 < pe <= 200:
             valid_pe.append(pe)
-    sector_pe_median = statistics.median(valid_pe) if len(valid_pe) >= 3 else None
+    sector_pe_median = statistics.median(valid_pe) if len(valid_pe) >= 5 else None
     sector_pe_mean = statistics.mean(valid_pe) if len(valid_pe) >= 3 else None
     for ticker, info in records:
         assessment = _score(info, sector_pe_median)
+        # Valuation and investability are distinct: a low multiple is not
+        # evidence of undervaluation without earnings quality and growth.
+        discount = assessment["metrics"]["pe_discount_pct"]
+        growth = assessment["metrics"]["revenue_growth"]
+        roe = assessment["metrics"]["roe"]
+        margin = assessment["metrics"]["profit_margin"]
+        healthy = all(value is not None for value in (growth, roe, margin)) and growth >= 0 and roe > 0 and margin > 0
+        if discount is None or not healthy:
+            valuation = "평가 보류"
+        elif discount >= 20:
+            valuation = "상대 저평가 후보"
+        elif discount >= 10:
+            valuation = "다소 저평가 후보"
+        elif discount >= -10:
+            valuation = "상대 적정"
+        elif discount >= -20:
+            valuation = "다소 고평가 가능성"
+        else:
+            valuation = "상대 고평가 가능성"
         results.append({
+            "valuation_label": valuation,
+            "valuation_basis": "표본 Forward PER 및 최소 성장·수익성 검증",
             "ticker": ticker,
             "name": str(info.get("shortName") or ticker)[:120],
             "currency": str(info.get("currency") or ""),
@@ -126,9 +145,9 @@ def screen_sector(market, sector):
         "results": results, "failures": failures,
         "pe_benchmark": {"type": "curated_sample", "median": sector_pe_median,
                          "mean": round(sector_pe_mean, 2) if sector_pe_mean is not None else None,
-                         "valid_count": len(valid_pe), "minimum_count": 3},
-        "method": "동일 가중 6개 휴리스틱(PER은 표본 중앙값 대비, PBR, ROE, 매출성장, 순이익률, 52주 가격변화); 4개 이상 관측 시 평가 가능",
-        "disclaimer": "제한된 표본의 정량 선별 결과이며 저평가 확정 또는 매수 추천이 아닙니다. PER 기준은 소규모 표본 중앙값이며 섹터 전체 평균이 아닙니다. 업종별 적정 PER/PBR이 달라 직접 비교에 주의하세요.",
+                         "valid_count": len(valid_pe), "minimum_count": 5},
+        "method": "임시 탐색 점수(6개 지표). PER 상대평가는 Forward PER 유효 표본 5개 이상인 경우만 사용. 가치평가와 투자매력도는 별개입니다.",
+        "disclaimer": "제한된 표본의 정량 선별 결과이며 저평가 확정 또는 매수 추천이 아닙니다. PER 기준은 소규모 표본 중앙값이며 섹터 전체 평균이 아닙니다. 표본이 부족하면 가치평가를 보류합니다. 업종별 적정 PER/PBR이 달라 직접 비교에 주의하세요.",
     }
     CACHE[key] = (time.monotonic(), result)
     return result
