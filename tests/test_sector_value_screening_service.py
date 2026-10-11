@@ -1,0 +1,39 @@
+"""Regression tests for the explainable sector stock screener."""
+from unittest.mock import patch
+import pytest
+from services.sector_value_screening_service import (
+    _score, screen_sector, CACHE,
+)
+
+
+def test_missing_data_is_not_treated_as_failure():
+    result = _score({"forwardPE": 12})
+    assert result["coverage"] == 1
+    assert result["score"] == 100
+    assert result["eligible"] is False
+    assert result["checks"]["positive_roe"] is None
+
+
+def test_negative_pe_does_not_qualify():
+    result = _score({"forwardPE": -4, "trailingPE": -5})
+    assert result["checks"]["reasonable_pe"] is False
+
+
+def test_screen_handles_partial_provider_failures():
+    CACHE.clear()
+    def fake_info(ticker):
+        if ticker == "AAPL":
+            raise RuntimeError("provider unavailable")
+        return {"shortName": ticker, "forwardPE": 15, "priceToBook": 2,
+                "returnOnEquity": .2, "revenueGrowth": .1,
+                "profitMargins": .2, "fiftyTwoWeekChange": .05}
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "technology")
+    assert "AAPL" in result["failures"]
+    assert result["results"][0]["eligible"]
+    assert result["results"][0]["score"] == 100
+
+
+def test_invalid_sector_is_rejected():
+    with pytest.raises(ValueError):
+        screen_sector("us", "not_a_sector")
