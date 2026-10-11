@@ -10,23 +10,23 @@ import time
 
 UNIVERSE = {
     "us": {
-        "technology": ["MSFT", "AAPL", "CSCO", "ORCL"],
-        "financials": ["JPM", "BAC", "WFC", "C"],
-        "healthcare": ["JNJ", "MRK", "ABBV", "PFE"],
-        "industrials": ["CAT", "DE", "HON", "GE"],
-        "consumer_discretionary": ["AMZN", "HD", "MCD", "NKE"],
-        "consumer_staples": ["PG", "KO", "PEP", "WMT"],
-        "energy": ["XOM", "CVX", "COP", "SLB"],
-        "utilities": ["NEE", "SO", "DUK", "AEP"],
-        "materials": ["LIN", "SHW", "ECL", "NEM"],
-        "real_estate": ["PLD", "AMT", "EQIX", "O"],
-        "communication": ["GOOGL", "META", "VZ", "T"],
+        "technology": ["MSFT", "AAPL", "CSCO", "ORCL", "ADBE", "CRM", "INTU", "IBM", "ACN", "NOW", "PANW", "SNPS"],
+        "financials": ["JPM", "BAC", "WFC", "C", "GS", "MS", "USB", "PNC", "TFC", "BK", "SCHW", "AXP"],
+        "healthcare": ["JNJ", "MRK", "ABBV", "PFE", "LLY", "UNH", "ABT", "TMO", "DHR", "BMY", "AMGN", "GILD"],
+        "industrials": ["CAT", "DE", "HON", "GE", "RTX", "LMT", "ETN", "EMR", "UPS", "UNP", "WM", "PH"],
+        "consumer_discretionary": ["AMZN", "HD", "MCD", "NKE", "LOW", "SBUX", "TJX", "BKNG", "CMG", "YUM", "ROST", "MAR"],
+        "consumer_staples": ["PG", "KO", "PEP", "WMT", "COST", "CL", "KMB", "MDLZ", "GIS", "KHC", "HSY", "KR"],
+        "energy": ["XOM", "CVX", "COP", "SLB", "EOG", "OXY", "MPC", "PSX", "VLO", "HAL", "DVN", "BKR"],
+        "utilities": ["NEE", "SO", "DUK", "AEP", "D", "EXC", "SRE", "XEL", "ED", "WEC", "PEG", "EIX"],
+        "materials": ["LIN", "SHW", "ECL", "NEM", "APD", "FCX", "NUE", "DOW", "DD", "VMC", "MLM", "PPG"],
+        "real_estate": ["PLD", "AMT", "EQIX", "O", "WELL", "SPG", "DLR", "PSA", "VICI", "AVB", "EQR", "IRM"],
+        "communication": ["GOOGL", "META", "VZ", "T", "NFLX", "DIS", "CMCSA", "TMUS", "CHTR", "EA", "TTWO", "OMC"],
     },
     "kr": {
-        "semiconductors": ["005930.KS", "000660.KS"],
-        "banks": ["105560.KS", "055550.KS", "086790.KS"],
-        "automobiles": ["005380.KS", "000270.KS"],
-        "healthcare": ["207940.KS", "068270.KS"],
+        "semiconductors": ["005930.KS", "000660.KS", "042700.KS", "058470.KQ", "403870.KQ", "240810.KQ", "039030.KQ", "036930.KQ", "095340.KQ", "000990.KS"],
+        "banks": ["105560.KS", "055550.KS", "086790.KS", "024110.KS", "316140.KS", "138930.KS", "175330.KS", "323410.KS", "139130.KS", "006220.KS"],
+        "automobiles": ["005380.KS", "000270.KS", "012330.KS", "018880.KS", "011210.KS", "204320.KS", "064960.KS", "003620.KS", "161390.KS", "009900.KS"],
+        "healthcare": ["207940.KS", "068270.KS", "128940.KS", "000100.KS", "326030.KS", "196170.KQ", "145020.KQ", "302440.KS", "091990.KQ", "141080.KQ"],
     },
 }
 CACHE = {}
