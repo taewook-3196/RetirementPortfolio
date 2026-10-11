@@ -115,6 +115,14 @@ def screen_sector(market, sector):
             valid_pe.append(pe)
     sector_pe_median = statistics.median(valid_pe) if len(valid_pe) >= 5 else None
     sector_pe_mean = statistics.mean(valid_pe) if len(valid_pe) >= 3 else None
+    bank_ratios = []
+    if policy["primary"] == "pbr_roe":
+        for _, company in records:
+            pb = _finite(company.get("priceToBook"))
+            roe = _finite(company.get("returnOnEquity"))
+            if pb is not None and roe is not None and pb > 0 and roe > 0:
+                bank_ratios.append(pb / roe)
+    bank_median = statistics.median(bank_ratios) if len(bank_ratios) >= 5 else None
     for ticker, info in records:
         assessment = _score(info, sector_pe_median)
         # Valuation and investability are distinct: a low multiple is not
@@ -138,6 +146,7 @@ def screen_sector(market, sector):
             valuation = "상대 고평가 가능성"
         results.append({
             "valuation_label": valuation,
+            "bank_pbr_roe_discount_pct": round(bank_discount, 2) if bank_discount is not None else None,
             "valuation_basis": ("표본 Forward PER 및 최소 성장·수익성 검증" if policy["automatic_valuation"] else "업종 전용 재무지표 미검증"),
             "ticker": ticker,
             "name": str(info.get("shortName") or ticker)[:120],
@@ -153,6 +162,8 @@ def screen_sector(market, sector):
         "market": market, "sector": sector, "valuation_policy": policy, "as_of": datetime.now(timezone.utc).isoformat(),
         "sample_size": len(UNIVERSE[market][sector]),
         "results": results, "failures": failures,
+        "bank_pbr_roe_benchmark": {"median": round(bank_median, 4) if bank_median is not None else None,
+                                   "valid_count": len(bank_ratios), "minimum_count": 5},
         "pe_benchmark": {"type": "curated_sample", "median": sector_pe_median,
                          "mean": round(sector_pe_mean, 2) if sector_pe_mean is not None else None,
                          "valid_count": len(valid_pe), "minimum_count": 5},
