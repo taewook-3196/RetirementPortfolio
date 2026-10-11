@@ -34,3 +34,16 @@ def test_latest_revenue_across_multiple_taxonomy_tags():
         "SalesRevenueNet": {"units": {"USD": [{"form": "10-K", "fy": 2025, "fp": "FY", "start": "2025-01-01", "end": "2025-12-31", "val": 120}]}},
     }}}
     assert _annual_facts(facts, ("Revenues", "SalesRevenueNet")) == (120.0, "2025-12-31")
+
+
+def test_sec_roe_only_with_matching_equity_fiscal_date():
+    from services.sec_edgar_fundamentals import fetch_sec_fundamentals
+    def flow(val):
+        return {"units": {"USD": [{"form": "10-K", "fy": 2025, "fp": "FY", "start": "2025-01-01", "end": "2025-12-31", "val": val}]}}
+    def balance(end):
+        return {"units": {"USD": [{"form": "10-K", "end": end, "val": 200}]}}
+    facts = {"facts": {"us-gaap": {"Revenues": flow(100), "NetIncomeLoss": flow(20), "StockholdersEquity": balance("2025-12-31")}}}
+    with patch("services.sec_edgar_fundamentals._cik_for_ticker", return_value=123), patch("services.sec_edgar_fundamentals._cached", return_value=facts):
+        assert fetch_sec_fundamentals("TEST")["returnOnEquity"] == .1
+        facts["facts"]["us-gaap"]["StockholdersEquity"] = balance("2024-12-31")
+        assert fetch_sec_fundamentals("TEST")["returnOnEquity"] is None
