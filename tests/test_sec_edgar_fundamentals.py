@@ -26,3 +26,11 @@ def test_sec_rejects_mismatched_annual_periods():
 def test_yahoo_unavailable_uses_sec_verified_profit_margin():
     with patch("yfinance.Ticker", side_effect=RuntimeError("401")), patch("services.sec_edgar_fundamentals.fetch_sec_fundamentals", return_value={"shortName": "Example", "profitMargins": .2}):
         assert _fetch_info("AAPL")["profitMargins"] == .2
+
+
+def test_latest_revenue_across_multiple_taxonomy_tags():
+    facts = {"facts": {"us-gaap": {
+        "Revenues": {"units": {"USD": [{"form": "10-K", "fy": 2024, "fp": "FY", "start": "2024-01-01", "end": "2024-12-31", "val": 90}]}},
+        "SalesRevenueNet": {"units": {"USD": [{"form": "10-K", "fy": 2025, "fp": "FY", "start": "2025-01-01", "end": "2025-12-31", "val": 120}]}},
+    }}}
+    assert _annual_facts(facts, ("Revenues", "SalesRevenueNet")) == (120.0, "2025-12-31")
