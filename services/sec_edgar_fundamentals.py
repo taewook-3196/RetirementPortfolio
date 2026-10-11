@@ -90,6 +90,20 @@ def _instant_facts(facts, tags):
     return float(best["val"]), best["end"]
 
 
+def _shares_outstanding(facts):
+    dei = facts.get("facts", {}).get("dei", {})
+    rows = dei.get("EntityCommonStockSharesOutstanding", {}).get("units", {}).get("shares", [])
+    candidates = [
+        row for row in rows
+        if row.get("form") in ("10-K", "10-K/A")
+        and row.get("end") and not row.get("start") and float(row.get("val", 0)) > 0
+    ]
+    if not candidates:
+        return None, None
+    best = max(candidates, key=lambda row: (row["end"], row.get("filed", "")))
+    return float(best["val"]), best["end"]
+
+
 def fetch_sec_fundamentals(ticker):
     """Returns verified annual sales/profit figures only, never invented ratios."""
     if not ticker or ticker.endswith((".KS", ".KQ")):
@@ -107,7 +121,10 @@ def fetch_sec_fundamentals(ticker):
     # Equity is a balance-sheet snapshot: compare only with matching FY income.
     if equity_date != income_date or equity is None or equity <= 0:
         equity, equity_date = None, None
+    shares, shares_date = _shares_outstanding(facts)
     return {
+        "shares_outstanding": shares,
+        "shares_as_of": shares_date,
         "annual_equity_usd": equity,
         "returnOnEquity": income / equity if equity else None,
         "equity_as_of": equity_date,
