@@ -69,4 +69,6 @@ def test_banks_require_specialized_valuation_inputs():
     with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
         result = screen_sector("us", "financials")
     assert result["valuation_policy"]["primary"] == "pbr_roe"
-    assert all(row["valuation_label"] == "평가 보류" for row in result["results"])
+    assert result["bank_pbr_roe_benchmark"]["valid_count"] >= 5
+    assert all(row["valuation_label"] == "은행 상대가치 참고" for row in result["results"])
+    assert all(row["bank_pbr_roe_discount_pct"] == 0 for row in result["results"])
