@@ -9,12 +9,15 @@ from datetime import datetime, timezone
 import json
 import os
 import time
+import threading
 from urllib.request import Request, urlopen
 
 SEC_BASE = "https://data.sec.gov"
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 CACHE = {}
 TTL = 86400
+SEC_REQUEST_LOCK = threading.Lock()
+_last_sec_request = 0.0
 
 
 def _get_json(url):
@@ -26,8 +29,15 @@ def _get_json(url):
         "Accept": "application/json",
         "Accept-Encoding": "identity",
     })
-    with urlopen(request, timeout=12) as response:
-        return json.load(response)
+    global _last_sec_request
+    # SEC requests are globally serialized and throttled within this process.
+    with SEC_REQUEST_LOCK:
+        wait = 0.2 - (time.monotonic() - _last_sec_request)
+        if wait > 0:
+            time.sleep(wait)
+        _last_sec_request = time.monotonic()
+        with urlopen(request, timeout=12) as response:
+            return json.load(response)
 
 
 def _cached(key, fetch):
