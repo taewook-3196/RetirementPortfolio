@@ -5,6 +5,7 @@ Universe is a curated sample, not all listed stocks.
 """
 from datetime import datetime, timezone
 import math
+import statistics
 import time
 
 UNIVERSE = {
@@ -47,8 +48,8 @@ def _fetch_info(ticker):
     return yf.Ticker(ticker).info or {}
 
 
-def _score(info):
-    """Absolute screening heuristics, with an explicit coverage requirement."""
+def _score(info, sector_pe_median=None):
+    """Sector-relative PE screening with an explicit coverage requirement."""
     pe = _finite(info.get("forwardPE"))
     if pe is None or pe <= 0:
         pe = _finite(info.get("trailingPE"))
@@ -60,7 +61,7 @@ def _score(info):
     metrics = {"pe": pe, "pb": pb, "roe": roe, "revenue_growth": growth,
                "profit_margin": margin, "year_change": momentum}
     checks = {
-        "reasonable_pe": None if pe is None else 0 < pe <= 20,
+        "reasonable_pe": None if pe is None or sector_pe_median is None else 0 < pe <= sector_pe_median,
         "reasonable_pb": None if pb is None else 0 < pb <= 3,
         "positive_roe": None if roe is None else roe >= .10,
         "revenue_growth": None if growth is None else growth >= .05,
@@ -69,7 +70,10 @@ def _score(info):
     }
     available = [value for value in checks.values() if value is not None]
     return {
-        "metrics": metrics, "checks": checks,
+        "metrics": {**metrics, "sector_pe_median": sector_pe_median,
+                    "pe_discount_pct": round((1 - pe / sector_pe_median) * 100, 2)
+                    if pe is not None and pe > 0 and sector_pe_median else None},
+        "checks": checks,
         "coverage": len(available), "total_metrics": len(checks),
         "score": round(100 * sum(available) / len(available), 1) if available else None,
         "eligible": len(available) >= 4,
@@ -83,21 +87,34 @@ def screen_sector(market, sector):
     cached = CACHE.get(key)
     if cached and time.monotonic() - cached[0] < TTL_SECONDS:
         return cached[1]
-    results, failures = [], {}
+    results, failures, records = [], {}, []
     for ticker in UNIVERSE[market][sector]:
         try:
             info = _fetch_info(ticker)
             if not isinstance(info, dict) or not info:
                 raise ValueError("기업 정보 없음")
-            assessment = _score(info)
-            results.append({
-                "ticker": ticker,
-                "name": str(info.get("shortName") or ticker)[:120],
-                "currency": str(info.get("currency") or ""),
-                **assessment,
-            })
+            records.append((ticker, info))
         except Exception:
             failures[ticker] = "기업 정보 조회 실패"
+    # The curated sample is too small to claim an industry-wide benchmark.
+    # Require at least 3 valid positive PE observations for a sample comparison.
+    valid_pe = []
+    for _, info in records:
+        pe = _finite(info.get("forwardPE"))
+        if pe is None or pe <= 0:
+            pe = _finite(info.get("trailingPE"))
+        if pe is not None and 0 < pe <= 200:
+            valid_pe.append(pe)
+    sector_pe_median = statistics.median(valid_pe) if len(valid_pe) >= 3 else None
+    sector_pe_mean = statistics.mean(valid_pe) if len(valid_pe) >= 3 else None
+    for ticker, info in records:
+        assessment = _score(info, sector_pe_median)
+        results.append({
+            "ticker": ticker,
+            "name": str(info.get("shortName") or ticker)[:120],
+            "currency": str(info.get("currency") or ""),
+            **assessment,
+        })
     results.sort(key=lambda item: (
         not item["eligible"],
         -(item["score"] if item["score"] is not None else -1),
@@ -107,8 +124,11 @@ def screen_sector(market, sector):
         "market": market, "sector": sector, "as_of": datetime.now(timezone.utc).isoformat(),
         "sample_size": len(UNIVERSE[market][sector]),
         "results": results, "failures": failures,
-        "method": "동일 가중 6개 휴리스틱(PE, PBR, ROE, 매출성장, 순이익률, 52주 가격변화); 4개 이상 관측 시 평가 가능",
-        "disclaimer": "제한된 표본의 정량 선별 결과이며 저평가 확정 또는 매수 추천이 아닙니다. 업종별 적정 PER/PBR이 달라 직접 비교에 주의하세요.",
+        "pe_benchmark": {"type": "curated_sample", "median": sector_pe_median,
+                         "mean": round(sector_pe_mean, 2) if sector_pe_mean is not None else None,
+                         "valid_count": len(valid_pe), "minimum_count": 3},
+        "method": "동일 가중 6개 휴리스틱(PER은 표본 중앙값 대비, PBR, ROE, 매출성장, 순이익률, 52주 가격변화); 4개 이상 관측 시 평가 가능",
+        "disclaimer": "제한된 표본의 정량 선별 결과이며 저평가 확정 또는 매수 추천이 아닙니다. PER 기준은 소규모 표본 중앙값이며 섹터 전체 평균이 아닙니다. 업종별 적정 PER/PBR이 달라 직접 비교에 주의하세요.",
     }
     CACHE[key] = (time.monotonic(), result)
     return result
