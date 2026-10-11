@@ -62,7 +62,7 @@ def _fetch_info(ticker):
     except Exception:
         info = {}
     # Annual SEC figures do not replace forecasts or live prices.
-    if "." not in ticker:
+    if not ticker.endswith((".KS", ".KQ")):
         from services.sec_edgar_fundamentals import fetch_sec_fundamentals
         return {**info, **fetch_sec_fundamentals(ticker)}
     return info
