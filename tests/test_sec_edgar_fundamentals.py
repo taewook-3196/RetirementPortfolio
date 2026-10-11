@@ -47,3 +47,13 @@ def test_sec_roe_only_with_matching_equity_fiscal_date():
         assert fetch_sec_fundamentals("TEST")["returnOnEquity"] == .1
         facts["facts"]["us-gaap"]["StockholdersEquity"] = balance("2024-12-31")
         assert fetch_sec_fundamentals("TEST")["returnOnEquity"] is None
+
+
+def test_sec_shares_are_dated_and_do_not_infer_current_valuation():
+    from services.sec_edgar_fundamentals import _shares_outstanding
+    facts = {"facts": {"dei": {"EntityCommonStockSharesOutstanding": {"units": {"shares": [
+        {"form": "10-K", "end": "2024-12-31", "val": 100},
+        {"form": "10-K", "end": "2025-12-31", "val": 80},
+    ]}}}}}
+    assert _shares_outstanding(facts) == (80.0, "2025-12-31")
+    assert _shares_outstanding({"facts": {}}) == (None, None)
