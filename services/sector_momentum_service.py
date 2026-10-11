@@ -45,11 +45,14 @@ def _close_history(symbol, start, end):
 
 
 def _return_for_period(values, cutoff):
-    before = [price for date, price in values if date <= cutoff]
-    after = [price for date, price in values if date > cutoff]
-    if not before or not after:
+    if not values or values[-1][0] <= cutoff:
         return None
-    return round((values[-1][1] / before[-1] - 1) * 100, 2)
+    # Use the first trading close on or after the period boundary. This
+    # avoids requiring a price on a market holiday or non-trading day.
+    baseline = next((price for day, price in values if day >= cutoff), None)
+    if baseline is None or baseline <= 0:
+        return None
+    return round((values[-1][1] / baseline - 1) * 100, 2)
 
 
 def load_sector_momentum(market="us"):
