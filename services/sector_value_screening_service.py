@@ -111,6 +111,14 @@ def screen_sector(market, sector):
                 records.append((ticker, info))
             except Exception:
                 failures[ticker] = "기업 정보 조회 실패"
+    # A provider may return only names/tickers while fundamentals are unavailable.
+    # Do not present such records as a valid valuation result or cache the outage.
+    usable = sum(
+        any(_finite(info.get(field)) is not None for field in FIELDS)
+        for _, info in records
+    )
+    if usable == 0:
+        raise RuntimeError("Fundamental data unavailable for all sampled companies")
     records.sort(key=lambda item: item[0])
     # Curated sample: never claim an industry-wide benchmark. Require 5
     # comparable positive forward PEs before allowing valuation labels.
