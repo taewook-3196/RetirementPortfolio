@@ -8,8 +8,8 @@ from services.sector_value_screening_service import (
 
 def test_missing_data_is_not_treated_as_failure():
     result = _score({"forwardPE": 12})
-    assert result["coverage"] == 1
-    assert result["score"] == 100
+    assert result["coverage"] == 0
+    assert result["score"] is None
     assert result["eligible"] is False
     assert result["checks"]["positive_roe"] is None
 
