@@ -1894,6 +1894,21 @@ class WatchlistSaveRequest(BaseModel):
     memo: str = ""
 
 
+@app.get("/api/sector-momentum/{market}")
+def get_sector_momentum_api(
+    market: str,
+    authorization: str | None = Header(default=None),
+):
+    get_verified_user_id(authorization)
+    from services.sector_momentum_service import load_sector_momentum
+    try:
+        return load_sector_momentum(market)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=503, detail="섹터 데이터를 일시적으로 가져올 수 없습니다.")
+
+
 @app.get("/api/market-indices/{index}/chart")
 def get_market_index_chart_api(
     index: str,
@@ -4581,6 +4596,17 @@ Gemini AI 투자 가이드 사용
 </section>
 
 
+<section id="sector-momentum-section" class="card">
+<h2>섹터 모멘텀</h2>
+<p class="subtitle">ETF 대용 지표 기준 성과입니다. 공식 업종지수와 다를 수 있습니다.</p>
+<label for="sector-market-select">시장</label>
+<select id="sector-market-select"><option value="us">미국</option><option value="kr">한국</option></select>
+<label for="sector-period-select">기간</label>
+<select id="sector-period-select"><option value="1m">1개월</option><option value="3m" selected>3개월</option><option value="6m">6개월</option><option value="1y">1년</option></select>
+<div id="sector-momentum-status" role="status" aria-live="polite"></div>
+<div id="sector-momentum-results" style="overflow-x:auto"></div>
+</section>
+
 <section id="market-index-section" class="card">
 <h2>주요 시장지수</h2>
 <p class="subtitle">지수를 선택하면 기간별 가격, 이동평균선, 수익률과 최대 낙폭을 확인할 수 있습니다.</p>
@@ -4825,6 +4851,7 @@ function setAppTab(tabName, options = {}) {
     if (nextTab === "settings") applySettingsPanel();
     if (nextTab === "portfolio" && typeof refreshWatchlist === "function") refreshWatchlist();
     if (nextTab === "portfolio" && typeof refreshMarketIndex === "function") refreshMarketIndex();
+    if (nextTab === "portfolio" && typeof refreshSectorMomentum === "function") refreshSectorMomentum();
     for (const button of appBottomNav.querySelectorAll("[data-app-tab]")) {
         const active = button.dataset.appTab === nextTab;
         button.classList.toggle("active", active);
@@ -7770,6 +7797,57 @@ async function lookupUsAsset(
 }
 
 let activeIndexPeriod = "1y";
+let sectorMomentumVersion = 0;
+async function refreshSectorMomentum() {
+    const token = localStorage.getItem("access_token") || "";
+    if (!token) return;
+    const version = ++sectorMomentumVersion;
+    const market = document.getElementById("sector-market-select").value;
+    const period = document.getElementById("sector-period-select").value;
+    const status = document.getElementById("sector-momentum-status");
+    const container = document.getElementById("sector-momentum-results");
+    status.textContent = "섹터 데이터를 불러오는 중...";
+    container.replaceChildren();
+    try {
+        const data = await apiRequest("/api/sector-momentum/" + encodeURIComponent(market), token);
+        if (version !== sectorMomentumVersion) return;
+        const table = document.createElement("table");
+        const header = document.createElement("tr");
+        for (const name of ["순위", "섹터", "수익률", "시장 대비"]) {
+            const cell = document.createElement("th");
+            cell.textContent = name;
+            header.appendChild(cell);
+        }
+        table.appendChild(header);
+        const items = [...(data.items || [])].sort((a,b) =>
+            (b.returns_pct[period] ?? -Infinity) - (a.returns_pct[period] ?? -Infinity));
+        items.forEach((item, i) => {
+            const tr = document.createElement("tr");
+            const value = item.returns_pct[period];
+            const relative = item.relative_pct_points[period];
+            for (const text of [
+                value === null ? "-" : String(i + 1),
+                item.name + " (" + item.ticker + ")",
+                value === null ? "-" : value.toFixed(2) + "%",
+                relative === null ? "-" : relative.toFixed(2) + "%p"
+            ]) {
+                const td = document.createElement("td");
+                td.textContent = text;
+                tr.appendChild(td);
+            }
+            table.appendChild(tr);
+        });
+        container.appendChild(table);
+        status.textContent = "기준: " + data.as_of + " · " + data.benchmark.name +
+            " 대비 · " + data.disclaimer +
+            (Object.keys(data.failures || {}).length ? " · 일부 데이터 조회 실패" : "");
+    } catch (error) {
+        if (version === sectorMomentumVersion) status.textContent = error.message;
+    }
+}
+document.getElementById("sector-market-select").addEventListener("change", refreshSectorMomentum);
+document.getElementById("sector-period-select").addEventListener("change", refreshSectorMomentum);
+
 let marketIndexLoadVersion = 0;
 async function refreshMarketIndex() {
     const token = watchlistToken();
