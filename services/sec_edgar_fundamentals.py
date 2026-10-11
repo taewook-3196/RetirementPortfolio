@@ -57,11 +57,11 @@ def _cik_for_ticker(ticker):
     raise ValueError("Ticker is not in SEC ticker map")
 
 
-def _annual_facts(facts, tags):
+def _annual_facts(facts, tags, unit="USD"):
     gaap = facts.get("facts", {}).get("us-gaap", {})
     candidates = []
     for tag in tags:
-        units = gaap.get(tag, {}).get("units", {}).get("USD", [])
+        units = gaap.get(tag, {}).get("units", {}).get(unit, [])
         candidates.extend(
             row for row in units
             if row.get("form") in ("10-K", "10-K/A")
@@ -73,6 +73,21 @@ def _annual_facts(facts, tags):
         best = max(candidates, key=lambda row: (row["end"], row.get("filed", "")))
         return float(best["val"]), best["end"]
     return None, None
+
+
+def _instant_facts(facts, tags):
+    gaap = facts.get("facts", {}).get("us-gaap", {})
+    candidates = []
+    for tag in tags:
+        candidates.extend(
+            row for row in gaap.get(tag, {}).get("units", {}).get("USD", [])
+            if row.get("form") in ("10-K", "10-K/A")
+            and row.get("end") and not row.get("start")
+        )
+    if not candidates:
+        return None, None
+    best = max(candidates, key=lambda row: (row["end"], row.get("filed", "")))
+    return float(best["val"]), best["end"]
 
 
 def fetch_sec_fundamentals(ticker):
@@ -88,7 +103,10 @@ def fetch_sec_fundamentals(ticker):
     income, income_date = _annual_facts(facts, ("NetIncomeLoss",))
     if revenue is None or income is None or revenue_date != income_date or revenue <= 0:
         raise ValueError("Comparable annual sales and net income are unavailable")
+    equity, equity_date = _instant_facts(facts, ("StockholdersEquity",))
     return {
+        "annual_equity_usd": equity,
+        "equity_as_of": equity_date,
         "shortName": facts.get("entityName", ticker),
         "annual_revenue_usd": revenue,
         "annual_net_income_usd": income,
