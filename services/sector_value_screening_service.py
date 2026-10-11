@@ -60,9 +60,10 @@ def _fetch_info(ticker):
 
 def _score(info, sector_pe_median=None):
     """Sector-relative PE screening with an explicit coverage requirement."""
-    pe = _finite(info.get("forwardPE"))
-    if pe is None or pe <= 0:
-        pe = _finite(info.get("trailingPE"))
+    forward_pe = _finite(info.get("forwardPE"))
+    forward_pe = forward_pe if forward_pe is not None and forward_pe > 0 else None
+    trailing_pe = _finite(info.get("trailingPE"))
+    pe = forward_pe if forward_pe is not None else trailing_pe
     pb = _finite(info.get("priceToBook"))
     roe = _finite(info.get("returnOnEquity"))
     growth = _finite(info.get("revenueGrowth"))
@@ -71,7 +72,7 @@ def _score(info, sector_pe_median=None):
     metrics = {"pe": pe, "pb": pb, "roe": roe, "revenue_growth": growth,
                "profit_margin": margin, "year_change": momentum}
     checks = {
-        "reasonable_pe": None if pe is None or sector_pe_median is None else 0 < pe <= sector_pe_median,
+        "reasonable_pe": None if forward_pe is None or sector_pe_median is None else forward_pe <= sector_pe_median,
         "reasonable_pb": None if pb is None else 0 < pb <= 3,
         "positive_roe": None if roe is None else roe >= .10,
         "revenue_growth": None if growth is None else growth >= .05,
@@ -80,9 +81,9 @@ def _score(info, sector_pe_median=None):
     }
     available = [value for value in checks.values() if value is not None]
     return {
-        "metrics": {**metrics, "sector_pe_median": sector_pe_median,
-                    "pe_discount_pct": round((1 - pe / sector_pe_median) * 100, 2)
-                    if pe is not None and pe > 0 and sector_pe_median else None},
+        "metrics": {**metrics, "pe_basis": "forward" if forward_pe is not None else "trailing" if pe is not None else None, "sector_pe_median": sector_pe_median,
+                    "pe_discount_pct": round((1 - forward_pe / sector_pe_median) * 100, 2)
+                    if forward_pe is not None and sector_pe_median else None},
         "checks": checks,
         "coverage": len(available), "total_metrics": len(checks),
         "score": round(100 * sum(available) / len(available), 1) if available else None,
