@@ -4829,7 +4829,7 @@ const appArea =
 const appBottomNav = document.getElementById("app-bottom-nav");
 const appTabSections = {
     home: ["app-header", "report-section"],
-    portfolio: ["portfolio-section", "market-index-section", "watchlist-section", "asset-search-section"],
+    portfolio: ["portfolio-section", "market-index-section", "sector-momentum-section", "sector-value-section", "watchlist-section", "asset-search-section"],
     transactions: ["transactions-section"],
     settings: ["settings-navigation-section", "account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section"],
     members: ["admin-section"],
