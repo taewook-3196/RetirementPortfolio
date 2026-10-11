@@ -130,6 +130,14 @@ def screen_sector(market, sector):
     )
     if usable == 0:
         raise RuntimeError("Fundamental data unavailable for all sampled companies")
+    # SEC-only annual profit margin is insufficient for a multi-factor screen.
+    # Keep this endpoint unavailable rather than render non-actionable cards.
+    sufficient = sum(
+        sum(_finite(info.get(field)) is not None for field in FIELDS) >= 4
+        for _, info in records
+    )
+    if sufficient == 0:
+        raise RuntimeError("Insufficient multi-factor data for sector screening")
     records.sort(key=lambda item: item[0])
     # Curated sample: never claim an industry-wide benchmark. Require 5
     # comparable positive forward PEs before allowing valuation labels.
