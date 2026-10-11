@@ -52,7 +52,7 @@ def _cached(key, fetch):
 def _cik_for_ticker(ticker):
     tickers = _cached("tickers", lambda: _get_json(TICKERS_URL))
     for entry in tickers.values():
-        if entry.get("ticker", "").upper() == ticker.upper():
+        if entry.get("ticker", "").upper().replace("-", ".") == ticker.upper().replace("-", "."):
             return int(entry["cik_str"])
     raise ValueError("Ticker is not in SEC ticker map")
 
@@ -77,7 +77,7 @@ def _annual_facts(facts, tags):
 
 def fetch_sec_fundamentals(ticker):
     """Returns verified annual sales/profit figures only, never invented ratios."""
-    if not ticker or "." in ticker:
+    if not ticker or ticker.endswith((".KS", ".KQ")):
         raise ValueError("SEC reader supports US tickers only")
     cik = _cik_for_ticker(ticker)
     facts = _cached(("facts", cik), lambda: _get_json(f"{SEC_BASE}/api/xbrl/companyfacts/CIK{cik:010d}.json"))
