@@ -55,7 +55,17 @@ def _finite(value):
 
 def _fetch_info(ticker):
     import yfinance as yf
-    return yf.Ticker(ticker).info or {}
+    try:
+        info = yf.Ticker(ticker).info or {}
+        if any(_finite(info.get(field)) is not None for field in FIELDS):
+            return info
+    except Exception:
+        info = {}
+    # Annual SEC figures do not replace forecasts or live prices.
+    if "." not in ticker:
+        from services.sec_edgar_fundamentals import fetch_sec_fundamentals
+        return {**info, **fetch_sec_fundamentals(ticker)}
+    return info
 
 
 def _score(info, sector_pe_median=None):
