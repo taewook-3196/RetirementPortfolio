@@ -49,18 +49,19 @@ def _cik_for_ticker(ticker):
 
 def _annual_facts(facts, tags):
     gaap = facts.get("facts", {}).get("us-gaap", {})
+    candidates = []
     for tag in tags:
         units = gaap.get(tag, {}).get("units", {}).get("USD", [])
-        candidates = [
+        candidates.extend(
             row for row in units
             if row.get("form") in ("10-K", "10-K/A")
             and row.get("fy") and row.get("fp") == "FY"
             and row.get("start") and row.get("end")
             and 330 <= (datetime.fromisoformat(row["end"]) - datetime.fromisoformat(row["start"])).days <= 380
-        ]
-        if candidates:
-            best = max(candidates, key=lambda row: (row["end"], row.get("filed", "")))
-            return float(best["val"]), best["end"]
+        )
+    if candidates:
+        best = max(candidates, key=lambda row: (row["end"], row.get("filed", "")))
+        return float(best["val"]), best["end"]
     return None, None
 
 
