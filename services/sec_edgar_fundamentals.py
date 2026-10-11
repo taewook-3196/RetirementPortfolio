@@ -96,7 +96,8 @@ def _shares_outstanding(facts):
     candidates = [
         row for row in rows
         if row.get("form") in ("10-K", "10-K/A")
-        and row.get("end") and not row.get("start") and float(row.get("val", 0)) > 0
+        and row.get("end") and not row.get("start")
+        and isinstance(row.get("val"), (int, float)) and row["val"] > 0
     ]
     if not candidates:
         return None, None
