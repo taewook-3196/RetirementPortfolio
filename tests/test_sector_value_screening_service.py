@@ -59,3 +59,14 @@ def test_forward_pe_only_and_profitability_gate():
         result = screen_sector("us", "financials")
     assert result["pe_benchmark"]["valid_count"] == 0
     assert all(row["valuation_label"] == "평가 보류" for row in result["results"])
+
+
+def test_banks_require_specialized_valuation_inputs():
+    CACHE.clear()
+    def fake_info(ticker):
+        return {"shortName": ticker, "forwardPE": 8, "priceToBook": 1,
+                "returnOnEquity": .15, "revenueGrowth": .1, "profitMargins": .2}
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "financials")
+    assert result["valuation_policy"]["primary"] == "pbr_roe"
+    assert all(row["valuation_label"] == "평가 보류" for row in result["results"])
