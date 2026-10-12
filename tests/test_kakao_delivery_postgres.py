@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
 DSN = os.getenv("KAKAO_DELIVERY_TEST_DSN")
 pytestmark = pytest.mark.skipif(not DSN, reason="Disposable PostgreSQL DSN not configured")
@@ -17,6 +18,9 @@ pytestmark = pytest.mark.skipif(not DSN, reason="Disposable PostgreSQL DSN not c
 
 @pytest.fixture
 def pg():
+    db_name = make_url(DSN).database
+    if db_name != "kakao_delivery_ci":
+        pytest.fail("Refusing to modify a database other than kakao_delivery_ci")
     engine = create_engine(DSN, pool_size=5, max_overflow=5)
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE IF NOT EXISTS public.profiles (id uuid PRIMARY KEY)"))
