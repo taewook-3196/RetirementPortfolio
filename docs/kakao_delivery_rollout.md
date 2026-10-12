@@ -117,3 +117,9 @@ The disposable PostgreSQL workflow now compiles all staged `services/kakao_deliv
 6. **Release control:** Keep feature flags disabled by default, PR draft/unmerged, production migration unapplied, and existing Tue–Sat KST morning-report schedules unchanged until a separately approved single-scheduler cutover and rollback plan are completed.
 
 **Acceptance gate:** green Python and PostgreSQL CI, nonproduction schema/permission verification, explicit sign-off for all send paths, and documented rollback before any production change. Passing CI alone does not authorize cutover.
+
+## Verified pre-send report prerequisite
+
+The staged PostgreSQL claim function now returns no claim unless a matching persisted morning_reports row exists for the user and report date. The staged transport is therefore not invoked when that row is absent. PostgreSQL CI at commit 546584a passed, including a missing-report no-send test, legacy sent-marker prevention, user/date isolation, and a test where the report row disappears after a claim but before completion. This is a staged-only safeguard; it is not wired into the production sender.
+
+The pre-send check does not eliminate every race with the legacy sender. Production cutover still requires one coordinated send path and a reviewed database schema/grant compatibility check. Do not apply the migration or enable feature flags solely because CI is green.
