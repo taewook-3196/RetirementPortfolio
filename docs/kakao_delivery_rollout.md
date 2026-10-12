@@ -163,3 +163,14 @@ Before cutover, use a **non-production** connection with the exact database role
 Separately, verify anon/authenticated have no table or identity-sequence privileges and cannot execute any of the three functions. Check the existing production schema against the migration's required columns and constraints **read-only**. If any privilege is missing or differs, stop the rollout and review a separately approved migration; do not grant broad permissions to client roles or silently use a superuser in the scheduled sender.
 
 The disposable CI database uses its object-owner connection and cannot establish these Supabase role facts. Do not report this checklist as completed until the same non-production server role has performed an end-to-end claim, uncertain outcome, and atomic legacy marker completion with an isolated test user/date.
+
+## Incident runbook: Kakao accepted but legacy report disappears
+
+If Kakao transport returns success but the dated morning_reports row is deleted before atomic completion, the staged sender reports an uncertain outcome. The attempt may remain **sending** because the atomic finalizer returns false without updating either marker. This is intentional fail-closed behavior: the active unique index continues blocking another claim, even after the lease expires. The incident requires external confirmation; a missing legacy row is not proof that Kakao did not deliver.
+
+1. Pause only the affected user's attempted resend path (do not change the shared morning-report schedule). Inspect the user-scoped attempt ID, date, status, lease expiry, and dated legacy report existence using a trusted backend identity; do not expose message content or tokens in logs.
+2. Check Kakao delivery evidence independently. If delivery cannot be proven or disproven, leave the attempt blocked and escalate for manual review. Do **not** reset the attempt to failed_before_send or clear the unique index just to make a retry possible.
+3. Investigate why the report row disappeared, and restore the correct report through an independently reviewed recovery procedure. Do not fabricate a sent timestamp. If delivery is externally confirmed, a separately reviewed, audited reconciliation operation may align the legacy and attempt markers; no such automatic operation exists in this PR.
+4. Verify that a subsequent scheduled/manual/CLI invocation cannot send again for the same user/date, and document the resolution before reopening that path.
+
+The existing read-only reconciliation helper treats expired sending attempts as requiring external verification. It does not authorize automatic retries, repair missing reports, or mutate the database.
