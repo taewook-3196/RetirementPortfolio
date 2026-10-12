@@ -70,3 +70,39 @@ $$;
 REVOKE ALL ON FUNCTION public.claim_kakao_delivery_attempt(uuid, date, uuid, integer)
 FROM PUBLIC, anon, authenticated;
 -- Execute only via trusted server-side DB role, never with client credentials.
+
+-- Finalize only the exact attempt that owns the claim. A terminal 'sent' or
+-- 'uncertain' record must never be silently overwritten by another worker.
+CREATE OR REPLACE FUNCTION public.finish_kakao_delivery_attempt(
+    p_user_id uuid,
+    p_attempt_id uuid,
+    p_final_status text,
+    p_error_code text DEFAULT NULL
+) RETURNS boolean
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+    v_id bigint;
+BEGIN
+    IF p_user_id IS NULL OR p_attempt_id IS NULL OR
+       p_final_status NOT IN ('sent', 'uncertain', 'failed_before_send') THEN
+        RAISE EXCEPTION 'invalid completion argument';
+    END IF;
+    UPDATE public.kakao_delivery_attempts
+    SET status = p_final_status,
+        completed_at = now(),
+        updated_at = now(),
+        lease_expires_at = NULL,
+        last_error_code = left(p_error_code, 80)
+    WHERE user_id = p_user_id
+      AND attempt_id = p_attempt_id
+      AND status = 'sending'
+    RETURNING id INTO v_id;
+    RETURN v_id IS NOT NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.finish_kakao_delivery_attempt(uuid, uuid, text, text)
+FROM PUBLIC, anon, authenticated;
