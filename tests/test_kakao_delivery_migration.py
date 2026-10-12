@@ -24,3 +24,13 @@ def test_claim_requires_successful_insert_and_restricts_execution():
     assert "REVOKE ALL ON FUNCTION public.claim_kakao_delivery_attempt" in sql
     assert "FROM PUBLIC, anon, authenticated" in sql
     assert "SECURITY INVOKER" in sql
+
+
+def test_completion_requires_attempt_ownership_and_nonterminal_state():
+    sql = Path("database/migrations/20261012_kakao_delivery_attempts.sql").read_text(encoding="utf-8")
+    finish = sql.split("CREATE OR REPLACE FUNCTION public.finish_kakao_delivery_attempt(", 1)[1]
+    assert "AND attempt_id = p_attempt_id" in finish
+    assert "AND status = 'sending'" in finish
+    assert "p_final_status NOT IN ('sent', 'uncertain', 'failed_before_send')" in finish
+    assert "RETURN v_id IS NOT NULL" in finish
+    assert "REVOKE ALL ON FUNCTION public.finish_kakao_delivery_attempt" in finish
