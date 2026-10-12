@@ -1712,6 +1712,20 @@ class DailyReportService:
                                 time.sleep(1)
 
                         if not delivery_recorded:
+                            # A DB commit may succeed even when the caller sees
+                            # a connection error. Re-read before declaring the
+                            # delivery record missing and risking a retry.
+                            try:
+                                persisted = self.repo.get_morning_report_for_date(report_date)
+                                delivery_recorded = bool(
+                                    persisted is not None
+                                    and getattr(persisted, "kakao_sent_at", None) is not None
+                                )
+                            except Exception as exc:
+                                logger.warning(
+                                    "카카오 발송 기록 재조회 실패: %s", type(exc).__name__
+                                )
+                        if not delivery_recorded:
                             logger.error(
                                 "카카오 메시지는 전송됐지만 완료 기록을 저장하지 못했습니다. "
                                 "다음 스케줄에서 중복 발송될 수 있습니다. error_type=%s",
