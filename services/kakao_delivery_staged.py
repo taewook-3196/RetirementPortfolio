@@ -22,6 +22,6 @@ def run_staged_delivery(*, engine, user_id, report_date, transport, env=None):
     return send_with_delivery_claim(
         claim=lambda: store.claim(attempt),
         transport=transport,
-        finish=lambda status: store.finish(attempt, status),
+        finish=lambda status: (store.finish_sent_with_legacy(attempt) if status == "sent" else store.finish(attempt, status)),
         env=env,
     )
