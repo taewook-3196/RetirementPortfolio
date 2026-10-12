@@ -31,7 +31,7 @@ def test_completion_requires_attempt_ownership_and_nonterminal_state():
     finish = sql.split("CREATE OR REPLACE FUNCTION public.finish_kakao_delivery_attempt(", 1)[1]
     assert "AND attempt_id = p_attempt_id" in finish
     assert "AND status = 'sending'" in finish
-    assert "p_final_status NOT IN ('sent', 'uncertain', 'failed_before_send')" in finish
+    assert "p_final_status NOT IN ('uncertain', 'failed_before_send')" in finish
     assert "RETURN v_id IS NOT NULL" in finish
     assert "REVOKE ALL ON FUNCTION public.finish_kakao_delivery_attempt" in finish
 
