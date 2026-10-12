@@ -32,3 +32,7 @@ This feature is **not enabled**. Do not merge or apply the SQL migration until t
 | sent | Never | No action |
 
 **Rollback:** Disable the new sender feature flag and stop new jobs. Wait for any in-flight new sender to finish. Before restoring the old sender, reconcile every `sending` and `uncertain` attempt against Kakao and the legacy sent marker; otherwise the old sender may resend. The SQL table can remain unused; do not drop records during recovery.
+
+## Staged feature gate (not connected to sender)
+
+`services/kakao_delivery_feature_gate.py` provides a strict default-OFF gate. Both `KAKAO_DELIVERY_STATE_ENABLED=true` and `KAKAO_DELIVERY_CUTOVER_APPROVED=true` are required; partial or misspelled values are rejected. **These flags do not yet activate a new sender**: production send code does not import the gate. Never set these flags in production before the single-scheduler cutover and sender integration have been reviewed.
