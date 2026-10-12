@@ -14,3 +14,13 @@ def test_attempt_migration_is_private_and_has_active_uniqueness():
 def test_migration_is_not_executed_by_morning_report_workflow():
     workflow = Path(".github/workflows/morning_report.yml").read_text(encoding="utf-8")
     assert "20261012_kakao_delivery_attempts.sql" not in workflow
+
+
+def test_claim_requires_successful_insert_and_restricts_execution():
+    sql = Path("database/migrations/20261012_kakao_delivery_attempts.sql").read_text(encoding="utf-8")
+    assert "CREATE OR REPLACE FUNCTION public.claim_kakao_delivery_attempt(" in sql
+    assert "ON CONFLICT DO NOTHING" in sql
+    assert "RETURNING id INTO v_id" in sql
+    assert "REVOKE ALL ON FUNCTION public.claim_kakao_delivery_attempt" in sql
+    assert "FROM PUBLIC, anon, authenticated" in sql
+    assert "SECURITY INVOKER" in sql
