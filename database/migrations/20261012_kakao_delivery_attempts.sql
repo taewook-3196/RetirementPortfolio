@@ -87,7 +87,9 @@ REVOKE ALL ON FUNCTION public.claim_kakao_delivery_attempt(uuid, date, uuid, int
 FROM PUBLIC, anon, authenticated;
 -- Execute only via trusted server-side DB role, never with client credentials.
 
--- Finalize only the exact attempt that owns the claim. A terminal 'sent' or
+-- Finalize only uncertain/pre-send failures here. Successful sends MUST use
+-- finish_kakao_delivery_with_legacy to update both markers atomically.
+-- A terminal 'sent' or
 -- 'uncertain' record must never be silently overwritten by another worker.
 CREATE OR REPLACE FUNCTION public.finish_kakao_delivery_attempt(
     p_user_id uuid,
@@ -104,7 +106,7 @@ DECLARE
 BEGIN
     IF p_user_id IS NULL OR p_attempt_id IS NULL OR
        p_final_status IS NULL OR
-       p_final_status NOT IN ('sent', 'uncertain', 'failed_before_send') THEN
+       p_final_status NOT IN ('uncertain', 'failed_before_send') THEN
         RAISE EXCEPTION 'invalid completion argument';
     END IF;
     UPDATE public.kakao_delivery_attempts
