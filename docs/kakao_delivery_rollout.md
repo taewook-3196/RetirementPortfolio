@@ -132,3 +132,18 @@ The pre-send check does not eliminate every race with the legacy sender. Product
 - **Shared transport:** DailyReportService.generate_and_send invokes kakao_service.send_morning_report and then separately retries marking the legacy report sent. A successful remote send followed by failed legacy marker persistence is a duplicate-risk window.
 
 **Cutover design constraint:** The eventual approved integration must be placed at the shared transport boundary or explicitly cover all three entry points. Manual/force flags must never bypass a durable claim, and the legacy sender must not run in parallel with the new sender. No production call sites are changed by this audit.
+
+## Cutover readiness checkpoint — 2026-10-12
+
+**Status: NOT READY FOR PRODUCTION.** The staged Python and disposable PostgreSQL CI suites passed through commit 2796c85. These tests demonstrate intended isolation and conservative retry behavior, but do not prove live Supabase compatibility or production entry-point coverage.
+
+Outstanding release gates, in recommended order:
+
+1. Verify the migration against a non-production schema matching the deployed Supabase profiles/morning_reports structure, existing indexes, RLS and execution grants. Keep production migration unapplied.
+2. Implement a single shared send boundary used by scheduled, manual UI and CLI paths, including force/override options. The staged orchestrator is not yet imported by those production paths.
+3. Preserve a committed report row before claim and atomically commit both legacy kakao_sent_at and new sent marker after remote acceptance. Any missing/ambiguous response must remain blocked from automatic retry.
+4. Validate service-role-only DB access and end-to-end authenticated, same-user-only inspection without exposing Kakao credentials, report bodies or sensitive errors.
+5. Run realistic integration tests for scheduler retries, manual force, CLI send-only, timeouts, process interruption, concurrent workers and rollback without duplicate sends.
+6. Obtain explicit approval for a single-scheduler cutover and feature flags, with a tested rollback/reconciliation runbook. Never run old and new sender paths concurrently.
+
+**Current decision:** retain draft PR, no merge, no production schema changes, no scheduler or live Kakao changes.
