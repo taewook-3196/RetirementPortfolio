@@ -243,3 +243,66 @@ def test_missing_legacy_row_never_marks_attempt_sent(pg):
     with pg.begin() as conn:
         assert conn.execute(text("SELECT public.finish_kakao_delivery_with_legacy(CAST(:u AS uuid), CAST(:a AS uuid))"), {"u": str(user_id), "a": str(attempt.attempt_id)}).scalar_one() is False
         assert conn.execute(text("SELECT status FROM public.kakao_delivery_attempts WHERE attempt_id = CAST(:a AS uuid)"), {"a": str(attempt.attempt_id)}).scalar_one() == "sending"
+
+
+
+def test_staged_success_without_legacy_report_is_uncertain_and_not_retried(pg):
+    from datetime import date
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    events = []
+    first = run_staged_delivery(
+        engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+        transport=lambda: events.append("first") or (True, "ok"), env=env,
+    )
+    second = run_staged_delivery(
+        engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+        transport=lambda: events.append("duplicate") or (True, "ok"), env=env,
+    )
+    assert first.outcome == SendOutcome.UNCERTAIN
+    assert first.needs_reconciliation
+    assert second.outcome == SendOutcome.NOT_CLAIMED
+    assert events == ["first"]
+    with pg.connect() as conn:
+        assert conn.execute(
+            text("SELECT status FROM public.kakao_delivery_attempts WHERE user_id = CAST(:u AS uuid)"),
+            {"u": str(user_id)},
+        ).scalar_one() == "sending"
+
+
+def test_staged_transport_failure_preserves_legacy_unsent_and_blocks_retry(pg):
+    from datetime import date
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12')"), {"u": str(user_id)})
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    events = []
+    first = run_staged_delivery(
+        engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+        transport=lambda: events.append("first") or (False, "timeout"), env=env,
+    )
+    second = run_staged_delivery(
+        engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+        transport=lambda: events.append("duplicate"), env=env,
+    )
+    assert first.outcome == SendOutcome.UNCERTAIN
+    assert second.outcome == SendOutcome.NOT_CLAIMED
+    assert events == ["first"]
+    with pg.connect() as conn:
+        assert conn.execute(
+            text("SELECT kakao_sent_at FROM public.morning_reports WHERE user_id = CAST(:u AS uuid)"),
+            {"u": str(user_id)},
+        ).scalar_one() is None
+        assert conn.execute(
+            text("SELECT status FROM public.kakao_delivery_attempts WHERE user_id = CAST(:u AS uuid)"),
+            {"u": str(user_id)},
+        ).scalar_one() == "uncertain"
