@@ -83,3 +83,33 @@ def test_missing_or_malformed_success_is_uncertain(response):
     assert result.outcome == SendOutcome.UNCERTAIN
     assert result.needs_reconciliation
     assert states == ["uncertain"]
+
+
+@pytest.mark.parametrize("origin", ["scheduled", "manual", "cli"])
+def test_every_entry_origin_requires_claim_before_transport(origin):
+    events = []
+    def claim():
+        events.append((origin, "claim"))
+        return 1
+    def transport():
+        events.append((origin, "transport"))
+        return (True, "mock")
+    def finish(status):
+        events.append((origin, status))
+        return True
+    result = send_with_delivery_claim(claim=claim, transport=transport, finish=finish, env=ON)
+    assert result.outcome == SendOutcome.SENT
+    assert events == [(origin, "claim"), (origin, "transport"), (origin, "sent")]
+
+
+@pytest.mark.parametrize("origin", ["scheduled", "manual", "cli"])
+def test_every_entry_origin_denied_claim_never_transports(origin):
+    events = []
+    result = send_with_delivery_claim(
+        claim=lambda: events.append((origin, "claim")) or None,
+        transport=lambda: pytest.fail(f"{origin} bypassed claim"),
+        finish=lambda _: pytest.fail("denied claim finalized"),
+        env=ON,
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
+    assert events == [(origin, "claim")]
