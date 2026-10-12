@@ -86,3 +86,7 @@ The staged migration now includes `finish_kakao_delivery_with_legacy(user_id,att
 ## Staged completion failure regression checks
 
 Additional disposable PostgreSQL tests exercise two end-to-end cases: (1) Kakao mock returns success but the dated legacy report row is missing, so dual-marker completion fails and the attempt remains `sending`, blocking any automatic second send; (2) Kakao mock returns `(False, reason)`, so the attempt becomes `uncertain`, the legacy sent marker stays null, and a second invocation is blocked. Both require operator reconciliation, not an automatic retry. These tests do not use the live Kakao API.
+
+## Read-only operator inspection (staged)
+
+`inspect_delivery_attempts(engine, user_id=UUID(...), limit=30)` returns bounded, user-scoped date/status/legacy marker/review flags. It deliberately excludes tokens, report bodies, Kakao messages, and raw error strings. This is a trusted server-side helper only: do not expose it as a public endpoint, and never pass an untrusted user ID without authorization. Integration tests cover cross-user isolation and bounds. No production UI or scheduler uses this helper.
