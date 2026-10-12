@@ -481,3 +481,15 @@ def test_expired_sending_lease_never_allows_automatic_duplicate(pg):
             text("SELECT status FROM public.kakao_delivery_attempts WHERE attempt_id = CAST(:id AS uuid)"),
             {"id": str(attempt.attempt_id)},
         ).scalar_one() == "sending"
+
+
+def test_staged_migration_can_be_reapplied_idempotently(pg):
+    sql = Path("database/migrations/20261012_kakao_delivery_attempts.sql").read_text(encoding="utf-8")
+    with pg.begin() as conn:
+        conn.exec_driver_sql(sql)
+        assert conn.execute(text("SELECT to_regclass('public.kakao_delivery_attempts') IS NOT NULL")).scalar_one() is True
+        for role in ("anon", "authenticated"):
+            assert conn.execute(
+                text("SELECT has_function_privilege(:role, 'public.finish_kakao_delivery_with_legacy(uuid,uuid)', 'EXECUTE')"),
+                {"role": role},
+            ).scalar_one() is False
