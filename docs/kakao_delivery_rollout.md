@@ -147,3 +147,11 @@ Outstanding release gates, in recommended order:
 6. Obtain explicit approval for a single-scheduler cutover and feature flags, with a tested rollback/reconciliation runbook. Never run old and new sender paths concurrently.
 
 **Current decision:** retain draft PR, no merge, no production schema changes, no scheduler or live Kakao changes.
+
+## Supabase-specific compatibility risks (not yet verified live)
+
+The disposable PostgreSQL fixture creates simplified public.profiles and public.morning_reports tables and local anon/authenticated roles. Passing this fixture **does not verify** the deployed Supabase schema, existing object ownership, grants, RLS policies, or service-role connectivity.
+
+Before any non-production rollout, compare the target database's actual schema to the migration: profiles(id) must be UUID primary/unique and compatible with the new FK; morning_reports must have user_id UUID, report_date DATE, kakao_sent_at TIMESTAMPTZ and updated_at TIMESTAMPTZ, with unique (user_id, report_date). Confirm that any existing trigger/RLS/grant policy permits the trusted backend to claim and atomically update the report marker, and that anon/authenticated cannot execute the three functions or access the attempts table. A PostgreSQL SECURITY INVOKER function runs with the calling role's privileges: **revoking client execution is not sufficient if the server connection itself lacks the required privileges**.
+
+Do not assume production migration idempotence based on a fresh disposable database: existing tables, functions, ownership or grants may differ. Use a sanitized schema-only clone in an isolated database, never a production DSN. Verify grants explicitly and test both first application and repeated application before seeking cutover approval.
