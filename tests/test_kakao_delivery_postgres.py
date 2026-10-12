@@ -202,6 +202,7 @@ def test_client_roles_cannot_access_attempts_or_execute_functions(pg):
             assert conn.execute(text("SELECT has_table_privilege(:role, 'public.kakao_delivery_attempts', 'UPDATE')"), {"role": role}).scalar_one() is False
             assert conn.execute(text("SELECT has_function_privilege(:role, 'public.claim_kakao_delivery_attempt(uuid,date,uuid,integer)', 'EXECUTE')"), {"role": role}).scalar_one() is False
             assert conn.execute(text("SELECT has_function_privilege(:role, 'public.finish_kakao_delivery_attempt(uuid,uuid,text,text)', 'EXECUTE')"), {"role": role}).scalar_one() is False
+            assert conn.execute(text("SELECT has_function_privilege(:role, 'public.finish_kakao_delivery_with_legacy(uuid,uuid)', 'EXECUTE')"), {"role": role}).scalar_one() is False
         assert conn.execute(text("SELECT relrowsecurity FROM pg_class WHERE oid = 'public.kakao_delivery_attempts'::regclass")).scalar_one() is True
 
 
