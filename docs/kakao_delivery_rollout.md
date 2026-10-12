@@ -90,3 +90,7 @@ Additional disposable PostgreSQL tests exercise two end-to-end cases: (1) Kakao 
 ## Read-only operator inspection (staged)
 
 `inspect_delivery_attempts(engine, user_id=UUID(...), limit=30)` returns bounded, user-scoped date/status/legacy marker/review flags. It deliberately excludes tokens, report bodies, Kakao messages, and raw error strings. This is a trusted server-side helper only: do not expose it as a public endpoint, and never pass an untrusted user ID without authorization. Integration tests cover cross-user isolation and bounds. No production UI or scheduler uses this helper.
+
+## Operator authorization boundary (staged only)
+
+`inspect_for_operator` denies reads unless the caller supplies UUID actor/target identities and an explicit boolean admin authorization. Unit tests ensure denial occurs before any DB connection; disposable integration tests confirm a non-admin cannot inspect another user's delivery attempts. **The boolean is not a substitute for authentication**: a future server route must derive `actor_id` and admin role from trusted server-side session/DB checks, never from client-supplied fields. Do not connect this helper to any UI until that integration is independently tested.
