@@ -74,3 +74,7 @@ Disposable PostgreSQL integration tests now assert that `anon` and `authenticate
 ## Legacy/new sent marker consistency (staged audit)
 
 `services/kakao_delivery_marker_audit.py` compares legacy `morning_reports.kakao_sent_at` with new attempt status without changing either. A new `sent` record without a legacy sent marker, or a legacy sent marker paired with a non-sent new attempt, requires manual review. `uncertain` always requires review even when the markers do not contradict. This module is not connected to production. **Blocking rollout requirement:** the current staged `finish_kakao_delivery_attempt` updates only the new attempt table; production cutover must implement and test durable dual-marker completion or an explicitly reviewed replacement of every legacy reader before enabling live sending.
+
+## Staged atomic dual-marker completion (not wired)
+
+The staged migration now includes `finish_kakao_delivery_with_legacy(user_id,attempt_id)`: it locks the owned `sending` attempt, requires the dated `morning_reports` row, updates the legacy sent timestamp, and marks the new attempt `sent` in the same PostgreSQL transaction. A missing legacy row returns false without updating either marker. Disposable PostgreSQL tests cover both paths. **Cutover remains blocked** until the staged sender uses this function on success (rather than the single-marker finish method), other send entry points are coordinated, and production schema/grants are verified. Do not apply this migration yet.
