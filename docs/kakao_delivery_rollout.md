@@ -36,3 +36,7 @@ This feature is **not enabled**. Do not merge or apply the SQL migration until t
 ## Staged feature gate (not connected to sender)
 
 `services/kakao_delivery_feature_gate.py` provides a strict default-OFF gate. Both `KAKAO_DELIVERY_STATE_ENABLED=true` and `KAKAO_DELIVERY_CUTOVER_APPROVED=true` are required; partial or misspelled values are rejected. **These flags do not yet activate a new sender**: production send code does not import the gate. Never set these flags in production before the single-scheduler cutover and sender integration have been reviewed.
+
+## Isolated orchestration (not connected to scheduler)
+
+`services/kakao_delivery_orchestrator.py` now models gated claim → transport → completion. It assumes `claim()` commits before returning; DB failures block transport. Transport exceptions and post-send completion failures are marked uncertain, requiring reconciliation. This is a **unit-tested skeleton**, not an operational sender: there is no real database adapter, transport binding, or scheduler integration. Do not treat its presence as production activation readiness.
