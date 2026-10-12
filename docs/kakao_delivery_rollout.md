@@ -94,3 +94,7 @@ Additional disposable PostgreSQL tests exercise two end-to-end cases: (1) Kakao 
 ## Operator authorization boundary (staged only)
 
 `inspect_for_operator` denies reads unless the caller supplies UUID actor/target identities and an explicit boolean admin authorization. Unit tests ensure denial occurs before any DB connection; disposable integration tests confirm a non-admin cannot inspect another user's delivery attempts. **The boolean is not a substitute for authentication**: a future server route must derive `actor_id` and admin role from trusted server-side session/DB checks, never from client-supplied fields. Do not connect this helper to any UI until that integration is independently tested.
+
+## Existing application authorization constraint
+
+The existing `Profile.is_admin` policy permits membership management only, **not cross-user portfolio access**. To preserve this boundary, the staged inspection wrapper now requires `actor_id == target_user_id` even when `actor_is_admin=True`; an admin cannot inspect other users' delivery metadata through this helper. Before building a genuine multi-user operator dashboard, obtain an explicit product/security decision and implement separately audited least-privilege authorization. No UI endpoint has been created.
