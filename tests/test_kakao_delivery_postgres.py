@@ -273,23 +273,29 @@ def test_staged_success_without_legacy_report_is_uncertain_and_not_retried(pg):
         conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12') ON CONFLICT DO NOTHING"), {"u": str(user_id)})
     env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
     events = []
+    def accepted_then_report_disappears():
+        events.append("first")
+        with pg.begin() as conn:
+            conn.execute(text("DELETE FROM public.morning_reports WHERE user_id = CAST(:u AS uuid) AND report_date = DATE '2026-10-12'"), {"u": str(user_id)})
+        return True, "ok"
+
     first = run_staged_delivery(
         engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
-        transport=lambda: events.append("first") or (True, "ok"), env=env,
+        transport=accepted_then_report_disappears, env=env,
     )
     second = run_staged_delivery(
         engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
         transport=lambda: events.append("duplicate") or (True, "ok"), env=env,
     )
-    assert first.outcome == SendOutcome.SENT
-    assert not first.needs_reconciliation
+    assert first.outcome == SendOutcome.UNCERTAIN
+    assert first.needs_reconciliation
     assert second.outcome == SendOutcome.NOT_CLAIMED
     assert events == ["first"]
     with pg.connect() as conn:
         assert conn.execute(
             text("SELECT status FROM public.kakao_delivery_attempts WHERE user_id = CAST(:u AS uuid)"),
             {"u": str(user_id)},
-        ).scalar_one() == "sent"
+        ).scalar_one() == "sending"
 
 
 def test_staged_transport_failure_preserves_legacy_unsent_and_blocks_retry(pg):
