@@ -129,7 +129,7 @@ def test_adapter_commits_claim_and_owner_completion(pg):
     attempt = DeliveryAttempt(user_id=user_id, report_date=date(2026, 10, 12), attempt_id=attempt_id)
     assert adapter.claim(attempt) is not None
     assert adapter.claim(DeliveryAttempt(user_id, date(2026, 10, 12), uuid4())) is None
-    assert adapter.finish(attempt, "sent") is True
+    assert adapter.finish_sent_with_legacy(attempt) is True
     assert adapter.finish(attempt, "uncertain") is False
 
 
