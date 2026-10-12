@@ -373,3 +373,21 @@ def test_admin_inspection_requires_explicit_permission_and_limits_target(pg):
     rows = inspect_for_operator(pg, actor_id=user_a, actor_is_admin=True, target_user_id=user_a)
     assert len(rows) == 1
     assert rows[0].user_id == user_a
+
+
+def test_missing_dated_report_refuses_claim_and_never_calls_transport(pg):
+    from datetime import date
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
+    events = []
+    result = run_staged_delivery(
+        engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+        transport=lambda: events.append("send") or (True, "ok"),
+        env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
+    assert events == []
