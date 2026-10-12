@@ -127,3 +127,35 @@ def test_false_or_none_claim_denial_never_reaches_transport(origin, denial):
     )
     assert result.outcome == SendOutcome.NOT_CLAIMED
     assert events == [(origin, "claim")]
+
+
+@pytest.mark.parametrize("origin", ["scheduled", "manual", "cli"])
+def test_shared_mock_transport_is_called_once_after_claim_across_origins(origin):
+    from services.kakao_delivery_orchestrator import SendOutcome, send_with_delivery_claim
+
+    events = []
+    gate = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    result = send_with_delivery_claim(
+        claim=lambda: events.append((origin, "claim")) or 123,
+        transport=lambda: events.append((origin, "transport")) or (True, "ok"),
+        finish=lambda status: events.append((origin, status)) or True,
+        env=gate,
+    )
+    assert result.outcome == SendOutcome.SENT
+    assert events == [(origin, "claim"), (origin, "transport"), (origin, "sent")]
+
+
+@pytest.mark.parametrize("origin", ["scheduled", "manual", "cli"])
+def test_shared_mock_transport_never_runs_when_claim_is_denied(origin):
+    from services.kakao_delivery_orchestrator import SendOutcome, send_with_delivery_claim
+
+    events = []
+    gate = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    result = send_with_delivery_claim(
+        claim=lambda: events.append((origin, "denied")) or None,
+        transport=lambda: events.append((origin, "transport")) or (True, "ok"),
+        finish=lambda status: events.append((origin, status)) or True,
+        env=gate,
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
+    assert events == [(origin, "denied")]
