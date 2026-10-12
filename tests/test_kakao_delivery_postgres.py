@@ -574,9 +574,9 @@ def test_non_atomic_sent_completion_is_rejected_without_mutating_markers(pg):
         conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12')"), {"u": str(user_id)})
         args = {"u": str(user_id), "a": str(attempt_id)}
         assert conn.execute(text("SELECT public.claim_kakao_delivery_attempt(CAST(:u AS uuid), DATE '2026-10-12', CAST(:a AS uuid), 300)"), args).scalar_one() is not None
-        with conn.begin_nested():
-            import pytest
-            with pytest.raises(Exception, match="invalid completion argument"):
+        import pytest
+        with pytest.raises(Exception, match="invalid completion argument"):
+            with conn.begin_nested():
                 conn.execute(text("SELECT public.finish_kakao_delivery_attempt(CAST(:u AS uuid), CAST(:a AS uuid), 'sent', NULL)"), args)
         assert conn.execute(text("SELECT status FROM public.kakao_delivery_attempts WHERE attempt_id = CAST(:a AS uuid)"), args).scalar_one() == "sending"
         assert conn.execute(text("SELECT kakao_sent_at FROM public.morning_reports WHERE user_id = CAST(:u AS uuid) AND report_date = DATE '2026-10-12'"), args).scalar_one() is None
