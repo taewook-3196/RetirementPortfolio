@@ -106,3 +106,14 @@ The existing `Profile.is_admin` policy permits membership management only, **not
 ## Pre-test syntax guard
 
 The disposable PostgreSQL workflow now compiles all staged `services/kakao_delivery_*.py` and `tests/test_kakao_delivery_*.py` modules before running database integration tests. The PR trigger also includes changes to those modules, preventing staged-only edits from bypassing this check. Python Tests still runs separately. No runtime behavior is changed.
+
+## Remaining release blockers (do not enable live sending)
+
+1. **Production schema and grants:** Review actual Supabase profiles and morning_reports schema, indexes, service-role grants, function EXECUTE privileges, and migration compatibility in a nonproduction clone before applying anything. CI uses simplified disposable tables and cannot establish production compatibility.
+2. **Every send entry point:** Audit the scheduled multi-user runner, CLI send-kakao-only and force flags, and web/manual send path. Every route must share one durable claim policy; no legacy/new senders may overlap during cutover.
+3. **Ambiguous transport outcomes:** HTTP timeout, failed token refresh, interrupted process, or DB completion failure must never trigger automatic retries. Operator reconciliation requires externally verified evidence; an expired lease alone is insufficient.
+4. **Post-send durability:** Require an existing dated legacy report before transport, atomic dual-marker completion on success, and tests for rollback, concurrent workers, transaction commit failure, and process termination between remote acceptance and local completion.
+5. **Identity and privacy:** Preserve existing no-cross-user-portfolio-access admin policy. The inspection helper has no public route and must not be exposed without separately reviewed authenticated authorization. Ensure Actions logs never contain Kakao tokens, user account data, or full report content.
+6. **Release control:** Keep feature flags disabled by default, PR draft/unmerged, production migration unapplied, and existing Tue–Sat KST morning-report schedules unchanged until a separately approved single-scheduler cutover and rollback plan are completed.
+
+**Acceptance gate:** green Python and PostgreSQL CI, nonproduction schema/permission verification, explicit sign-off for all send paths, and documented rollback before any production change. Passing CI alone does not authorize cutover.
