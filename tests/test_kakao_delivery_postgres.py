@@ -109,3 +109,29 @@ def test_legacy_sent_marker_prevents_new_claim(pg):
             {"u": str(user_id), "a": str(uuid4())},
         ).scalar_one()
         assert result is None
+
+
+def test_adapter_commits_claim_and_owner_completion(pg):
+    from datetime import date
+    from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
+
+    user_id, attempt_id = uuid4(), uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
+    adapter = PostgresDeliveryAttempts(pg)
+    attempt = DeliveryAttempt(user_id=user_id, report_date=date(2026, 10, 12), attempt_id=attempt_id)
+    assert adapter.claim(attempt) is not None
+    assert adapter.claim(DeliveryAttempt(user_id, date(2026, 10, 12), uuid4())) is None
+    assert adapter.finish(attempt, "sent") is True
+    assert adapter.finish(attempt, "uncertain") is False
+
+
+def test_adapter_claim_rejects_already_sent_legacy_report(pg):
+    from datetime import date
+    from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date, kakao_sent_at) VALUES (CAST(:u AS uuid), DATE '2026-10-12', now())"), {"u": str(user_id)})
+    assert PostgresDeliveryAttempts(pg).claim(DeliveryAttempt(user_id, date(2026, 10, 12), uuid4())) is None
