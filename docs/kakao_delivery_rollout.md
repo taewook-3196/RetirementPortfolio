@@ -82,3 +82,7 @@ The staged migration now includes `finish_kakao_delivery_with_legacy(user_id,att
 ## Staged sender now uses dual-marker completion
 
 `run_staged_delivery` now calls `PostgresDeliveryAttempts.finish_sent_with_legacy` on transport success; only an uncertain transport outcome uses the separate single-attempt finalizer. The disposable integration test creates the dated report first and verifies the legacy marker is populated. This staged code is still **not imported or invoked by the live scheduler**, and does not authorize a production cutover.
+
+## Staged completion failure regression checks
+
+Additional disposable PostgreSQL tests exercise two end-to-end cases: (1) Kakao mock returns success but the dated legacy report row is missing, so dual-marker completion fails and the attempt remains `sending`, blocking any automatic second send; (2) Kakao mock returns `(False, reason)`, so the attempt becomes `uncertain`, the legacy sent marker stays null, and a second invocation is blocked. Both require operator reconciliation, not an automatic retry. These tests do not use the live Kakao API.
