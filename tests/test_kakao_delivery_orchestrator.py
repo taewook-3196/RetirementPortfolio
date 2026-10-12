@@ -113,3 +113,17 @@ def test_every_entry_origin_denied_claim_never_transports(origin):
     )
     assert result.outcome == SendOutcome.NOT_CLAIMED
     assert events == [(origin, "claim")]
+
+
+@pytest.mark.parametrize("denial", [None, False])
+@pytest.mark.parametrize("origin", ["scheduled", "manual", "cli"])
+def test_false_or_none_claim_denial_never_reaches_transport(origin, denial):
+    events = []
+    result = send_with_delivery_claim(
+        claim=lambda: events.append((origin, "claim")) or denial,
+        transport=lambda: pytest.fail(f"{origin} attempted send without claim"),
+        finish=lambda _: pytest.fail("denied claim finalized"),
+        env=ON,
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
+    assert events == [(origin, "claim")]
