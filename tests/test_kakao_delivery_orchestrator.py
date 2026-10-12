@@ -217,3 +217,24 @@ def test_finalization_exception_after_success_never_reinvokes_transport(origin):
     assert result.outcome == SendOutcome.UNCERTAIN
     assert result.needs_reconciliation
     assert events == [(origin, "claim"), (origin, "transport"), (origin, "sent")]
+
+
+@pytest.mark.parametrize("origin", ["scheduled", "manual", "cli"])
+def test_claim_database_exception_prevents_any_transport_call(origin):
+    from services.kakao_delivery_orchestrator import send_with_delivery_claim
+
+    events = []
+    gate = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+
+    def claim():
+        events.append((origin, "claim"))
+        raise RuntimeError("database unavailable before Kakao send")
+
+    with pytest.raises(RuntimeError, match="database unavailable before Kakao send"):
+        send_with_delivery_claim(
+            claim=claim,
+            transport=lambda: events.append((origin, "transport")) or (True, "ok"),
+            finish=lambda status: events.append((origin, status)) or True,
+            env=gate,
+        )
+    assert events == [(origin, "claim")]
