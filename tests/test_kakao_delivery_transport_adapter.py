@@ -48,3 +48,19 @@ def test_adapter_does_not_send_when_staged_claim_is_denied():
         )
     assert result == SendOutcome.NOT_CLAIMED
     assert fake.calls == []
+
+
+def test_adapter_default_off_gate_never_calls_kakao_transport():
+    from services.kakao_delivery_orchestrator import SendResult
+
+    fake = FakeKakaoService()
+    with patch("services.kakao_delivery_staged.PostgresDeliveryAttempts") as store:
+        result = send_staged_morning_report(
+            engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
+            kakao_service=fake, summary_text="test", report_web_url="https://example.com",
+            env={},
+        )
+    assert isinstance(result, SendResult)
+    assert result.outcome == SendOutcome.DISABLED
+    assert fake.calls == []
+    store.return_value.claim.assert_not_called()
