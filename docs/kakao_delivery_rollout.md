@@ -54,3 +54,7 @@ This feature is **not enabled**. Do not merge or apply the SQL migration until t
 - Any production integration must update both new attempt state and the legacy sent marker, with conservative reconciliation if either completion write fails. Do not automatically resend if a Kakao request may already have been accepted.
 - Audit `force_kakao` and `FORCE_MORNING_REPORT`: an explicit force action must not bypass an unresolved `sending`/`uncertain` attempt. The staged integration currently does not handle manual force flows.
 - Review other entry points such as CLI/manual UI calls to `DailyReportService.generate_and_send`; a cutover limited to the scheduled runner would leave mixed-version senders active.
+
+## Common manual/scheduled/CLI eligibility policy (staged)
+
+`services/kakao_delivery_eligibility.py` models one conservative rule for scheduled, manual, and CLI sends. A force flag can request report regeneration but **never** override a prior sent marker or any pending/sending/sent/uncertain attempt. A clean date or explicitly verified `failed_before_send` may proceed to a separate atomic DB claim. This is a unit-tested policy only, not yet connected to any live entry point. At cutover, all call sites must use this rule and a committed claim before sending.
