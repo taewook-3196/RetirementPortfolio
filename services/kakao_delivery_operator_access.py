@@ -20,4 +20,6 @@ def inspect_for_operator(engine, *, actor_id: UUID, actor_is_admin: bool,
         raise DeliveryInspectionForbidden("valid authenticated actor and target required")
     if actor_is_admin is not True:
         raise DeliveryInspectionForbidden("admin authorization required")
+    if actor_id != target_user_id:
+        raise DeliveryInspectionForbidden("cross-user inspection is not authorized")
     return inspect_delivery_attempts(engine, user_id=target_user_id, limit=limit)
