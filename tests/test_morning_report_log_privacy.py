@@ -20,3 +20,10 @@ def test_report_service_does_not_log_sensitive_delivery_exceptions():
     assert 'logger.exception("모닝 리포트 생성 및 발송 실패")' not in source
     assert '"다음 스케줄에서 중복 발송될 수 있습니다. user_id=%s error=%s"' not in source
     assert 'type(last_record_error).__name__' in source
+
+
+def test_ambiguous_kakao_delivery_record_is_reconciled_by_readback():
+    source = Path("services/daily_report_service.py").read_text(encoding="utf-8")
+    assert "persisted = self.repo.get_morning_report_for_date(report_date)" in source
+    assert 'getattr(persisted, "kakao_sent_at", None) is not None' in source
+    assert source.index("persisted = self.repo.get_morning_report_for_date(report_date)") < source.index('"다음 스케줄에서 중복 발송될 수 있습니다. error_type=%s"')
