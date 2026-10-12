@@ -48,11 +48,17 @@ def send_with_delivery_claim(
         # The existing KakaoService returns (ok, message), not an exception.
         # A negative result is not proof that the API never accepted a send:
         # timeouts and remote failures can be ambiguous. Fail closed.
-        if isinstance(response, tuple):
-            if not response or response[0] is not True:
-                try:
-                    finish("uncertain")
-                except Exception:
+        if response is not True and not (
+            isinstance(response, tuple)
+            and len(response) == 2
+            and response[0] is True
+        ):
+            try:
+                finish("uncertain")
+            except Exception:
+                pass
+            return SendResult(SendOutcome.UNCERTAIN, needs_reconciliation=True)
+    except Exception:
                     pass
                 return SendResult(SendOutcome.UNCERTAIN, needs_reconciliation=True)
         elif response is not None and response is not True:
