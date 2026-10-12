@@ -59,15 +59,6 @@ def send_with_delivery_claim(
                 pass
             return SendResult(SendOutcome.UNCERTAIN, needs_reconciliation=True)
     except Exception:
-                    pass
-                return SendResult(SendOutcome.UNCERTAIN, needs_reconciliation=True)
-        elif response is not None and response is not True:
-            try:
-                finish("uncertain")
-            except Exception:
-                pass
-            return SendResult(SendOutcome.UNCERTAIN, needs_reconciliation=True)
-    except Exception:
         try:
             finish("uncertain")
         except Exception:
