@@ -70,3 +70,7 @@ This feature is **not enabled**. Do not merge or apply the SQL migration until t
 ## Client-role and tenant isolation checks
 
 Disposable PostgreSQL integration tests now assert that `anon` and `authenticated` have no SELECT/INSERT/UPDATE table privileges or EXECUTE privileges on claim/finish functions, that RLS is enabled, and that independent users/dates can claim without interfering. Finalization with another user's ID must fail. These checks apply only to the disposable CI database, not production Supabase grants; verify actual production grants before any migration rollout.
+
+## Legacy/new sent marker consistency (staged audit)
+
+`services/kakao_delivery_marker_audit.py` compares legacy `morning_reports.kakao_sent_at` with new attempt status without changing either. A new `sent` record without a legacy sent marker, or a legacy sent marker paired with a non-sent new attempt, requires manual review. `uncertain` always requires review even when the markers do not contradict. This module is not connected to production. **Blocking rollout requirement:** the current staged `finish_kakao_delivery_attempt` updates only the new attempt table; production cutover must implement and test durable dual-marker completion or an explicitly reviewed replacement of every legacy reader before enabling live sending.
