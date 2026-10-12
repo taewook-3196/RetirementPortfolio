@@ -159,3 +159,21 @@ def test_shared_mock_transport_never_runs_when_claim_is_denied(origin):
     )
     assert result.outcome == SendOutcome.NOT_CLAIMED
     assert events == [(origin, "denied")]
+
+
+@pytest.mark.parametrize("origin", ["scheduled", "manual", "cli"])
+@pytest.mark.parametrize("response", [(False, "timeout"), None, (True,), "unexpected"])
+def test_ambiguous_mock_transport_requires_review_for_every_origin(origin, response):
+    from services.kakao_delivery_orchestrator import SendOutcome, send_with_delivery_claim
+
+    events = []
+    gate = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    result = send_with_delivery_claim(
+        claim=lambda: events.append((origin, "claim")) or 123,
+        transport=lambda: events.append((origin, "transport")) or response,
+        finish=lambda status: events.append((origin, status)) or True,
+        env=gate,
+    )
+    assert result.outcome == SendOutcome.UNCERTAIN
+    assert result.needs_reconciliation
+    assert events == [(origin, "claim"), (origin, "transport"), (origin, "uncertain")]
