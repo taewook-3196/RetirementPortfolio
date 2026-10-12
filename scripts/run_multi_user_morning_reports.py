@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -82,9 +81,9 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
                 logger.info("발송 시각 전 또는 비활성 사용자 건너뜀: 설정시각=%s / 활성=%s", getattr(settings, "morning_report_time", None), getattr(settings, "morning_report_enabled", False))
                 continue
             due_users.append((user_id, repo, settings))
-        except Exception:
+        except Exception as exc:
             failures += 1
-            logger.error("모닝 리포트 대상 사용자 확인 예외: %s", type(sys.exc_info()[1]).__name__)
+            logger.error("모닝 리포트 대상 사용자 확인 예외: %s", type(exc).__name__)
 
     logger.info("이번 실행의 발송 대상: %d명", len(due_users))
     if due_users:
@@ -109,10 +108,10 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
                     len(due_users),
                     sync_result.get("saved_count", 0),
                 )
-        except Exception:
+        except Exception as exc:
             logger.warning(
                 "공용 시장 가격 동기화 실패 (기존 DB 캐시로 계속 진행): %s",
-                type(sys.exc_info()[1]).__name__,
+                type(exc).__name__,
             )
 
     for user_id, repo, settings in due_users:
@@ -158,9 +157,9 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
             else:
                 failures += 1
                 logger.error("사용자별 모닝 리포트 실패 (상세 메시지 비공개)")
-        except Exception:
+        except Exception as exc:
             failures += 1
-            logger.error("사용자별 모닝 리포트 예외: %s", type(sys.exc_info()[1]).__name__)
+            logger.error("사용자별 모닝 리포트 예외: %s", type(exc).__name__)
 
     if failures:
         logger.error("모닝 리포트 실패 사용자 수: %d", failures)
