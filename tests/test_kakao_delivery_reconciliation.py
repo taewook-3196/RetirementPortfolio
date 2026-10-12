@@ -34,3 +34,17 @@ def test_pre_send_failure_requires_review_not_automatic_retry():
     result = advise_reconciliation(attempt_status="failed_before_send")
     assert result.action == ReconciliationAction.REVIEW_PRE_SEND_FAILURE
     assert not result.automatic_resend_allowed
+
+
+@pytest.mark.parametrize("status", ["sending", "uncertain", "failed_before_send", "pending", "unknown"])
+@pytest.mark.parametrize("expired", [False, True])
+def test_legacy_sent_marker_never_authorizes_retry(status, expired):
+    result = advise_reconciliation(attempt_status=status, lease_expired=expired, legacy_sent=True)
+    assert result.action == ReconciliationAction.NO_ACTION
+    assert not result.automatic_resend_allowed
+
+
+def test_unrecognized_state_fails_closed_even_after_lease_expiry():
+    result = advise_reconciliation(attempt_status="unexpected", lease_expired=True)
+    assert result.action == ReconciliationAction.NO_ACTION
+    assert not result.automatic_resend_allowed
