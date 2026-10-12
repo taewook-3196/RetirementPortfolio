@@ -493,3 +493,22 @@ def test_staged_migration_can_be_reapplied_idempotently(pg):
                 text("SELECT has_function_privilege(:role, 'public.finish_kakao_delivery_with_legacy(uuid,uuid)', 'EXECUTE')"),
                 {"role": role},
             ).scalar_one() is False
+
+
+def test_staged_functions_are_security_invoker_and_not_publicly_executable(pg):
+    signatures = [
+        "public.claim_kakao_delivery_attempt(uuid,date,uuid,integer)",
+        "public.finish_kakao_delivery_attempt(uuid,uuid,text,text)",
+        "public.finish_kakao_delivery_with_legacy(uuid,uuid)",
+    ]
+    with pg.connect() as conn:
+        for signature in signatures:
+            assert conn.execute(
+                text("SELECT prosecdef FROM pg_proc WHERE oid = CAST(:signature AS regprocedure)"),
+                {"signature": signature},
+            ).scalar_one() is False
+            for role in ("anon", "authenticated"):
+                assert conn.execute(
+                    text("SELECT has_function_privilege(:role, CAST(:signature AS regprocedure), 'EXECUTE')"),
+                    {"role": role, "signature": signature},
+                ).scalar_one() is False
