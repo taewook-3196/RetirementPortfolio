@@ -55,14 +55,6 @@ BEGIN
     IF p_lease_seconds IS NULL OR p_lease_seconds < 30 OR p_lease_seconds > 1800 THEN
         RAISE EXCEPTION 'invalid lease duration';
     END IF;
-    -- A dated report must already exist before the external transport is called.
-    -- Otherwise successful delivery cannot be durably reflected in the legacy row.
-    IF NOT EXISTS (
-        SELECT 1 FROM public.morning_reports
-        WHERE user_id = p_user_id AND report_date = p_report_date
-    ) THEN
-        RETURN NULL;
-    END IF;
     -- Legacy sender already records successful deliveries in morning_reports.
     -- Refuse a new claim if that marker exists (including during rollout).
     IF EXISTS (
