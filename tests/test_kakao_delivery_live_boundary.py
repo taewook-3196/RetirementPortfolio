@@ -7,9 +7,9 @@ entrypoint tests and remove the legacy-only assumptions.
 from pathlib import Path
 
 
-def test_daily_report_has_one_legacy_kakao_transport_and_marker_boundary():
+def test_daily_report_inventories_both_legacy_kakao_transport_paths():
     source = Path("services/daily_report_service.py").read_text(encoding="utf-8")
-    assert source.count("self.kakao_service.send_morning_report(summary_text, report_web_url)") == 1
+    assert source.count("self.kakao_service.send_morning_report(summary_text, report_web_url)") == 2
     assert source.count("self.repo.mark_morning_report_kakao_sent(report_date)") == 1
 
 
