@@ -99,8 +99,8 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
             if str(sync_result.get("status", "")).lower() != "success":
                 logger.warning(
                     "공용 시장 가격 동기화가 최신 데이터를 저장하지 못했습니다. "
-                    "기존 DB 시세로 리포트를 계속 생성합니다: %s",
-                    sync_result,
+                    "기존 DB 시세로 리포트를 계속 생성합니다 (status=%s)",
+                    str(sync_result.get("status", "unknown"))[:32],
                 )
             else:
                 logger.info(
