@@ -32,8 +32,8 @@ class PostgresDeliveryAttempts:
         return claim_id
 
     def finish(self, attempt: DeliveryAttempt, status: str, error_code=None) -> bool:
-        """Only the exact claim owner can finalize; false means reconciliation."""
-        if status not in ("sent", "uncertain", "failed_before_send"):
+        """Finalize only uncertain or pre-send failure; success requires atomic dual markers."""
+        if status not in ("uncertain", "failed_before_send"):
             raise ValueError("invalid delivery completion status")
         with self.engine.begin() as conn:
             result = conn.execute(
