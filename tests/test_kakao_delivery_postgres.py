@@ -150,7 +150,7 @@ def test_staged_delivery_sends_only_once_with_mock_transport(pg):
         conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12')"), {"u": str(user_id)})
     events = []
     env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
-    first = run_staged_delivery(engine=pg, user_id=user_id, report_date=date(2026, 10, 12), transport=lambda: events.append("sent"), env=env)
+    first = run_staged_delivery(engine=pg, user_id=user_id, report_date=date(2026, 10, 12), transport=lambda: events.append("sent") or (True, "mock"), env=env)
     second = run_staged_delivery(engine=pg, user_id=user_id, report_date=date(2026, 10, 12), transport=lambda: events.append("duplicate"), env=env)
     assert first.outcome == SendOutcome.SENT
     assert second.outcome == SendOutcome.NOT_CLAIMED
