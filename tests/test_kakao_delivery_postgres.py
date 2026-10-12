@@ -306,3 +306,35 @@ def test_staged_transport_failure_preserves_legacy_unsent_and_blocks_retry(pg):
             text("SELECT status FROM public.kakao_delivery_attempts WHERE user_id = CAST(:u AS uuid)"),
             {"u": str(user_id)},
         ).scalar_one() == "uncertain"
+
+
+def test_read_only_inspection_is_scoped_and_flags_uncertain(pg):
+    from datetime import date
+    from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
+    from services.kakao_delivery_inspection import inspect_delivery_attempts
+
+    a, b = uuid4(), uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:a), (:b)"), {"a": str(a), "b": str(b)})
+    store = PostgresDeliveryAttempts(pg)
+    aa = DeliveryAttempt(a, date(2026, 10, 12), uuid4())
+    bb = DeliveryAttempt(b, date(2026, 10, 12), uuid4())
+    assert store.claim(aa) is not None
+    assert store.claim(bb) is not None
+    assert store.finish(aa, "uncertain") is True
+    rows = inspect_delivery_attempts(pg, user_id=a)
+    assert len(rows) == 1
+    assert rows[0].user_id == a
+    assert rows[0].status == "uncertain"
+    assert rows[0].requires_review is True
+    assert inspect_delivery_attempts(pg, user_id=b)[0].status == "sending"
+    with pg.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM public.kakao_delivery_attempts")).scalar_one() == 2
+
+
+def test_inspection_rejects_unbounded_or_invalid_queries(pg):
+    from services.kakao_delivery_inspection import inspect_delivery_attempts
+    with pytest.raises(ValueError):
+        inspect_delivery_attempts(pg, user_id=uuid4(), limit=1000)
+    with pytest.raises(ValueError):
+        inspect_delivery_attempts(pg, user_id=str(uuid4()))
