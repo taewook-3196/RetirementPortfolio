@@ -27,7 +27,7 @@ def test_claim_db_failure_never_sends():
 
 def test_successful_claim_and_completion():
     events = []
-    result = send_with_delivery_claim(claim=lambda: 1, transport=lambda: events.append("send"), finish=lambda status: events.append(status) or True, env=ON)
+    result = send_with_delivery_claim(claim=lambda: 1, transport=lambda: events.append("send") or (True, "mock"), finish=lambda status: events.append(status) or True, env=ON)
     assert result.outcome == SendOutcome.SENT
     assert events == ["send", "sent"]
 
@@ -53,7 +53,7 @@ def test_finish_db_failure_after_send_is_uncertain():
 
 
 def test_finish_rejected_after_send_is_uncertain():
-    result = send_with_delivery_claim(claim=lambda: 1, transport=lambda: None, finish=lambda _: False, env=ON)
+    result = send_with_delivery_claim(claim=lambda: 1, transport=lambda: (True, "mock"), finish=lambda _: False, env=ON)
     assert result.outcome == SendOutcome.UNCERTAIN
 
 
@@ -66,6 +66,20 @@ def test_kakao_success_tuple_is_sent():
 def test_kakao_failure_response_must_not_be_recorded_as_sent(response):
     states = []
     result = send_with_delivery_claim(claim=lambda: 1, transport=lambda: response, finish=lambda status: states.append(status) or True, env=ON)
+    assert result.outcome == SendOutcome.UNCERTAIN
+    assert result.needs_reconciliation
+    assert states == ["uncertain"]
+
+
+@pytest.mark.parametrize("response", [None, (), (True,), (True, "ok", "extra"), (1, "ok"), 0, "ok", {}, []])
+def test_missing_or_malformed_success_is_uncertain(response):
+    states = []
+    result = send_with_delivery_claim(
+        claim=lambda: 1,
+        transport=lambda: response,
+        finish=lambda status: states.append(status) or True,
+        env=ON,
+    )
     assert result.outcome == SendOutcome.UNCERTAIN
     assert result.needs_reconciliation
     assert states == ["uncertain"]
