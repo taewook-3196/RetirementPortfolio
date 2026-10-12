@@ -69,3 +69,29 @@ def test_only_claim_owner_can_finalize(pg):
         assert conn.execute(finish_sql, {"u": str(user_id), "a": str(uuid4()), "status": "sent"}).scalar_one() is False
         assert conn.execute(finish_sql, {"u": str(user_id), "a": str(attempt_id), "status": "sent"}).scalar_one() is True
         assert conn.execute(finish_sql, {"u": str(user_id), "a": str(attempt_id), "status": "uncertain"}).scalar_one() is False
+
+
+def test_uncertain_outcome_blocks_next_claim_even_after_lease_expiry(pg):
+    user_id, attempt_id = uuid4(), uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
+        args = {"u": str(user_id), "d": "2026-10-12", "a": str(attempt_id)}
+        claim = text("SELECT public.claim_kakao_delivery_attempt(CAST(:u AS uuid), CAST(:d AS date), CAST(:a AS uuid), 300)")
+        assert conn.execute(claim, args).scalar_one() is not None
+        conn.execute(text("UPDATE public.kakao_delivery_attempts SET lease_expires_at = now() - interval '1 hour' WHERE attempt_id = CAST(:a AS uuid)"), args)
+        assert conn.execute(claim, {**args, "a": str(uuid4())}).scalar_one() is None
+        finish = text("SELECT public.finish_kakao_delivery_attempt(CAST(:u AS uuid), CAST(:a AS uuid), :status, NULL)")
+        assert conn.execute(finish, {**args, "status": "uncertain"}).scalar_one() is True
+        assert conn.execute(claim, {**args, "a": str(uuid4())}).scalar_one() is None
+
+
+def test_failed_before_send_allows_explicit_new_attempt(pg):
+    user_id, attempt_id = uuid4(), uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
+        args = {"u": str(user_id), "d": "2026-10-12", "a": str(attempt_id)}
+        claim = text("SELECT public.claim_kakao_delivery_attempt(CAST(:u AS uuid), CAST(:d AS date), CAST(:a AS uuid), 300)")
+        assert conn.execute(claim, args).scalar_one() is not None
+        finish = text("SELECT public.finish_kakao_delivery_attempt(CAST(:u AS uuid), CAST(:a AS uuid), :status, NULL)")
+        assert conn.execute(finish, {**args, "status": "failed_before_send"}).scalar_one() is True
+        assert conn.execute(claim, {**args, "a": str(uuid4())}).scalar_one() is not None
