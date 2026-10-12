@@ -102,3 +102,7 @@ The existing `Profile.is_admin` policy permits membership management only, **not
 ## Existing session authentication reuse (staged)
 
 `inspect_for_authenticated_operator` calls the existing `web.app.require_admin(authorization)` to validate the Supabase bearer token, active profile, and server-side admin flag. It derives both actor and target UUID from that trusted result, never from a client-provided target ID. This is an isolated helper only; no public endpoint or UI is connected. Tests mock the trusted boundary and verify rejected authentication prevents inspection. A production route would require separate review of DB role privileges, session handling, and exposure policy.
+
+## Pre-test syntax guard
+
+The disposable PostgreSQL workflow now compiles all staged `services/kakao_delivery_*.py` and `tests/test_kakao_delivery_*.py` modules before running database integration tests. The PR trigger also includes changes to those modules, preventing staged-only edits from bypassing this check. Python Tests still runs separately. No runtime behavior is changed.
