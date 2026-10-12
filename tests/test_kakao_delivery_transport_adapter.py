@@ -88,3 +88,27 @@ def test_adapter_partial_or_inexact_feature_gate_cannot_send(env):
     assert result.outcome == SendOutcome.DISABLED
     assert fake.calls == []
     store.return_value.claim.assert_not_called()
+
+
+@pytest.mark.parametrize("legacy_finalize_ok, expected", [
+    (True, SendOutcome.SENT),
+    (False, SendOutcome.UNCERTAIN),
+])
+def test_adapter_real_staged_orchestrator_uses_atomic_legacy_finalizer(legacy_finalize_ok, expected):
+    fake = FakeKakaoService()
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    with patch("services.kakao_delivery_staged.PostgresDeliveryAttempts") as store_class:
+        store = store_class.return_value
+        store.claim.return_value = uuid4()
+        store.finish_sent_with_legacy.return_value = legacy_finalize_ok
+        result = send_staged_morning_report(
+            engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
+            kakao_service=fake, summary_text="report", report_web_url="https://example.com/report",
+            env=env,
+        )
+        store.claim.assert_called_once()
+        store.finish_sent_with_legacy.assert_called_once()
+        store.finish.assert_not_called()
+    assert result.outcome == expected
+    assert result.needs_reconciliation is (not legacy_finalize_ok)
+    assert fake.calls == [("report", "https://example.com/report")]
