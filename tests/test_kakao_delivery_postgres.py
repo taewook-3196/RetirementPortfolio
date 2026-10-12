@@ -580,3 +580,15 @@ def test_non_atomic_sent_completion_is_rejected_without_mutating_markers(pg):
                 conn.execute(text("SELECT public.finish_kakao_delivery_attempt(CAST(:u AS uuid), CAST(:a AS uuid), 'sent', NULL)"), args)
         assert conn.execute(text("SELECT status FROM public.kakao_delivery_attempts WHERE attempt_id = CAST(:a AS uuid)"), args).scalar_one() == "sending"
         assert conn.execute(text("SELECT kakao_sent_at FROM public.morning_reports WHERE user_id = CAST(:u AS uuid) AND report_date = DATE '2026-10-12'"), args).scalar_one() is None
+
+
+def test_python_adapter_rejects_non_atomic_sent_before_database_call(pg):
+    from datetime import date
+    from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
+
+    adapter = PostgresDeliveryAttempts(pg)
+    attempt = DeliveryAttempt(uuid4(), date(2026, 10, 12), uuid4())
+    with pytest.raises(ValueError, match="invalid delivery completion status"):
+        adapter.finish(attempt, "sent")
+    with pg.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM public.kakao_delivery_attempts")).scalar_one() == 0
