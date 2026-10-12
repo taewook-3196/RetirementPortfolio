@@ -450,3 +450,34 @@ def test_atomic_legacy_completion_updates_only_claimed_report_date(pg):
         assert markers == [(date(2026, 10, 12), True), (date(2026, 10, 13), False)]
     next_day = DeliveryAttempt(user_id, date(2026, 10, 13), uuid4())
     assert adapter.claim(next_day) is not None
+
+
+def test_expired_sending_lease_never_allows_automatic_duplicate(pg):
+    from datetime import date
+    from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12')"), {"u": str(user_id)})
+    attempt = DeliveryAttempt(user_id, date(2026, 10, 12), uuid4())
+    adapter = PostgresDeliveryAttempts(pg)
+    assert adapter.claim(attempt) is not None
+    with pg.begin() as conn:
+        conn.execute(
+            text("UPDATE public.kakao_delivery_attempts SET lease_expires_at = now() - interval '1 hour' WHERE attempt_id = CAST(:id AS uuid)"),
+            {"id": str(attempt.attempt_id)},
+        )
+    result = run_staged_delivery(
+        engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+        transport=lambda: pytest.fail("expired lease caused duplicate send"),
+        env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
+    with pg.connect() as conn:
+        assert conn.execute(
+            text("SELECT status FROM public.kakao_delivery_attempts WHERE attempt_id = CAST(:id AS uuid)"),
+            {"id": str(attempt.attempt_id)},
+        ).scalar_one() == "sending"
