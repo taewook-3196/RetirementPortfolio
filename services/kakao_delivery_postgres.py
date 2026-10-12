@@ -42,3 +42,12 @@ class PostgresDeliveryAttempts:
                  "status": status, "error_code": error_code},
             ).scalar_one()
         return result is True
+
+    def finish_sent_with_legacy(self, attempt: DeliveryAttempt) -> bool:
+        """Atomically confirm new attempt and legacy report sent marker."""
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                text("SELECT public.finish_kakao_delivery_with_legacy(:user_id, :attempt_id)"),
+                {"user_id": attempt.user_id, "attempt_id": attempt.attempt_id},
+            ).scalar_one()
+        return result is True
