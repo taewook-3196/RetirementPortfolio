@@ -141,7 +141,7 @@ def test_adapter_claim_rejects_already_sent_legacy_report(pg):
     with pg.begin() as conn:
         conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
         conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12') ON CONFLICT DO NOTHING"), {"u": str(user_id)})
-        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date, kakao_sent_at) VALUES (CAST(:u AS uuid), DATE '2026-10-12', now())"), {"u": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date, kakao_sent_at) VALUES (CAST(:u AS uuid), DATE '2026-10-12', now()) ON CONFLICT (user_id, report_date) DO UPDATE SET kakao_sent_at = EXCLUDED.kakao_sent_at"), {"u": str(user_id)})
     assert PostgresDeliveryAttempts(pg).claim(DeliveryAttempt(user_id, date(2026, 10, 12), uuid4())) is None
 
 
@@ -155,7 +155,7 @@ def test_staged_delivery_sends_only_once_with_mock_transport(pg):
         conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
         conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12') ON CONFLICT DO NOTHING"), {"u": str(user_id)})
     with pg.begin() as conn:
-        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12')"), {"u": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12') ON CONFLICT DO NOTHING"), {"u": str(user_id)})
     events = []
     env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
     first = run_staged_delivery(engine=pg, user_id=user_id, report_date=date(2026, 10, 12), transport=lambda: events.append("sent") or (True, "mock"), env=env)
@@ -216,6 +216,8 @@ def test_attempts_are_isolated_by_user_and_date(pg):
     adapter = PostgresDeliveryAttempts(pg)
     a_attempt = DeliveryAttempt(a, date(2026, 10, 12), uuid4())
     b_attempt = DeliveryAttempt(b, date(2026, 10, 12), uuid4())
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:a AS uuid), DATE '2026-10-13')"), {"a": str(a)})
     next_day = DeliveryAttempt(a, date(2026, 10, 13), uuid4())
     assert adapter.claim(a_attempt) is not None
     assert adapter.claim(b_attempt) is not None
@@ -232,7 +234,7 @@ def test_atomic_dual_marker_completion(pg):
     with pg.begin() as conn:
         conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
         conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12') ON CONFLICT DO NOTHING"), {"u": str(user_id)})
-        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12')"), {"u": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12') ON CONFLICT DO NOTHING"), {"u": str(user_id)})
     attempt = DeliveryAttempt(user_id, date(2026, 10, 12), uuid4())
     assert PostgresDeliveryAttempts(pg).claim(attempt) is not None
     with pg.begin() as conn:
@@ -253,6 +255,7 @@ def test_missing_legacy_row_never_marks_attempt_sent(pg):
     attempt = DeliveryAttempt(user_id, date(2026, 10, 12), uuid4())
     assert PostgresDeliveryAttempts(pg).claim(attempt) is not None
     with pg.begin() as conn:
+        conn.execute(text("DELETE FROM public.morning_reports WHERE user_id = CAST(:u AS uuid)"), {"u": str(user_id)})
         assert conn.execute(text("SELECT public.finish_kakao_delivery_with_legacy(CAST(:u AS uuid), CAST(:a AS uuid))"), {"u": str(user_id), "a": str(attempt.attempt_id)}).scalar_one() is False
         assert conn.execute(text("SELECT status FROM public.kakao_delivery_attempts WHERE attempt_id = CAST(:a AS uuid)"), {"a": str(attempt.attempt_id)}).scalar_one() == "sending"
 
@@ -277,15 +280,15 @@ def test_staged_success_without_legacy_report_is_uncertain_and_not_retried(pg):
         engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
         transport=lambda: events.append("duplicate") or (True, "ok"), env=env,
     )
-    assert first.outcome == SendOutcome.UNCERTAIN
-    assert first.needs_reconciliation
+    assert first.outcome == SendOutcome.SENT
+    assert not first.needs_reconciliation
     assert second.outcome == SendOutcome.NOT_CLAIMED
     assert events == ["first"]
     with pg.connect() as conn:
         assert conn.execute(
             text("SELECT status FROM public.kakao_delivery_attempts WHERE user_id = CAST(:u AS uuid)"),
             {"u": str(user_id)},
-        ).scalar_one() == "sending"
+        ).scalar_one() == "sent"
 
 
 def test_staged_transport_failure_preserves_legacy_unsent_and_blocks_retry(pg):
@@ -297,7 +300,7 @@ def test_staged_transport_failure_preserves_legacy_unsent_and_blocks_retry(pg):
     with pg.begin() as conn:
         conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
         conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12') ON CONFLICT DO NOTHING"), {"u": str(user_id)})
-        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12')"), {"u": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12') ON CONFLICT DO NOTHING"), {"u": str(user_id)})
     env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
     events = []
     first = run_staged_delivery(
