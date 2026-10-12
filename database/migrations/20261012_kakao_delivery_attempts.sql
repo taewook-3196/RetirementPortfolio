@@ -55,7 +55,16 @@ BEGIN
     IF p_lease_seconds IS NULL OR p_lease_seconds < 30 OR p_lease_seconds > 1800 THEN
         RAISE EXCEPTION 'invalid lease duration';
     END IF;
-    -- Legacy sender already records successful deliveries in morning_reports.\n    -- Refuse a new claim if that marker exists (including during rollout).\n    IF EXISTS (\n        SELECT 1 FROM public.morning_reports\n        WHERE user_id = p_user_id AND report_date = p_report_date\n          AND kakao_sent_at IS NOT NULL\n    ) THEN\n        RETURN NULL;\n    END IF;\n    INSERT INTO public.kakao_delivery_attempts (
+    -- Legacy sender already records successful deliveries in morning_reports.
+    -- Refuse a new claim if that marker exists (including during rollout).
+    IF EXISTS (
+        SELECT 1 FROM public.morning_reports
+        WHERE user_id = p_user_id AND report_date = p_report_date
+          AND kakao_sent_at IS NOT NULL
+    ) THEN
+        RETURN NULL;
+    END IF;
+    INSERT INTO public.kakao_delivery_attempts (
         user_id, report_date, attempt_id, status, started_at, lease_expires_at
     ) VALUES (
         p_user_id, p_report_date, p_attempt_id, 'sending', now(),
