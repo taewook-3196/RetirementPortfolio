@@ -26,6 +26,7 @@ def pg():
         conn.execute(text("CREATE ROLE anon NOLOGIN"))
         conn.execute(text("CREATE ROLE authenticated NOLOGIN"))
         conn.execute(text("CREATE TABLE IF NOT EXISTS public.profiles (id uuid PRIMARY KEY)"))
+        conn.execute(text("CREATE TABLE public.morning_reports (user_id uuid NOT NULL, report_date date NOT NULL, kakao_sent_at timestamptz)"))
         sql = Path("database/migrations/20261012_kakao_delivery_attempts.sql").read_text(encoding="utf-8")
         conn.exec_driver_sql(sql)
     yield engine
@@ -33,6 +34,7 @@ def pg():
         conn.execute(text("DROP FUNCTION IF EXISTS public.finish_kakao_delivery_attempt(uuid, uuid, text, text)"))
         conn.execute(text("DROP FUNCTION IF EXISTS public.claim_kakao_delivery_attempt(uuid, date, uuid, integer)"))
         conn.execute(text("DROP TABLE IF EXISTS public.kakao_delivery_attempts"))
+        conn.execute(text("DROP TABLE IF EXISTS public.morning_reports"))
         conn.execute(text("DROP TABLE IF EXISTS public.profiles"))
         conn.execute(text("DROP ROLE IF EXISTS anon"))
         conn.execute(text("DROP ROLE IF EXISTS authenticated"))
@@ -95,3 +97,15 @@ def test_failed_before_send_allows_explicit_new_attempt(pg):
         finish = text("SELECT public.finish_kakao_delivery_attempt(CAST(:u AS uuid), CAST(:a AS uuid), :status, NULL)")
         assert conn.execute(finish, {**args, "status": "failed_before_send"}).scalar_one() is True
         assert conn.execute(claim, {**args, "a": str(uuid4())}).scalar_one() is not None
+
+
+def test_legacy_sent_marker_prevents_new_claim(pg):
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date, kakao_sent_at) VALUES (CAST(:u AS uuid), DATE '2026-10-12', now())"), {"u": str(user_id)})
+        result = conn.execute(
+            text("SELECT public.claim_kakao_delivery_attempt(CAST(:u AS uuid), DATE '2026-10-12', CAST(:a AS uuid), 300)"),
+            {"u": str(user_id), "a": str(uuid4())},
+        ).scalar_one()
+        assert result is None
