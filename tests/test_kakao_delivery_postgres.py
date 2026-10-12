@@ -109,7 +109,7 @@ def test_legacy_sent_marker_prevents_new_claim(pg):
     with pg.begin() as conn:
         conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
         conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12') ON CONFLICT DO NOTHING"), {"u": str(user_id)})
-        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date, kakao_sent_at) VALUES (CAST(:u AS uuid), DATE '2026-10-12', now())"), {"u": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date, kakao_sent_at) VALUES (CAST(:u AS uuid), DATE '2026-10-12', now()) ON CONFLICT (user_id, report_date) DO UPDATE SET kakao_sent_at = EXCLUDED.kakao_sent_at"), {"u": str(user_id)})
         result = conn.execute(
             text("SELECT public.claim_kakao_delivery_attempt(CAST(:u AS uuid), DATE '2026-10-12', CAST(:a AS uuid), 300)"),
             {"u": str(user_id), "a": str(uuid4())},
