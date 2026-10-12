@@ -338,3 +338,20 @@ def test_inspection_rejects_unbounded_or_invalid_queries(pg):
         inspect_delivery_attempts(pg, user_id=uuid4(), limit=1000)
     with pytest.raises(ValueError):
         inspect_delivery_attempts(pg, user_id=str(uuid4()))
+
+
+def test_admin_inspection_requires_explicit_permission_and_limits_target(pg):
+    from datetime import date
+    from services.kakao_delivery_operator_access import inspect_for_operator, DeliveryInspectionForbidden
+    from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
+    admin, user_a, user_b = uuid4(), uuid4(), uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:a), (:b)"), {"a": str(user_a), "b": str(user_b)})
+    store = PostgresDeliveryAttempts(pg)
+    assert store.claim(DeliveryAttempt(user_a, date(2026, 10, 12), uuid4())) is not None
+    assert store.claim(DeliveryAttempt(user_b, date(2026, 10, 12), uuid4())) is not None
+    with pytest.raises(DeliveryInspectionForbidden):
+        inspect_for_operator(pg, actor_id=user_a, actor_is_admin=False, target_user_id=user_b)
+    rows = inspect_for_operator(pg, actor_id=admin, actor_is_admin=True, target_user_id=user_a)
+    assert len(rows) == 1
+    assert rows[0].user_id == user_a
