@@ -62,3 +62,7 @@ This feature is **not enabled**. Do not merge or apply the SQL migration until t
 ## Kakao transport result contract
 
 `KakaoService.send_morning_report` returns `(bool, message)`, including failures without throwing. The staged orchestrator must never interpret `(False, reason)` as success. Negative responses are conservatively classified `uncertain`, since some transport errors may occur after the server accepts the request; a definitive pre-send rejection can only be classified `failed_before_send` with explicit evidence. The production sender remains unchanged.
+
+## Reconciliation guidance (read-only)
+
+`services/kakao_delivery_reconciliation.py` provides operator guidance only, with no DB writes and no send calls. `uncertain` and expired `sending` require external verification of Kakao delivery; neither authorizes automatic resend. `failed_before_send` still requires confirming no request was submitted before a new claim. A legacy sent marker takes precedence. Never change an uncertain attempt to a retryable state solely because a lease expired.
