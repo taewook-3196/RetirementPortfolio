@@ -352,6 +352,8 @@ def test_admin_inspection_requires_explicit_permission_and_limits_target(pg):
     assert store.claim(DeliveryAttempt(user_b, date(2026, 10, 12), uuid4())) is not None
     with pytest.raises(DeliveryInspectionForbidden):
         inspect_for_operator(pg, actor_id=user_a, actor_is_admin=False, target_user_id=user_b)
-    rows = inspect_for_operator(pg, actor_id=admin, actor_is_admin=True, target_user_id=user_a)
+    with pytest.raises(DeliveryInspectionForbidden):
+        inspect_for_operator(pg, actor_id=admin, actor_is_admin=True, target_user_id=user_a)
+    rows = inspect_for_operator(pg, actor_id=user_a, actor_is_admin=True, target_user_id=user_a)
     assert len(rows) == 1
     assert rows[0].user_id == user_a
