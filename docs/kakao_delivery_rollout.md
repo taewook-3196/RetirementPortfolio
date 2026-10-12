@@ -174,3 +174,11 @@ If Kakao transport returns success but the dated morning_reports row is deleted 
 4. Verify that a subsequent scheduled/manual/CLI invocation cannot send again for the same user/date, and document the resolution before reopening that path.
 
 The existing read-only reconciliation helper treats expired sending attempts as requiring external verification. It does not authorize automatic retries, repair missing reports, or mutate the database.
+
+## Concrete shared send boundary (code review)
+
+Current scheduled entry: scripts/run_multi_user_morning_reports.py calls DailyReportService.generate_and_send(send_kakao=..., force_kakao=send_kakao). Current CLI entry: services/daily_report_service.py:run_daily_report_cli calls the same method with send_kakao/force_kakao based on --generate-only. The manual UI entry also invokes generate_and_send with force_kakao=True. **The common transport boundary is inside DailyReportService.generate_and_send**, immediately before kakao_service.send_morning_report(summary_text, report_web_url), followed by repo.mark_morning_report_kakao_sent(report_date).
+
+Safe integration plan (NOT implemented): after the report is persisted, all three origins must pass through a single server-side delivery coordinator at this exact boundary. The coordinator must verify membership/configuration, resolve the correct user and report date, acquire the DB claim before any Kakao HTTP request, use the existing (ok, msg) transport contract, and finalize both markers atomically. A force option may regenerate report content but must never bypass the claim. On ambiguous transport results or failed marker finalization, return an explicit manual-reconciliation outcome and never fall through to the old send block. The old legacy-only marker loop must be replaced **only when the staged coordinator is fully wired and approved**; retaining both independent send paths would permit duplicates.
+
+Cutover is still blocked: a non-production server-role/RLS test, a real shared-boundary integration test covering scheduled/manual/CLI, an operator-authenticated reconciliation workflow, and explicit approval remain outstanding. No changes to live scheduling or sending are authorized by this document.
