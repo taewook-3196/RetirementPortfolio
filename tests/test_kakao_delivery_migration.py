@@ -34,3 +34,22 @@ def test_completion_requires_attempt_ownership_and_nonterminal_state():
     assert "p_final_status NOT IN ('sent', 'uncertain', 'failed_before_send')" in finish
     assert "RETURN v_id IS NOT NULL" in finish
     assert "REVOKE ALL ON FUNCTION public.finish_kakao_delivery_attempt" in finish
+
+
+def test_staged_migration_matches_morning_report_model_contract():
+    from database.models import MorningReport
+    from sqlalchemy import UniqueConstraint
+
+    columns = MorningReport.__table__.columns
+    assert {"user_id", "report_date", "kakao_sent_at", "updated_at"}.issubset(columns.keys())
+    assert columns["kakao_sent_at"].nullable
+    assert columns["user_id"].type.as_generic().__class__.__name__ == "Uuid"
+    assert any(
+        isinstance(constraint, UniqueConstraint)
+        and set(constraint.columns.keys()) == {"user_id", "report_date"}
+        for constraint in MorningReport.__table__.constraints
+    )
+    sql = Path("database/migrations/20261012_kakao_delivery_attempts.sql").read_text(encoding="utf-8")
+    assert "FROM public.morning_reports" in sql
+    assert "kakao_sent_at IS NOT NULL" in sql
+    assert "SET kakao_sent_at = COALESCE(kakao_sent_at, now()), updated_at = now()" in sql
