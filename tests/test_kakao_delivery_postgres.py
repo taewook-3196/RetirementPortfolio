@@ -135,3 +135,46 @@ def test_adapter_claim_rejects_already_sent_legacy_report(pg):
         conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
         conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date, kakao_sent_at) VALUES (CAST(:u AS uuid), DATE '2026-10-12', now())"), {"u": str(user_id)})
     assert PostgresDeliveryAttempts(pg).claim(DeliveryAttempt(user_id, date(2026, 10, 12), uuid4())) is None
+
+
+def test_staged_delivery_sends_only_once_with_mock_transport(pg):
+    from datetime import date
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
+    events = []
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    first = run_staged_delivery(engine=pg, user_id=user_id, report_date=date(2026, 10, 12), transport=lambda: events.append("sent"), env=env)
+    second = run_staged_delivery(engine=pg, user_id=user_id, report_date=date(2026, 10, 12), transport=lambda: events.append("duplicate"), env=env)
+    assert first.outcome == SendOutcome.SENT
+    assert second.outcome == SendOutcome.NOT_CLAIMED
+    assert events == ["sent"]
+
+
+def test_staged_delivery_off_never_claims_or_sends(pg):
+    from datetime import date
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    result = run_staged_delivery(engine=pg, user_id=uuid4(), report_date=date(2026, 10, 12), transport=lambda: pytest.fail("sent"), env={})
+    assert result.outcome == SendOutcome.DISABLED
+
+
+def test_staged_delivery_timeout_blocks_second_mock_send(pg):
+    from datetime import date
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    def timeout():
+        raise TimeoutError("lost response after request")
+    first = run_staged_delivery(engine=pg, user_id=user_id, report_date=date(2026, 10, 12), transport=timeout, env=env)
+    second = run_staged_delivery(engine=pg, user_id=user_id, report_date=date(2026, 10, 12), transport=lambda: pytest.fail("duplicate"), env=env)
+    assert first.outcome == SendOutcome.UNCERTAIN
+    assert second.outcome == SendOutcome.NOT_CLAIMED
