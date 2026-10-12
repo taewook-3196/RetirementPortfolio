@@ -425,3 +425,28 @@ def test_atomic_legacy_completion_cannot_finalize_another_users_attempt(pg):
             {"id": str(attempt.attempt_id)},
         ).scalar_one() == "sending"
     assert adapter.finish_sent_with_legacy(attempt) is True
+
+
+def test_atomic_legacy_completion_updates_only_claimed_report_date(pg):
+    from datetime import date
+    from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(
+            text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12'), (CAST(:u AS uuid), DATE '2026-10-13')"),
+            {"u": str(user_id)},
+        )
+    adapter = PostgresDeliveryAttempts(pg)
+    attempt = DeliveryAttempt(user_id, date(2026, 10, 12), uuid4())
+    assert adapter.claim(attempt) is not None
+    assert adapter.finish_sent_with_legacy(attempt) is True
+    with pg.connect() as conn:
+        markers = conn.execute(
+            text("SELECT report_date, kakao_sent_at IS NOT NULL FROM public.morning_reports WHERE user_id = CAST(:u AS uuid) ORDER BY report_date"),
+            {"u": str(user_id)},
+        ).all()
+        assert markers == [(date(2026, 10, 12), True), (date(2026, 10, 13), False)]
+    next_day = DeliveryAttempt(user_id, date(2026, 10, 13), uuid4())
+    assert adapter.claim(next_day) is not None
