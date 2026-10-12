@@ -177,3 +177,21 @@ def test_ambiguous_mock_transport_requires_review_for_every_origin(origin, respo
     assert result.outcome == SendOutcome.UNCERTAIN
     assert result.needs_reconciliation
     assert events == [(origin, "claim"), (origin, "transport"), (origin, "uncertain")]
+
+
+@pytest.mark.parametrize("origin", ["scheduled", "manual", "cli"])
+@pytest.mark.parametrize("finalized", [False, None])
+def test_successful_transport_with_failed_marker_finalization_requires_review(origin, finalized):
+    from services.kakao_delivery_orchestrator import SendOutcome, send_with_delivery_claim
+
+    events = []
+    gate = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    result = send_with_delivery_claim(
+        claim=lambda: events.append((origin, "claim")) or 123,
+        transport=lambda: events.append((origin, "transport")) or (True, "ok"),
+        finish=lambda status: events.append((origin, status)) or finalized,
+        env=gate,
+    )
+    assert result.outcome == SendOutcome.UNCERTAIN
+    assert result.needs_reconciliation
+    assert events == [(origin, "claim"), (origin, "transport"), (origin, "sent")]
