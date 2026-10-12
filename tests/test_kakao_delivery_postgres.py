@@ -178,3 +178,33 @@ def test_staged_delivery_timeout_blocks_second_mock_send(pg):
     second = run_staged_delivery(engine=pg, user_id=user_id, report_date=date(2026, 10, 12), transport=lambda: pytest.fail("duplicate"), env=env)
     assert first.outcome == SendOutcome.UNCERTAIN
     assert second.outcome == SendOutcome.NOT_CLAIMED
+
+
+def test_client_roles_cannot_access_attempts_or_execute_functions(pg):
+    with pg.connect() as conn:
+        for role in ("anon", "authenticated"):
+            assert conn.execute(text("SELECT has_table_privilege(:role, 'public.kakao_delivery_attempts', 'SELECT')"), {"role": role}).scalar_one() is False
+            assert conn.execute(text("SELECT has_table_privilege(:role, 'public.kakao_delivery_attempts', 'INSERT')"), {"role": role}).scalar_one() is False
+            assert conn.execute(text("SELECT has_table_privilege(:role, 'public.kakao_delivery_attempts', 'UPDATE')"), {"role": role}).scalar_one() is False
+            assert conn.execute(text("SELECT has_function_privilege(:role, 'public.claim_kakao_delivery_attempt(uuid,date,uuid,integer)', 'EXECUTE')"), {"role": role}).scalar_one() is False
+            assert conn.execute(text("SELECT has_function_privilege(:role, 'public.finish_kakao_delivery_attempt(uuid,uuid,text,text)', 'EXECUTE')"), {"role": role}).scalar_one() is False
+        assert conn.execute(text("SELECT relrowsecurity FROM pg_class WHERE oid = 'public.kakao_delivery_attempts'::regclass")).scalar_one() is True
+
+
+def test_attempts_are_isolated_by_user_and_date(pg):
+    from datetime import date
+    from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
+
+    a, b = uuid4(), uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:a), (:b)"), {"a": str(a), "b": str(b)})
+    adapter = PostgresDeliveryAttempts(pg)
+    a_attempt = DeliveryAttempt(a, date(2026, 10, 12), uuid4())
+    b_attempt = DeliveryAttempt(b, date(2026, 10, 12), uuid4())
+    next_day = DeliveryAttempt(a, date(2026, 10, 13), uuid4())
+    assert adapter.claim(a_attempt) is not None
+    assert adapter.claim(b_attempt) is not None
+    assert adapter.claim(next_day) is not None
+    assert adapter.finish(DeliveryAttempt(b, date(2026, 10, 12), a_attempt.attempt_id), "sent") is False
+    assert adapter.finish(a_attempt, "sent") is True
+    assert adapter.finish(b_attempt, "sent") is True
