@@ -46,6 +46,6 @@ def inspect_delivery_attempts(engine, *, user_id: UUID, limit: int = 30) -> list
         result.append(DeliveryInspection(
             user_id=row["user_id"], report_date=row["report_date"], status=row["status"],
             legacy_sent=row["legacy_sent"],
-            requires_review=audit.requires_review or advice.needs_reconciliation if hasattr(advice, "needs_reconciliation") else audit.requires_review or advice.action.value == "verify_externally",
+            requires_review=audit.requires_review or advice.action.value == "verify_externally",
         ))
     return result
