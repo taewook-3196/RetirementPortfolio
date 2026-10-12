@@ -28,3 +28,23 @@ def test_all_paths_can_request_atomic_claim_only_when_safe(origin, force, state)
 
 def test_unknown_origin_is_blocked():
     assert not check_delivery_eligibility(origin="manual", legacy_sent=False, attempt_state=None, force=True).allowed
+
+
+@pytest.mark.parametrize("origin", list(DeliveryOrigin))
+@pytest.mark.parametrize("force", [False, True])
+@pytest.mark.parametrize("state", ["sending", "uncertain", "sent"])
+def test_force_never_bypasses_ambiguous_or_confirmed_send_across_entrypoints(origin, force, state):
+    eligible = check_delivery_eligibility(
+        origin=origin, legacy_sent=False, attempt_state=state, force=force,
+    )
+    assert eligible.allowed is False
+    assert eligible.reason == "existing or ambiguous delivery attempt"
+
+
+@pytest.mark.parametrize("origin", list(DeliveryOrigin))
+def test_pre_send_failure_only_permits_new_atomic_claim_not_direct_send(origin):
+    result = check_delivery_eligibility(
+        origin=origin, legacy_sent=False, attempt_state="failed_before_send", force=True,
+    )
+    assert result.allowed is True
+    assert result.reason == "eligible for atomic claim"
