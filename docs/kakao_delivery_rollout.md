@@ -40,3 +40,7 @@ This feature is **not enabled**. Do not merge or apply the SQL migration until t
 ## Isolated orchestration (not connected to scheduler)
 
 `services/kakao_delivery_orchestrator.py` now models gated claim → transport → completion. It assumes `claim()` commits before returning; DB failures block transport. Transport exceptions and post-send completion failures are marked uncertain, requiring reconciliation. This is a **unit-tested skeleton**, not an operational sender: there is no real database adapter, transport binding, or scheduler integration. Do not treat its presence as production activation readiness.
+
+## Staged end-to-end adapter (mock transport only)
+
+`services/kakao_delivery_staged.py` composes the transactional PostgreSQL adapter with the feature-gated orchestrator. Integration tests use a mock transport to prove that successful delivery, duplicate invocations, disabled gates, and transport timeouts do not generate extra sends. It remains completely disconnected from the live Kakao sender and scheduled jobs. Setting flags alone does not switch the production path.
