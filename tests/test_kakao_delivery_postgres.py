@@ -26,11 +26,12 @@ def pg():
         conn.execute(text("CREATE ROLE anon NOLOGIN"))
         conn.execute(text("CREATE ROLE authenticated NOLOGIN"))
         conn.execute(text("CREATE TABLE IF NOT EXISTS public.profiles (id uuid PRIMARY KEY)"))
-        conn.execute(text("CREATE TABLE public.morning_reports (user_id uuid NOT NULL, report_date date NOT NULL, kakao_sent_at timestamptz)"))
+        conn.execute(text("CREATE TABLE public.morning_reports (user_id uuid NOT NULL, report_date date NOT NULL, kakao_sent_at timestamptz, updated_at timestamptz)"))
         sql = Path("database/migrations/20261012_kakao_delivery_attempts.sql").read_text(encoding="utf-8")
         conn.exec_driver_sql(sql)
     yield engine
     with engine.begin() as conn:
+        conn.execute(text("DROP FUNCTION IF EXISTS public.finish_kakao_delivery_with_legacy(uuid, uuid)"))
         conn.execute(text("DROP FUNCTION IF EXISTS public.finish_kakao_delivery_attempt(uuid, uuid, text, text)"))
         conn.execute(text("DROP FUNCTION IF EXISTS public.claim_kakao_delivery_attempt(uuid, date, uuid, integer)"))
         conn.execute(text("DROP TABLE IF EXISTS public.kakao_delivery_attempts"))
@@ -208,3 +209,33 @@ def test_attempts_are_isolated_by_user_and_date(pg):
     assert adapter.finish(DeliveryAttempt(b, date(2026, 10, 12), a_attempt.attempt_id), "sent") is False
     assert adapter.finish(a_attempt, "sent") is True
     assert adapter.finish(b_attempt, "sent") is True
+
+
+def test_atomic_dual_marker_completion(pg):
+    from datetime import date
+    from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12')"), {"u": str(user_id)})
+    attempt = DeliveryAttempt(user_id, date(2026, 10, 12), uuid4())
+    assert PostgresDeliveryAttempts(pg).claim(attempt) is not None
+    with pg.begin() as conn:
+        assert conn.execute(text("SELECT public.finish_kakao_delivery_with_legacy(CAST(:u AS uuid), CAST(:a AS uuid))"), {"u": str(user_id), "a": str(attempt.attempt_id)}).scalar_one() is True
+        legacy = conn.execute(text("SELECT kakao_sent_at FROM public.morning_reports WHERE user_id = CAST(:u AS uuid)"), {"u": str(user_id)}).scalar_one()
+        status = conn.execute(text("SELECT status FROM public.kakao_delivery_attempts WHERE attempt_id = CAST(:a AS uuid)"), {"a": str(attempt.attempt_id)}).scalar_one()
+        assert legacy is not None
+        assert status == "sent"
+
+
+def test_missing_legacy_row_never_marks_attempt_sent(pg):
+    from datetime import date
+    from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+    attempt = DeliveryAttempt(user_id, date(2026, 10, 12), uuid4())
+    assert PostgresDeliveryAttempts(pg).claim(attempt) is not None
+    with pg.begin() as conn:
+        assert conn.execute(text("SELECT public.finish_kakao_delivery_with_legacy(CAST(:u AS uuid), CAST(:a AS uuid))"), {"u": str(user_id), "a": str(attempt.attempt_id)}).scalar_one() is False
+        assert conn.execute(text("SELECT status FROM public.kakao_delivery_attempts WHERE attempt_id = CAST(:a AS uuid)"), {"a": str(attempt.attempt_id)}).scalar_one() == "sending"
