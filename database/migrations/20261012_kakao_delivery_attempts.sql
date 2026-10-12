@@ -32,3 +32,41 @@ ALTER TABLE public.kakao_delivery_attempts ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.kakao_delivery_attempts FROM anon, authenticated;
 -- Only trusted backend service-role connections may manipulate attempts.
 -- Do not create public client-side RLS policies for this table.
+
+-- Atomic claim: insert exactly one pending attempt for a given user/day.
+-- Unique partial index makes competing transactions mutually exclusive.
+-- A conflict returns no row; callers MUST NOT send unless an ID is returned.
+CREATE OR REPLACE FUNCTION public.claim_kakao_delivery_attempt(
+    p_user_id uuid,
+    p_report_date date,
+    p_attempt_id uuid,
+    p_lease_seconds integer DEFAULT 300
+) RETURNS bigint
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+    v_id bigint;
+BEGIN
+    IF p_user_id IS NULL OR p_report_date IS NULL OR p_attempt_id IS NULL THEN
+        RAISE EXCEPTION 'missing claim argument';
+    END IF;
+    IF p_lease_seconds < 30 OR p_lease_seconds > 1800 THEN
+        RAISE EXCEPTION 'invalid lease duration';
+    END IF;
+    INSERT INTO public.kakao_delivery_attempts (
+        user_id, report_date, attempt_id, status, started_at, lease_expires_at
+    ) VALUES (
+        p_user_id, p_report_date, p_attempt_id, 'sending', now(),
+        now() + make_interval(secs => p_lease_seconds)
+    )
+    ON CONFLICT DO NOTHING
+    RETURNING id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.claim_kakao_delivery_attempt(uuid, date, uuid, integer)
+FROM PUBLIC, anon, authenticated;
+-- Execute only via trusted server-side DB role, never with client credentials.
