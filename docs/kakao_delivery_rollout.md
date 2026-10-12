@@ -123,3 +123,12 @@ The disposable PostgreSQL workflow now compiles all staged `services/kakao_deliv
 The staged PostgreSQL claim function now returns no claim unless a matching persisted morning_reports row exists for the user and report date. The staged transport is therefore not invoked when that row is absent. PostgreSQL CI at commit 546584a passed, including a missing-report no-send test, legacy sent-marker prevention, user/date isolation, and a test where the report row disappears after a claim but before completion. This is a staged-only safeguard; it is not wired into the production sender.
 
 The pre-send check does not eliminate every race with the legacy sender. Production cutover still requires one coordinated send path and a reviewed database schema/grant compatibility check. Do not apply the migration or enable feature flags solely because CI is green.
+
+## Confirmed send entry-point audit (read-only)
+
+- **Scheduled:** scripts/run_multi_user_morning_reports.py invokes DailyReportService.generate_and_send with send_kakao based on user settings and force_kakao=send_kakao. It checks the legacy kakao_sent_at marker unless FORCE_MORNING_REPORT is set. The force option can bypass this legacy skip.
+- **Manual UI:** ui/settings_page.py invokes the same generate_and_send method with send_kakao=True and force_kakao=True; a separate generate-only button passes send_kakao=False.
+- **CLI:** services/daily_report_service.py run_daily_report_cli also calls generate_and_send, with force_kakao enabled unless generate-only.
+- **Shared transport:** DailyReportService.generate_and_send invokes kakao_service.send_morning_report and then separately retries marking the legacy report sent. A successful remote send followed by failed legacy marker persistence is a duplicate-risk window.
+
+**Cutover design constraint:** The eventual approved integration must be placed at the shared transport boundary or explicitly cover all three entry points. Manual/force flags must never bypass a durable claim, and the legacy sender must not run in parallel with the new sender. No production call sites are changed by this audit.
