@@ -98,3 +98,7 @@ Additional disposable PostgreSQL tests exercise two end-to-end cases: (1) Kakao 
 ## Existing application authorization constraint
 
 The existing `Profile.is_admin` policy permits membership management only, **not cross-user portfolio access**. To preserve this boundary, the staged inspection wrapper now requires `actor_id == target_user_id` even when `actor_is_admin=True`; an admin cannot inspect other users' delivery metadata through this helper. Before building a genuine multi-user operator dashboard, obtain an explicit product/security decision and implement separately audited least-privilege authorization. No UI endpoint has been created.
+
+## Existing session authentication reuse (staged)
+
+`inspect_for_authenticated_operator` calls the existing `web.app.require_admin(authorization)` to validate the Supabase bearer token, active profile, and server-side admin flag. It derives both actor and target UUID from that trusted result, never from a client-provided target ID. This is an isolated helper only; no public endpoint or UI is connected. Tests mock the trusted boundary and verify rejected authentication prevents inspection. A production route would require separate review of DB role privileges, session handling, and exposure policy.
