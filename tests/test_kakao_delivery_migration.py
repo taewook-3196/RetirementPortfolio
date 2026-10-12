@@ -53,3 +53,17 @@ def test_staged_migration_matches_morning_report_model_contract():
     assert "FROM public.morning_reports" in sql
     assert "kakao_sent_at IS NOT NULL" in sql
     assert "SET kakao_sent_at = COALESCE(kakao_sent_at, now()), updated_at = now()" in sql
+
+
+def test_current_scheduled_manual_cli_entrypoints_share_report_service():
+    """Inventory guard: review integration if a send entrypoint changes."""
+    scheduled = Path("scripts/run_multi_user_morning_reports.py").read_text(encoding="utf-8")
+    manual = Path("ui/settings_page.py").read_text(encoding="utf-8")
+    service = Path("services/daily_report_service.py").read_text(encoding="utf-8")
+    assert "service.generate_and_send(" in scheduled
+    assert "force_kakao=send_kakao" in scheduled
+    assert "service.generate_and_send(send_kakao=True, force_kakao=True)" in manual
+    assert "def run_daily_report_cli():" in service
+    assert "service.generate_and_send(send_kakao=not generate_only, force_kakao=not generate_only)" in service
+    assert "self.kakao_service.send_morning_report(summary_text, report_web_url)" in service
+    assert "self.repo.mark_morning_report_kakao_sent(report_date)" in service
