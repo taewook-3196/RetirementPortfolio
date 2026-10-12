@@ -78,12 +78,12 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
             repo = Repository(user_id=user_id)
             settings = repo.get_user_settings()
             if not force and not _is_due(settings, current):
-                logger.info("발송 시각 전 또는 비활성 사용자 건너뜀: %s / 설정시각=%s / 활성=%s", user_id, getattr(settings, "morning_report_time", None), getattr(settings, "morning_report_enabled", False))
+                logger.info("발송 시각 전 또는 비활성 사용자 건너뜀: 설정시각=%s / 활성=%s", getattr(settings, "morning_report_time", None), getattr(settings, "morning_report_enabled", False))
                 continue
             due_users.append((user_id, repo, settings))
         except Exception:
             failures += 1
-            logger.exception("모닝 리포트 대상 사용자 확인 예외: %s", user_id)
+            logger.error("모닝 리포트 대상 사용자 확인 예외: %s", type(__import__("sys").exc_info()[1]).__name__)
 
     logger.info("이번 실행의 발송 대상: %d명", len(due_users))
     if due_users:
@@ -126,10 +126,7 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
                 }
                 if credential is None or "talk_message" not in granted_scopes:
                     send_kakao = False
-                    logger.warning(
-                        "카카오 메시지 권한이 없어 발송을 건너뜀: %s",
-                        user_id,
-                    )
+                    logger.warning("카카오 메시지 권한이 없어 발송을 건너뜀")
 
             # A generated report and a delivered Kakao message are separate
             # states. Retry an unsent report only when Kakao is actually ready;
@@ -137,17 +134,17 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
             existing_report = repo.get_morning_report_for_date(current.date())
             if existing_report is not None and not force:
                 if not settings.kakao_enabled or not send_kakao:
-                    logger.info("오늘 리포트가 이미 생성됨: %s", user_id)
+                    logger.info("오늘 리포트가 이미 생성됨")
                     continue
                 if getattr(existing_report, "kakao_sent_at", None) is not None:
-                    logger.info("오늘 카카오 리포트가 이미 발송됨: %s", user_id)
+                    logger.info("오늘 카카오 리포트가 이미 발송됨")
                     continue
-                logger.info("오늘 리포트는 생성됐지만 카카오 미발송 상태라 재시도: %s", user_id)
+                logger.info("오늘 리포트는 생성됐지만 카카오 미발송 상태라 재시도")
 
             if force and existing_report is not None:
-                logger.info("수동 강제 재생성·재발송: %s", user_id)
+                logger.info("수동 강제 재생성·재발송")
 
-            logger.info("사용자별 모닝 리포트 생성 시작: %s", user_id)
+            logger.info("사용자별 모닝 리포트 생성 시작")
             service = DailyReportService(config=config, repo=repo)
             ok, message, _ = service.generate_and_send(
                 send_kakao=send_kakao,
@@ -155,13 +152,13 @@ def run_all_users(now: datetime | None = None, force: bool = False) -> int:
                 force_kakao=send_kakao,
             )
             if ok:
-                logger.info("사용자별 모닝 리포트 완료: %s", user_id)
+                logger.info("사용자별 모닝 리포트 완료")
             else:
                 failures += 1
-                logger.error("사용자별 모닝 리포트 실패: %s / %s", user_id, message)
+                logger.error("사용자별 모닝 리포트 실패: %s", message)
         except Exception:
             failures += 1
-            logger.exception("사용자별 모닝 리포트 예외: %s", user_id)
+            logger.error("사용자별 모닝 리포트 예외: %s", type(__import__("sys").exc_info()[1]).__name__)
 
     if failures:
         logger.error("모닝 리포트 실패 사용자 수: %d", failures)
