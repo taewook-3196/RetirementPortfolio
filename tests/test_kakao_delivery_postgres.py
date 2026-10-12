@@ -395,3 +395,33 @@ def test_missing_dated_report_refuses_claim_and_never_calls_transport(pg):
     )
     assert result.outcome == SendOutcome.NOT_CLAIMED
     assert events == []
+
+
+def test_atomic_legacy_completion_cannot_finalize_another_users_attempt(pg):
+    from datetime import date
+    from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
+
+    user_a, user_b = uuid4(), uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:a), (:b)"), {"a": str(user_a), "b": str(user_b)})
+        conn.execute(
+            text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:a AS uuid), DATE '2026-10-12'), (CAST(:b AS uuid), DATE '2026-10-12')"),
+            {"a": str(user_a), "b": str(user_b)},
+        )
+    attempt = DeliveryAttempt(user_a, date(2026, 10, 12), uuid4())
+    adapter = PostgresDeliveryAttempts(pg)
+    assert adapter.claim(attempt) is not None
+    with pg.begin() as conn:
+        assert conn.execute(
+            text("SELECT public.finish_kakao_delivery_with_legacy(CAST(:u AS uuid), CAST(:id AS uuid))"),
+            {"u": str(user_b), "id": str(attempt.attempt_id)},
+        ).scalar_one() is False
+        assert conn.execute(
+            text("SELECT kakao_sent_at IS NOT NULL FROM public.morning_reports WHERE user_id = CAST(:u AS uuid)"),
+            {"u": str(user_b)},
+        ).scalar_one() is False
+        assert conn.execute(
+            text("SELECT status FROM public.kakao_delivery_attempts WHERE attempt_id = CAST(:id AS uuid)"),
+            {"id": str(attempt.attempt_id)},
+        ).scalar_one() == "sending"
+    assert adapter.finish_sent_with_legacy(attempt) is True
