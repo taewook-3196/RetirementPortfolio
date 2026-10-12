@@ -55,3 +55,17 @@ def test_finish_db_failure_after_send_is_uncertain():
 def test_finish_rejected_after_send_is_uncertain():
     result = send_with_delivery_claim(claim=lambda: 1, transport=lambda: None, finish=lambda _: False, env=ON)
     assert result.outcome == SendOutcome.UNCERTAIN
+
+
+def test_kakao_success_tuple_is_sent():
+    result = send_with_delivery_claim(claim=lambda: 1, transport=lambda: (True, "ok"), finish=lambda _: True, env=ON)
+    assert result.outcome == SendOutcome.SENT
+
+
+@pytest.mark.parametrize("response", [(False, "timeout"), (False, "HTTP 403"), False])
+def test_kakao_failure_response_must_not_be_recorded_as_sent(response):
+    states = []
+    result = send_with_delivery_claim(claim=lambda: 1, transport=lambda: response, finish=lambda status: states.append(status) or True, env=ON)
+    assert result.outcome == SendOutcome.UNCERTAIN
+    assert result.needs_reconciliation
+    assert states == ["uncertain"]
