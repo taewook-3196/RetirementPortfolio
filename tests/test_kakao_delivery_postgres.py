@@ -223,9 +223,9 @@ def test_attempts_are_isolated_by_user_and_date(pg):
     assert adapter.claim(a_attempt) is not None
     assert adapter.claim(b_attempt) is not None
     assert adapter.claim(next_day) is not None
-    assert adapter.finish(DeliveryAttempt(b, date(2026, 10, 12), a_attempt.attempt_id), "sent") is False
-    assert adapter.finish(a_attempt, "sent") is True
-    assert adapter.finish(b_attempt, "sent") is True
+    assert adapter.finish_sent_with_legacy(DeliveryAttempt(b, date(2026, 10, 12), a_attempt.attempt_id)) is False
+    assert adapter.finish_sent_with_legacy(a_attempt) is True
+    assert adapter.finish_sent_with_legacy(b_attempt) is True
 
 
 def test_atomic_dual_marker_completion(pg):
