@@ -1,6 +1,8 @@
 """Contract checks for the staged KakaoService adapter; no real Kakao calls."""
 from datetime import date
 from unittest.mock import patch
+
+import pytest
 from uuid import uuid4
 
 from services.kakao_delivery_orchestrator import SendOutcome
@@ -59,6 +61,28 @@ def test_adapter_default_off_gate_never_calls_kakao_transport():
             engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
             kakao_service=fake, summary_text="test", report_web_url="https://example.com",
             env={},
+        )
+    assert isinstance(result, SendResult)
+    assert result.outcome == SendOutcome.DISABLED
+    assert fake.calls == []
+    store.return_value.claim.assert_not_called()
+
+
+@pytest.mark.parametrize("env", [
+    {"KAKAO_DELIVERY_STATE_ENABLED": "true"},
+    {"KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    {"KAKAO_DELIVERY_STATE_ENABLED": "TRUE", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "TRUE"},
+])
+def test_adapter_partial_or_inexact_feature_gate_cannot_send(env):
+    from services.kakao_delivery_orchestrator import SendResult
+
+    fake = FakeKakaoService()
+    with patch("services.kakao_delivery_staged.PostgresDeliveryAttempts") as store:
+        result = send_staged_morning_report(
+            engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
+            kakao_service=fake, summary_text="test", report_web_url="https://example.com",
+            env=env,
         )
     assert isinstance(result, SendResult)
     assert result.outcome == SendOutcome.DISABLED
