@@ -533,3 +533,29 @@ def test_client_roles_cannot_use_delivery_sequence_or_truncate_attempts(pg):
                 text("SELECT has_sequence_privilege(:role, CAST(:seq AS regclass), 'USAGE')"),
                 {"role": role, "seq": sequence},
             ).scalar_one() is False
+
+
+def test_disposable_backend_owner_has_required_delivery_permissions(pg):
+    # This checks the CI database owner only, NOT the actual Supabase service role.
+    with pg.connect() as conn:
+        assert conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'USAGE')")).scalar_one()
+        for table, privilege in (
+            ("public.morning_reports", "SELECT"),
+            ("public.morning_reports", "UPDATE"),
+            ("public.kakao_delivery_attempts", "SELECT"),
+            ("public.kakao_delivery_attempts", "INSERT"),
+            ("public.kakao_delivery_attempts", "UPDATE"),
+        ):
+            assert conn.execute(
+                text("SELECT has_table_privilege(current_user, :table, :privilege)"),
+                {"table": table, "privilege": privilege},
+            ).scalar_one()
+        for signature in (
+            "public.claim_kakao_delivery_attempt(uuid,date,uuid,integer)",
+            "public.finish_kakao_delivery_attempt(uuid,uuid,text,text)",
+            "public.finish_kakao_delivery_with_legacy(uuid,uuid)",
+        ):
+            assert conn.execute(
+                text("SELECT has_function_privilege(current_user, CAST(:signature AS regprocedure), 'EXECUTE')"),
+                {"signature": signature},
+            ).scalar_one()
