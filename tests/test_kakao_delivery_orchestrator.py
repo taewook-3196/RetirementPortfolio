@@ -195,3 +195,25 @@ def test_successful_transport_with_failed_marker_finalization_requires_review(or
     assert result.outcome == SendOutcome.UNCERTAIN
     assert result.needs_reconciliation
     assert events == [(origin, "claim"), (origin, "transport"), (origin, "sent")]
+
+
+@pytest.mark.parametrize("origin", ["scheduled", "manual", "cli"])
+def test_finalization_exception_after_success_never_reinvokes_transport(origin):
+    from services.kakao_delivery_orchestrator import SendOutcome, send_with_delivery_claim
+
+    events = []
+    gate = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+
+    def finish(status):
+        events.append((origin, status))
+        raise RuntimeError("database unavailable after Kakao acceptance")
+
+    result = send_with_delivery_claim(
+        claim=lambda: events.append((origin, "claim")) or 123,
+        transport=lambda: events.append((origin, "transport")) or (True, "ok"),
+        finish=finish,
+        env=gate,
+    )
+    assert result.outcome == SendOutcome.UNCERTAIN
+    assert result.needs_reconciliation
+    assert events == [(origin, "claim"), (origin, "transport"), (origin, "sent")]
