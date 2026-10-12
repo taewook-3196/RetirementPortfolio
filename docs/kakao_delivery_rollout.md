@@ -78,3 +78,7 @@ Disposable PostgreSQL integration tests now assert that `anon` and `authenticate
 ## Staged atomic dual-marker completion (not wired)
 
 The staged migration now includes `finish_kakao_delivery_with_legacy(user_id,attempt_id)`: it locks the owned `sending` attempt, requires the dated `morning_reports` row, updates the legacy sent timestamp, and marks the new attempt `sent` in the same PostgreSQL transaction. A missing legacy row returns false without updating either marker. Disposable PostgreSQL tests cover both paths. **Cutover remains blocked** until the staged sender uses this function on success (rather than the single-marker finish method), other send entry points are coordinated, and production schema/grants are verified. Do not apply this migration yet.
+
+## Staged sender now uses dual-marker completion
+
+`run_staged_delivery` now calls `PostgresDeliveryAttempts.finish_sent_with_legacy` on transport success; only an uncertain transport outcome uses the separate single-attempt finalizer. The disposable integration test creates the dated report first and verifies the legacy marker is populated. This staged code is still **not imported or invoked by the live scheduler**, and does not authorize a production cutover.
