@@ -71,8 +71,8 @@ def test_only_claim_owner_can_finalize(pg):
         ).scalar_one()
         assert claim is not None
         finish_sql = text("SELECT public.finish_kakao_delivery_attempt(CAST(:u AS uuid), CAST(:a AS uuid), :status, NULL)")
-        assert conn.execute(finish_sql, {"u": str(user_id), "a": str(uuid4()), "status": "sent"}).scalar_one() is False
-        assert conn.execute(finish_sql, {"u": str(user_id), "a": str(attempt_id), "status": "sent"}).scalar_one() is True
+        assert conn.execute(finish_sql, {"u": str(user_id), "a": str(uuid4()), "status": "uncertain"}).scalar_one() is False
+        assert conn.execute(text("SELECT public.finish_kakao_delivery_with_legacy(CAST(:u AS uuid), CAST(:a AS uuid))"), {"u": str(user_id), "a": str(attempt_id)}).scalar_one() is True
         assert conn.execute(finish_sql, {"u": str(user_id), "a": str(attempt_id), "status": "uncertain"}).scalar_one() is False
 
 
@@ -565,3 +565,18 @@ def test_disposable_backend_owner_has_required_delivery_permissions(pg):
                 text("SELECT has_function_privilege(current_user, CAST(:signature AS regprocedure), 'EXECUTE')"),
                 {"signature": signature},
             ).scalar_one()
+
+
+def test_non_atomic_sent_completion_is_rejected_without_mutating_markers(pg):
+    user_id, attempt_id = uuid4(), uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12')"), {"u": str(user_id)})
+        args = {"u": str(user_id), "a": str(attempt_id)}
+        assert conn.execute(text("SELECT public.claim_kakao_delivery_attempt(CAST(:u AS uuid), DATE '2026-10-12', CAST(:a AS uuid), 300)"), args).scalar_one() is not None
+        with conn.begin_nested():
+            import pytest
+            with pytest.raises(Exception, match="invalid completion argument"):
+                conn.execute(text("SELECT public.finish_kakao_delivery_attempt(CAST(:u AS uuid), CAST(:a AS uuid), 'sent', NULL)"), args)
+        assert conn.execute(text("SELECT status FROM public.kakao_delivery_attempts WHERE attempt_id = CAST(:a AS uuid)"), args).scalar_one() == "sending"
+        assert conn.execute(text("SELECT kakao_sent_at FROM public.morning_reports WHERE user_id = CAST(:u AS uuid) AND report_date = DATE '2026-10-12'"), args).scalar_one() is None
