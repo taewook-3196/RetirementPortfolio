@@ -52,7 +52,7 @@ BEGIN
     IF p_user_id IS NULL OR p_report_date IS NULL OR p_attempt_id IS NULL THEN
         RAISE EXCEPTION 'missing claim argument';
     END IF;
-    IF p_lease_seconds < 30 OR p_lease_seconds > 1800 THEN
+    IF p_lease_seconds IS NULL OR p_lease_seconds < 30 OR p_lease_seconds > 1800 THEN
         RAISE EXCEPTION 'invalid lease duration';
     END IF;
     INSERT INTO public.kakao_delivery_attempts (
@@ -87,6 +87,7 @@ DECLARE
     v_id bigint;
 BEGIN
     IF p_user_id IS NULL OR p_attempt_id IS NULL OR
+       p_final_status IS NULL OR
        p_final_status NOT IN ('sent', 'uncertain', 'failed_before_send') THEN
         RAISE EXCEPTION 'invalid completion argument';
     END IF;
