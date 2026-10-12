@@ -116,3 +116,42 @@ $$;
 
 REVOKE ALL ON FUNCTION public.finish_kakao_delivery_attempt(uuid, uuid, text, text)
 FROM PUBLIC, anon, authenticated;
+
+-- Atomic dual-marker completion for staged cutover. NOT used by production.
+-- Requires the dated legacy report row to exist before Kakao transport starts.
+-- A missing report or incorrect claim owner leaves BOTH markers unchanged.
+CREATE OR REPLACE FUNCTION public.finish_kakao_delivery_with_legacy(
+    p_user_id uuid,
+    p_attempt_id uuid
+) RETURNS boolean
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+    v_report_date date;
+BEGIN
+    IF p_user_id IS NULL OR p_attempt_id IS NULL THEN
+        RAISE EXCEPTION 'missing completion argument';
+    END IF;
+    SELECT report_date INTO v_report_date
+    FROM public.kakao_delivery_attempts
+    WHERE user_id = p_user_id AND attempt_id = p_attempt_id AND status = 'sending'
+    FOR UPDATE;
+    IF v_report_date IS NULL THEN
+        RETURN FALSE;
+    END IF;
+    UPDATE public.morning_reports
+    SET kakao_sent_at = COALESCE(kakao_sent_at, now()), updated_at = now()
+    WHERE user_id = p_user_id AND report_date = v_report_date;
+    IF NOT FOUND THEN
+        RETURN FALSE;
+    END IF;
+    UPDATE public.kakao_delivery_attempts
+    SET status = 'sent', completed_at = now(), updated_at = now(), lease_expires_at = NULL
+    WHERE user_id = p_user_id AND attempt_id = p_attempt_id AND status = 'sending';
+    RETURN FOUND;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.finish_kakao_delivery_with_legacy(uuid, uuid)
+FROM PUBLIC, anon, authenticated;
