@@ -58,3 +58,7 @@ This feature is **not enabled**. Do not merge or apply the SQL migration until t
 ## Common manual/scheduled/CLI eligibility policy (staged)
 
 `services/kakao_delivery_eligibility.py` models one conservative rule for scheduled, manual, and CLI sends. A force flag can request report regeneration but **never** override a prior sent marker or any pending/sending/sent/uncertain attempt. A clean date or explicitly verified `failed_before_send` may proceed to a separate atomic DB claim. This is a unit-tested policy only, not yet connected to any live entry point. At cutover, all call sites must use this rule and a committed claim before sending.
+
+## Kakao transport result contract
+
+`KakaoService.send_morning_report` returns `(bool, message)`, including failures without throwing. The staged orchestrator must never interpret `(False, reason)` as success. Negative responses are conservatively classified `uncertain`, since some transport errors may occur after the server accepts the request; a definitive pre-send rejection can only be classified `failed_before_send` with explicit evidence. The production sender remains unchanged.
