@@ -512,3 +512,24 @@ def test_staged_functions_are_security_invoker_and_not_publicly_executable(pg):
                     text("SELECT has_function_privilege(:role, CAST(:signature AS regprocedure), 'EXECUTE')"),
                     {"role": role, "signature": signature},
                 ).scalar_one() is False
+
+
+def test_client_roles_cannot_use_delivery_sequence_or_truncate_attempts(pg):
+    with pg.connect() as conn:
+        sequence = conn.execute(
+            text("SELECT pg_get_serial_sequence('public.kakao_delivery_attempts', 'id')")
+        ).scalar_one()
+        assert sequence is not None
+        for role in ("anon", "authenticated"):
+            assert conn.execute(
+                text("SELECT has_table_privilege(:role, 'public.kakao_delivery_attempts', 'DELETE')"),
+                {"role": role},
+            ).scalar_one() is False
+            assert conn.execute(
+                text("SELECT has_table_privilege(:role, 'public.kakao_delivery_attempts', 'TRUNCATE')"),
+                {"role": role},
+            ).scalar_one() is False
+            assert conn.execute(
+                text("SELECT has_sequence_privilege(:role, CAST(:seq AS regclass), 'USAGE')"),
+                {"role": role, "seq": sequence},
+            ).scalar_one() is False
