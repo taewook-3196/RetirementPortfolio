@@ -66,3 +66,7 @@ This feature is **not enabled**. Do not merge or apply the SQL migration until t
 ## Reconciliation guidance (read-only)
 
 `services/kakao_delivery_reconciliation.py` provides operator guidance only, with no DB writes and no send calls. `uncertain` and expired `sending` require external verification of Kakao delivery; neither authorizes automatic resend. `failed_before_send` still requires confirming no request was submitted before a new claim. A legacy sent marker takes precedence. Never change an uncertain attempt to a retryable state solely because a lease expired.
+
+## Client-role and tenant isolation checks
+
+Disposable PostgreSQL integration tests now assert that `anon` and `authenticated` have no SELECT/INSERT/UPDATE table privileges or EXECUTE privileges on claim/finish functions, that RLS is enabled, and that independent users/dates can claim without interfering. Finalization with another user's ID must fail. These checks apply only to the disposable CI database, not production Supabase grants; verify actual production grants before any migration rollout.
