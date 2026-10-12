@@ -23,6 +23,8 @@ def pg():
         pytest.fail("Refusing to modify a database other than kakao_delivery_ci")
     engine = create_engine(DSN, pool_size=5, max_overflow=5)
     with engine.begin() as conn:
+        conn.execute(text("CREATE ROLE anon NOLOGIN"))
+        conn.execute(text("CREATE ROLE authenticated NOLOGIN"))
         conn.execute(text("CREATE TABLE IF NOT EXISTS public.profiles (id uuid PRIMARY KEY)"))
         sql = Path("database/migrations/20261012_kakao_delivery_attempts.sql").read_text(encoding="utf-8")
         conn.exec_driver_sql(sql)
@@ -32,6 +34,8 @@ def pg():
         conn.execute(text("DROP FUNCTION IF EXISTS public.claim_kakao_delivery_attempt(uuid, date, uuid, integer)"))
         conn.execute(text("DROP TABLE IF EXISTS public.kakao_delivery_attempts"))
         conn.execute(text("DROP TABLE IF EXISTS public.profiles"))
+        conn.execute(text("DROP ROLE IF EXISTS anon"))
+        conn.execute(text("DROP ROLE IF EXISTS authenticated"))
     engine.dispose()
 
 
