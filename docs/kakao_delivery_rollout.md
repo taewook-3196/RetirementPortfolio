@@ -44,3 +44,13 @@ This feature is **not enabled**. Do not merge or apply the SQL migration until t
 ## Staged end-to-end adapter (mock transport only)
 
 `services/kakao_delivery_staged.py` composes the transactional PostgreSQL adapter with the feature-gated orchestrator. Integration tests use a mock transport to prove that successful delivery, duplicate invocations, disabled gates, and transport timeouts do not generate extra sends. It remains completely disconnected from the live Kakao sender and scheduled jobs. Setting flags alone does not switch the production path.
+
+## Verified production integration points (code review)
+
+- Scheduled entry point: `scripts/run_multi_user_morning_reports.py:run_all_users` calls `DailyReportService.generate_and_send(send_kakao=..., update_prices=False, force_kakao=send_kakao)` for each eligible user.
+- Current same-day skip checks `Repository.get_morning_report_for_date(...).kakao_sent_at` only when not forced. The runner passes `force_kakao=True` for enabled users, so migration must review forced-send semantics separately.
+- `services/daily_report_service.py:generate_and_send` performs the Kakao transport and calls `Repository.mark_morning_report_kakao_sent(report_date)` after successful delivery, with up to three retries. It logs a possible duplicate if all completion writes fail.
+- Do **not** wrap the entire report generation in the new claim: generate/save report first, then claim immediately before the network send. Refactor the transport boundary to preserve HTML generation when Kakao is disabled.
+- Any production integration must update both new attempt state and the legacy sent marker, with conservative reconciliation if either completion write fails. Do not automatically resend if a Kakao request may already have been accepted.
+- Audit `force_kakao` and `FORCE_MORNING_REPORT`: an explicit force action must not bypass an unresolved `sending`/`uncertain` attempt. The staged integration currently does not handle manual force flows.
+- Review other entry points such as CLI/manual UI calls to `DailyReportService.generate_and_send`; a cutover limited to the scheduled runner would leave mixed-version senders active.
