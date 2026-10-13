@@ -45,10 +45,10 @@ def audit_runs(day: dt.date, runs: list[dict]) -> dict:
         diagnosis = "not_scheduled_day"
     elif not scheduled:
         diagnosis = "no_scheduled_runs"
-    elif any(run["status"] != "completed" for run in scheduled):
-        diagnosis = "scheduled_run_in_progress"
     elif any(run["conclusion"] == "success" for run in scheduled):
         diagnosis = "scheduled_run_succeeded_delivery_unverified"
+    elif any(run["status"] != "completed" for run in scheduled):
+        diagnosis = "scheduled_run_in_progress"
     else:
         diagnosis = "scheduled_runs_completed_without_success"
     return {
