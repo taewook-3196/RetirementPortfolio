@@ -64,6 +64,8 @@ def evaluate_delivery(
             diagnosis = "no_eligible_recipients_verify_configuration"
         elif missing:
             diagnosis = "delivery_marker_missing"
+        elif schedule["schedule_missing"] and schedule["manual_runs"]:
+            diagnosis = "schedule_missing_manual_run_present_delivery_markers_complete"
         elif schedule["schedule_missing"]:
             diagnosis = "schedule_missing_but_delivery_markers_complete"
         else:
