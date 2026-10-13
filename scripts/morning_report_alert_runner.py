@@ -9,7 +9,7 @@ from pathlib import Path
 
 from scripts.morning_report_admin_alert import classify_admin_alert
 from scripts.morning_report_admin_message import format_admin_alert
-from scripts.morning_report_alert_store import claim_alert_with_expiry, release_alert
+from scripts.morning_report_alert_store import claim_alert_with_expiry
 
 
 def process_admin_alert(
