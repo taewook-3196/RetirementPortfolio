@@ -58,3 +58,11 @@ def test_running_schedule_is_not_reported_as_failed():
         {"id": 11, "event": "schedule", "created_at": "2026-10-12T20:35:00Z", "status": "in_progress", "conclusion": None}
     ])
     assert result["diagnosis"] == "scheduled_run_in_progress"
+
+
+def test_successful_run_takes_priority_over_other_running_attempt():
+    result = audit_runs(dt.date(2026, 10, 13), [
+        {"id": 12, "event": "schedule", "created_at": "2026-10-12T20:35:00Z", "status": "completed", "conclusion": "success"},
+        {"id": 13, "event": "schedule", "created_at": "2026-10-12T22:10:00Z", "status": "queued", "conclusion": None},
+    ])
+    assert result["diagnosis"] == "scheduled_run_succeeded_delivery_unverified"
