@@ -26,15 +26,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     day = args.date or dt.datetime.now(SEOUL).date()
     try:
+        url = os.getenv("MORNING_REPORT_ADMIN_WEBHOOK_URL") if args.send else None
+        store = os.getenv("MORNING_REPORT_ALERT_STORE_DIR") if args.send else None
+        if args.send and (not url or not store):
+            raise ValueError("webhook URL and durable alert store are required")
         result = run_audit(day, dt.datetime.now(SEOUL), args.repository)
         alert = classify_admin_alert(result)
         if not args.send:
             print(json.dumps({"mode": "dry_run", "should_alert": alert["should_alert"]}))
             return 0
-        url = os.getenv("MORNING_REPORT_ADMIN_WEBHOOK_URL")
-        store = os.getenv("MORNING_REPORT_ALERT_STORE_DIR")
-        if not url or not store:
-            raise ValueError("webhook URL and durable alert store are required")
         status = process_admin_alert(
             result,
             store_directory=Path(store),
