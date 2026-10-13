@@ -36,3 +36,12 @@ def test_missing_markers_return_nonzero(monkeypatch):
         "scheduled_run_diagnosis": "scheduled_run_succeeded_delivery_unverified"
     })
     assert cli.main(["--date", "2026-10-13"]) == 1
+
+
+def test_zero_eligible_recipients_returns_nonzero(monkeypatch):
+    monkeypatch.setattr(cli, "run_audit", lambda *args: {
+        "diagnosis": "no_eligible_recipients_verify_configuration",
+        "missing_marker_count": 0,
+        "scheduled_run_diagnosis": "scheduled_run_succeeded_delivery_unverified",
+    })
+    assert cli.main(["--date", "2026-10-13"]) == 1
