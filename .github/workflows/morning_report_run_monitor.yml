@@ -1,0 +1,89 @@
+name: Morning Report run monitor
+
+on:
+  workflow_run:
+    workflows:
+      - "Morning Portfolio Report & KakaoTalk Notification"
+    types:
+      - completed
+
+permissions:
+  actions: read
+  issues: write
+
+concurrency:
+  group: morning-report-run-monitor
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    # Do not expose any reporting data or secrets to this workflow.
+    if: ${{ github.event.workflow_run.event != 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update failure issue from completed run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const title = '[자동 감시] Morning Report 실행 실패';
+            const { owner, repo } = context.repo;
+            const all = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', per_page: 100,
+            });
+            const alerts = all.filter(i => !i.pull_request && i.title === title);
+            const latest = alerts[0];
+            const result = run.conclusion;
+            const runNumber = Number(run.run_number || 0);
+            const runUrl = run.html_url;
+            if (!['success', 'failure', 'timed_out', 'cancelled', 'action_required', 'startup_failure'].includes(result)) {
+              core.info(`Ignoring non-terminal conclusion: ${result}`);
+              return;
+            }
+            const priorNumber = Number((latest?.body || '').match(/<!-- report-run-number:(\d+) -->/)?.[1] || 0);
+            if (latest && runNumber < priorNumber) {
+              core.info('Ignoring older run result');
+              return;
+            }
+            if (result !== 'success') {
+              const body = [
+                'Morning Report GitHub Actions 실행이 정상 완료되지 않았습니다.',
+                '',
+                `- 실행: ${runUrl}`,
+                `- 결과: ${result}`,
+                `- 실행 번호: ${runNumber}`,
+                '',
+                '보고서 내용이나 인증정보는 이 Issue에 기록하지 않습니다.',
+                `<!-- report-run-number:${runNumber} -->`,
+              ].join('\n');
+              if (latest) {
+                await github.rest.issues.update({
+                  owner, repo, issue_number: latest.number, body,
+                });
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: latest.number,
+                  body: `추가 실패: ${runUrl} (결과: ${result})`,
+                });
+              } else {
+                await github.rest.issues.create({ owner, repo, title, body });
+              }
+              for (const duplicate of alerts.slice(1)) {
+                await github.rest.issues.update({
+                  owner, repo, issue_number: duplicate.number,
+                  state: 'closed', state_reason: 'not_planned',
+                });
+              }
+            } else {
+              for (const issue of alerts) {
+                const issueNumber = Number((issue.body || '').match(/<!-- report-run-number:(\d+) -->/)?.[1] || 0);
+                if (runNumber < issueNumber) continue;
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: issue.number,
+                  body: `정상 복구 확인: ${runUrl}`,
+                });
+                await github.rest.issues.update({
+                  owner, repo, issue_number: issue.number,
+                  state: 'closed', state_reason: 'completed',
+                });
+              }
+            }
