@@ -48,3 +48,9 @@ def test_previous_day_marker_not_accepted():
 def test_naive_clock_rejected():
     with pytest.raises(ValueError):
         evaluate_delivery(DAY, dt.datetime(2026, 10, 13, 10, 30), [], [])
+
+
+def test_date_scoped_database_marker_is_accepted_without_timezone_guess():
+    result = _check(10, [{"enabled": True, "kakao_enabled": True, "report_date_marker_present": True}])
+    assert result["delivered_marker_count"] == 1
+    assert result["missing_marker_count"] == 0
