@@ -36,3 +36,25 @@ def test_utc_boundary_and_other_days_are_filtered():
 
 def test_no_alert_on_non_schedule_days():
     assert audit_runs(dt.date(2026, 10, 12), [])["schedule_missing"] is False
+
+
+def test_failed_scheduled_runs_have_distinct_diagnosis():
+    result = audit_runs(dt.date(2026, 10, 13), [
+        {"id": 9, "event": "schedule", "created_at": "2026-10-12T20:35:00Z", "status": "completed", "conclusion": "failure"}
+    ])
+    assert result["diagnosis"] == "scheduled_runs_completed_without_success"
+    assert result["schedule_missing"] is False
+
+
+def test_successful_schedule_does_not_claim_kakao_was_delivered():
+    result = audit_runs(dt.date(2026, 10, 13), [
+        {"id": 10, "event": "schedule", "created_at": "2026-10-12T20:35:00Z", "status": "completed", "conclusion": "success"}
+    ])
+    assert result["diagnosis"] == "scheduled_run_succeeded_delivery_unverified"
+
+
+def test_running_schedule_is_not_reported_as_failed():
+    result = audit_runs(dt.date(2026, 10, 13), [
+        {"id": 11, "event": "schedule", "created_at": "2026-10-12T20:35:00Z", "status": "in_progress", "conclusion": None}
+    ])
+    assert result["diagnosis"] == "scheduled_run_in_progress"
