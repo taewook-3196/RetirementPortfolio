@@ -14,7 +14,13 @@ import urllib.request
 import urllib.parse
 import ssl
 from typing import Dict, Any, Optional, Tuple
-from core.config import AppConfig, MorningReportConfig, save_config
+from core.config import (
+    AppConfig,
+    MorningReportConfig,
+    get_report_url,
+    save_config,
+    validate_public_url,
+)
 
 logger = logging.getLogger("RetirementPortfolio.KakaoService")
 
@@ -97,15 +103,8 @@ class KakaoService:
         if not access_token:
             return False, "카카오 Access Token이 비어있습니다. [환경 설정]에서 토큰을 입력해 주세요."
 
-        # 카카오는 file:// 링크를 지원하지 않으므로, http/https가 아닐 경우 GitHub Pages URL로 대체
-        safe_url = web_url.strip() if web_url else ""
-        if not safe_url.startswith("http://") and not safe_url.startswith("https://"):
-            gh_repo = getattr(self.morning_cfg, "github_repo", "").strip()
-            if "/" in gh_repo:
-                owner, repo = gh_repo.split("/")[0].strip().lower(), gh_repo.split("/")[1].strip()
-                safe_url = f"https://{owner}.github.io/{repo}/"
-            else:
-                safe_url = "https://taewook-3196.github.io/RetirementPortfolio/"
+        # 카카오는 공개 HTTP(S) 링크만 지원합니다.
+        safe_url = validate_public_url(web_url, get_report_url())
 
         template_obj = {
             "object_type": "text",
