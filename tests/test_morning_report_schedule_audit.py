@@ -66,3 +66,46 @@ def test_successful_run_takes_priority_over_other_running_attempt():
         {"id": 13, "event": "schedule", "created_at": "2026-10-12T22:10:00Z", "status": "queued", "conclusion": None},
     ])
     assert result["diagnosis"] == "scheduled_run_succeeded_delivery_unverified"
+
+
+def test_github_query_uses_exact_kst_calendar_day(monkeypatch):
+    import io
+    import json
+    from scripts import audit_morning_report_schedule as audit
+
+    seen = []
+
+    class Response:
+        def __enter__(self):
+            return io.BytesIO(json.dumps({"total_count": 0, "workflow_runs": []}).encode())
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(request, timeout):
+        seen.append(request.full_url)
+        return Response()
+
+    monkeypatch.setattr(audit.urllib.request, "urlopen", fake_urlopen)
+    audit.fetch_runs("owner/repo", day=dt.date(2026, 10, 13))
+    from urllib.parse import parse_qs, urlsplit
+    params = parse_qs(urlsplit(seen[0]).query)
+    assert params["created"] == ["2026-10-12T15:00:00Z..2026-10-13T15:00:00Z"]
+
+
+def test_truncated_github_results_raise_instead_of_claiming_no_runs(monkeypatch):
+    import io
+    import json
+    import pytest
+    from scripts import audit_morning_report_schedule as audit
+
+    class Response:
+        def __enter__(self):
+            return io.BytesIO(json.dumps({"total_count": 101, "workflow_runs": []}).encode())
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(audit.urllib.request, "urlopen", lambda request, timeout: Response())
+    with pytest.raises(ValueError, match="capacity"):
+        audit.fetch_runs("owner/repo", day=dt.date(2026, 10, 13))
