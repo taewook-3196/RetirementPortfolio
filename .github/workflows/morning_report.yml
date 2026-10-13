@@ -25,6 +25,7 @@ jobs:
       REPORT_USER_ID: ${{ secrets.REPORT_USER_ID }}
       BEA_API_KEY: ${{ secrets.BEA_API_KEY }}
       RETIREMENT_PORTFOLIO_WEB_URL: ${{ vars.RETIREMENT_PORTFOLIO_WEB_URL || 'https://retirementportfolio.onrender.com/' }}
+      RETIREMENT_PORTFOLIO_REPORT_URL: ${{ vars.RETIREMENT_PORTFOLIO_REPORT_URL || 'https://taewook-3196.github.io/RetirementPortfolio/' }}
       
     steps:
       - name: 저장소 체크아웃
@@ -53,7 +54,6 @@ jobs:
           AI_INVESTMENT_STANCE: ${{ vars.AI_INVESTMENT_STANCE || '' }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_PAGES_BASE_URL: https://${{ github.repository_owner }}.github.io/RetirementPortfolio
         run: |
           python -m services.daily_report_service --generate-only
 

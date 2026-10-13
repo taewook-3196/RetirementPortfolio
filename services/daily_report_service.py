@@ -20,8 +20,10 @@ from core.config import (
     AppConfig,
     MorningReportConfig,
     ETFConfig,
+    get_report_url,
     get_web_app_url,
     load_config,
+    validate_public_url,
 )
 from core.paths import get_project_root, get_report_dir
 from database.connection import init_db
@@ -1618,21 +1620,7 @@ class DailyReportService:
             html_file = self.html_generator.generate_html(report_data)
             logger.info(f"모닝 리포트 HTML 생성 완료: {html_file}")
 
-            # 웹 URL 결정 (카카오톡 버튼은 file:// 링크를 지원하지 않으며 반드시 http/https 여야 합니다)
-            pages_env = os.getenv("GITHUB_PAGES_BASE_URL", "").strip().rstrip("/")
-            gh_repo = getattr(self.config.morning_report, "github_repo", "").strip() or os.getenv("GITHUB_REPOSITORY", "").strip()
-            if "github.com/" in gh_repo:
-                gh_repo = gh_repo.split("github.com/")[1].strip("/").removesuffix(".git")
-
-            if pages_env:
-                report_web_url = f"{pages_env}/"
-            elif gh_repo and "/" in gh_repo:
-                parts = gh_repo.split("/")
-                owner, repo = parts[0].strip().lower(), parts[1].strip()
-                report_web_url = f"https://{owner}.github.io/{repo}/"
-            else:
-                # 기본 fallback 웹 URL (GitHub Pages)
-                report_web_url = "https://taewook-3196.github.io/RetirementPortfolio/"
+            report_web_url = get_report_url()
 
             summary_text = self._build_kakao_summary_text(
                 account_name=account_name,
@@ -2444,7 +2432,10 @@ class DailyReportService:
             import json
             data = json.loads(payload_cache.read_text(encoding="utf-8"))
             summary_text = data.get("summary_text", "")
-            report_web_url = data.get("report_web_url", "https://taewook-3196.github.io/RetirementPortfolio/")
+            report_web_url = validate_public_url(
+                data.get("report_web_url"),
+                get_report_url(),
+            )
             if not self.kakao_service.is_configured():
                 return False, "카카오톡 토큰이 설정되지 않았습니다."
             return self.kakao_service.send_morning_report(summary_text, report_web_url)

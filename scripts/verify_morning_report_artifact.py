@@ -37,24 +37,8 @@ FORBIDDEN_MARKERS = (
 )
 
 
-def verify_report_artifact(directory: Path, report_date: str | None = None) -> dict:
-    """현재 날짜 보고서와 index.html이 같은 최신 기능 HTML인지 검사합니다."""
-    directory = Path(directory)
-    index_path = directory / "index.html"
-    date_key = report_date or datetime.datetime.now().strftime("%Y%m%d")
-    dated_path = directory / f"morning_report_{date_key}.html"
-
-    if not index_path.is_file():
-        raise RuntimeError(f"Pages index.html이 없습니다: {index_path}")
-    if not dated_path.is_file():
-        raise RuntimeError(f"오늘자 보고서가 없습니다: {dated_path}")
-
-    index_bytes = index_path.read_bytes()
-    dated_bytes = dated_path.read_bytes()
-    if index_bytes != dated_bytes:
-        raise RuntimeError("index.html이 오늘자 보고서와 일치하지 않습니다.")
-
-    content = index_bytes.decode("utf-8")
+def verify_report_content(content: str) -> None:
+    """배포 전/후 보고서가 필수 기능과 secret 방어를 갖췄는지 검사합니다."""
     missing = [fragment for fragment in REQUIRED_FRAGMENTS if fragment not in content]
     if missing:
         raise RuntimeError(
@@ -81,6 +65,27 @@ def verify_report_artifact(directory: Path, report_date: str | None = None) -> d
             "최종 index.html에 secret 관련 문자열이 포함되었습니다: "
             + ", ".join(sorted(set(forbidden)))
         )
+
+
+def verify_report_artifact(directory: Path, report_date: str | None = None) -> dict:
+    """현재 날짜 보고서와 index.html이 같은 최신 기능 HTML인지 검사합니다."""
+    directory = Path(directory)
+    index_path = directory / "index.html"
+    date_key = report_date or datetime.datetime.now().strftime("%Y%m%d")
+    dated_path = directory / f"morning_report_{date_key}.html"
+
+    if not index_path.is_file():
+        raise RuntimeError(f"Pages index.html이 없습니다: {index_path}")
+    if not dated_path.is_file():
+        raise RuntimeError(f"오늘자 보고서가 없습니다: {dated_path}")
+
+    index_bytes = index_path.read_bytes()
+    dated_bytes = dated_path.read_bytes()
+    if index_bytes != dated_bytes:
+        raise RuntimeError("index.html이 오늘자 보고서와 일치하지 않습니다.")
+
+    content = index_bytes.decode("utf-8")
+    verify_report_content(content)
 
     digest = hashlib.sha256(index_bytes).hexdigest()
     return {
