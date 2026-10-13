@@ -34,3 +34,10 @@ def test_explicit_send_uses_runner(monkeypatch, tmp_path):
     assert len(sent) == 1
     assert cli.main(["--send", "--date", "2026-10-13"]) == 0
     assert len(sent) == 1
+
+
+def test_missing_send_config_does_not_query_database(monkeypatch):
+    monkeypatch.delenv("MORNING_REPORT_ADMIN_WEBHOOK_URL", raising=False)
+    monkeypatch.delenv("MORNING_REPORT_ALERT_STORE_DIR", raising=False)
+    monkeypatch.setattr(cli, "run_audit", lambda *args: (_ for _ in ()).throw(AssertionError("audit should not run")))
+    assert cli.main(["--send", "--date", "2026-10-13"]) == 2
