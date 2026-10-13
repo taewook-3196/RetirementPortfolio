@@ -44,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(result, ensure_ascii=False))
     if result["diagnosis"] in {"awaiting_cutoff", "historical_audit", "not_scheduled_day"}:
         return 0
-    return 1 if result["diagnosis"] == "no_eligible_recipients_verify_configuration" or result["missing_marker_count"] or result["scheduled_run_diagnosis"] == "no_scheduled_runs" else 0
+    return 1 if result["diagnosis"] == "no_eligible_recipients_verify_configuration" or result["missing_marker_count"] or result["scheduled_run_diagnosis"] in {"no_scheduled_runs", "scheduled_runs_completed_without_success", "scheduled_run_in_progress"} else 0
 
 
 if __name__ == "__main__":
