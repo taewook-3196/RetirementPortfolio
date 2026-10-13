@@ -23,7 +23,7 @@ def run_audit(day: dt.date, now: dt.datetime, repository: str) -> dict:
     # Import lazily so core tests don't require production database dependencies.
     from scripts.morning_report_delivery_reader import read_recipient_markers
 
-    runs = fetch_runs(repository, os.getenv("GITHUB_TOKEN"))
+    runs = fetch_runs(repository, os.getenv("GITHUB_TOKEN"), day)
     recipients = read_recipient_markers(day)
     return evaluate_delivery(day, now, runs, recipients)
 
