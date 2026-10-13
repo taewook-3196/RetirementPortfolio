@@ -33,6 +33,18 @@ jobs:
             });
             const alerts = all.filter(i => !i.pull_request && i.title === title);
             const latest = alerts[0];
+            // Ignore delayed events if a newer completed report run already exists.
+            const recent = await github.rest.actions.listWorkflowRuns({
+              owner, repo, workflow_id: run.workflow_id,
+              status: 'completed', per_page: 10,
+            });
+            const newer = (recent.data.workflow_runs || []).some(other =>
+              other.id !== run.id && Number(other.run_number) > Number(run.run_number)
+            );
+            if (newer) {
+              core.info('A newer completed report run exists; ignoring stale event');
+              return;
+            }
             const result = run.conclusion;
             const runNumber = Number(run.run_number || 0);
             const runUrl = run.html_url;
@@ -56,6 +68,10 @@ jobs:
                 '보고서 내용이나 인증정보는 이 Issue에 기록하지 않습니다.',
                 `<!-- report-run-number:${runNumber} -->`,
               ].join('\n');
+              if (latest && priorNumber === runNumber) {
+                core.info('This failed run has already been recorded');
+                return;
+              }
               if (latest) {
                 await github.rest.issues.update({
                   owner, repo, issue_number: latest.number, body,
