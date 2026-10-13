@@ -37,3 +37,26 @@ def release_alert(key: str, directory: str | Path) -> None:
     if not _KEY_PATTERN.fullmatch(key):
         raise ValueError("invalid alert deduplication key")
     (Path(directory) / (key + ".claim")).unlink(missing_ok=True)
+
+
+def claim_alert_with_expiry(key: str, directory: str | Path, *, stale_after_seconds: int = 3600) -> bool:
+    """Claim or recover a stale claim.
+
+    Recovery can cause duplicate delivery if the previous sender completed
+    but crashed before acknowledging success. Use only with an idempotent
+    outbound provider or an operator-reviewed retry policy.
+    """
+    if stale_after_seconds <= 0:
+        raise ValueError("stale_after_seconds must be positive")
+    if claim_alert(key, directory):
+        return True
+    target = Path(directory) / (key + ".claim")
+    try:
+        age = time.time() - target.stat().st_mtime
+    except FileNotFoundError:
+        return claim_alert(key, directory)
+    if age < stale_after_seconds:
+        return False
+    # Never automatically delete a potentially sent claim. Report it for
+    # operator review instead of risking a duplicate notification.
+    raise RuntimeError("stale alert claim requires manual review")
