@@ -22,7 +22,7 @@ def evaluate_delivery(
     """Evaluate *pre-fetched* recipient statuses without exposing identities.
 
     recipients: [{enabled: bool, kakao_enabled: bool,
-                  sent_at: ISO timestamp or None}]
+                  report_date_marker_present: bool}]
     Caller must fetch recipient status using an authorized, read-only
     database connection. This function never queries the DB itself.
     """
@@ -48,7 +48,7 @@ def evaluate_delivery(
         eligible += 1
         stamp = recipient.get("sent_at")
         sent_today = recipient.get("report_date_marker_present") is True
-        if stamp:
+        if stamp and not sent_today:
             try:
                 parsed = dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
                 sent_today = parsed.tzinfo is not None and parsed.astimezone(SEOUL).date() == day
