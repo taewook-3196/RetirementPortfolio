@@ -74,3 +74,22 @@ Kakao may have accepted the message even if the marker update failed.
 A Render free web service can sleep and should not be assumed to provide a
 reliable internal timer. Creating a Render Cron Job or any paid service
 requires separate approval after cost review.
+
+## Independent scheduler decision (pending authorization)
+
+Preferred: an external scheduled job that runs the audit CLI after 09:30 KST,
+not a second GitHub Actions workflow. The existing Render web service is on
+a free plan and can sleep; do not rely on its in-process scheduler.
+
+A Render Cron Job is technically supported but is a **new service** and its
+pricing must be reviewed before creation. The Render API may default to a
+paid Starter plan; never accept the default without user approval.
+
+A third-party scheduler that merely requests an HTTP URL cannot run this
+CLI or access the database by itself. Exposing an unauthenticated audit
+endpoint would create an unnecessary security risk. Such a design requires
+an authenticated endpoint, rate limiting, alert delivery, and safe
+secret management, all of which are **not implemented**.
+
+Until an independent job is authorized and configured, do not describe
+the watchdog as active. Continue to use the manual audit procedure.
