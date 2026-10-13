@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import re
+import time
 
 _KEY_PATTERN = re.compile(r"^[0-9a-f]{24}$")
 
