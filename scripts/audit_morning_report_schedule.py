@@ -69,7 +69,7 @@ def fetch_runs(repository: str, token: str | None = None, day: dt.date | None = 
     params = {"per_page": "100"}
     if day is not None:
         start = dt.datetime.combine(day, dt.time.min, SEOUL).astimezone(dt.timezone.utc)
-        end = start + dt.timedelta(days=1)
+        end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, SEOUL).astimezone(dt.timezone.utc)
         params["created"] = start.strftime("%Y-%m-%dT%H:%M:%SZ") + ".." + end.strftime("%Y-%m-%dT%H:%M:%SZ")
     url = "https://api.github.com/repos/" + repository + "/actions/workflows/" + WORKFLOW + "/runs?" + urllib.parse.urlencode(params)
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "RetirementPortfolio-schedule-audit"}
