@@ -59,3 +59,15 @@ def test_date_scoped_database_marker_is_accepted_without_timezone_guess():
 def test_zero_eligible_recipients_requires_configuration_review():
     result = _check(10, [])
     assert result["diagnosis"] == "no_eligible_recipients_verify_configuration"
+
+
+def test_manual_recovery_is_distinguished_from_scheduled_delivery():
+    result = _check(10, [
+        {"enabled": True, "kakao_enabled": True, "report_date_marker_present": True}
+    ], [
+        {"id": 21, "event": "workflow_dispatch", "created_at": "2026-10-13T00:42:00Z",
+         "status": "completed", "conclusion": "success"}
+    ])
+    assert result["diagnosis"] == "schedule_missing_manual_run_present_delivery_markers_complete"
+    assert result["scheduled_run_diagnosis"] == "no_scheduled_runs"
+    assert result["missing_marker_count"] == 0
