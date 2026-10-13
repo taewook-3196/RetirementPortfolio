@@ -13,7 +13,7 @@ from database.models import MorningReport, Profile, UserSetting
 def read_recipient_markers(day: date) -> list[dict]:
     """Fetch enabled users and today's stored delivery marker in one query.
 
-    Only boolean status and timestamps leave the database session.
+    Only boolean status leaves the database session.
     A missing row is an unconfirmed delivery, not proof of failure.
     """
     with get_db_session() as session:
@@ -30,6 +30,7 @@ def read_recipient_markers(day: date) -> list[dict]:
                 & (MorningReport.report_date == day),
             )
             .filter(Profile.is_active.is_(True))
+            .filter(UserSetting.morning_report_enabled.is_(True))
             .all()
         )
         return [
