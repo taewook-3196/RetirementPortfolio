@@ -54,3 +54,8 @@ def test_date_scoped_database_marker_is_accepted_without_timezone_guess():
     result = _check(10, [{"enabled": True, "kakao_enabled": True, "report_date_marker_present": True}])
     assert result["delivered_marker_count"] == 1
     assert result["missing_marker_count"] == 0
+
+
+def test_zero_eligible_recipients_requires_configuration_review():
+    result = _check(10, [])
+    assert result["diagnosis"] == "no_eligible_recipients_verify_configuration"
