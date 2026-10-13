@@ -40,12 +40,24 @@ def audit_runs(day: dt.date, runs: list[dict]) -> dict:
             scheduled.append(item)
         elif event == "workflow_dispatch":
             manual.append(item)
+    expected = expected_slots(day)
+    if not expected:
+        diagnosis = "not_scheduled_day"
+    elif not scheduled:
+        diagnosis = "no_scheduled_runs"
+    elif any(run["status"] != "completed" for run in scheduled):
+        diagnosis = "scheduled_run_in_progress"
+    elif any(run["conclusion"] == "success" for run in scheduled):
+        diagnosis = "scheduled_run_succeeded_delivery_unverified"
+    else:
+        diagnosis = "scheduled_runs_completed_without_success"
     return {
         "date_kst": day.isoformat(),
-        "expected_slots_kst": list(expected_slots(day)),
+        "diagnosis": diagnosis,
+        "expected_slots_kst": list(expected),
         "scheduled_runs": scheduled,
         "manual_runs": manual,
-        "schedule_missing": bool(expected_slots(day)) and not scheduled,
+        "schedule_missing": bool(expected) and not scheduled,
         "note": "Workflow-run metadata only; successful runs do not prove Kakao delivery.",
     }
 
