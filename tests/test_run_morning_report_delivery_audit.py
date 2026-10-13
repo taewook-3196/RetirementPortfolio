@@ -8,7 +8,7 @@ KST = ZoneInfo("Asia/Seoul")
 
 def test_combined_audit_uses_both_readers_without_sending(monkeypatch):
     observed = []
-    monkeypatch.setattr(cli, "fetch_runs", lambda repository, token: observed.append(("github", repository)) or [
+    monkeypatch.setattr(cli, "fetch_runs", lambda repository, token, day: observed.append(("github", repository, day)) or [
         {"id": 1, "event": "schedule", "created_at": "2026-10-12T22:10:00Z", "status": "completed", "conclusion": "success"}
     ])
     import scripts.morning_report_delivery_reader as reader
@@ -16,7 +16,7 @@ def test_combined_audit_uses_both_readers_without_sending(monkeypatch):
         {"enabled": True, "kakao_enabled": True, "report_date_marker_present": True}
     ])
     result = cli.run_audit(dt.date(2026, 10, 13), dt.datetime(2026, 10, 13, 10, tzinfo=KST), "owner/repo")
-    assert observed == [("github", "owner/repo"), ("db", dt.date(2026, 10, 13))]
+    assert observed == [("github", "owner/repo", dt.date(2026, 10, 13)), ("db", dt.date(2026, 10, 13))]
     assert result["missing_marker_count"] == 0
     assert result["diagnosis"] == "no_missing_delivery_markers"
     assert "user_id" not in str(result)
