@@ -1,0 +1,71 @@
+name: Monitor deployed Morning Report
+
+on:
+  workflow_run:
+    workflows: ["Morning Portfolio Report & KakaoTalk Notification"]
+    types: [completed]
+  schedule:
+    # 정기 보고서 배포 후 한국시간 08:00에 한 번 더 점검합니다.
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: morning-report-monitor
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RETIREMENT_PORTFOLIO_REPORT_URL: ${{ vars.RETIREMENT_PORTFOLIO_REPORT_URL || 'https://taewook-3196.github.io/RetirementPortfolio/' }}
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 3.12 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 보고서 생성 workflow 결과 확인
+        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' }}
+        run: |
+          echo "Morning Report workflow failed: ${{ github.event.workflow_run.html_url }}" >&2
+          exit 1
+
+      - name: 배포 전파 대기
+        if: ${{ github.event_name == 'workflow_run' }}
+        run: sleep 30
+
+      - name: 배포된 Morning Report 검증
+        run: |
+          for attempt in 1 2 3; do
+            if python -m scripts.monitor_morning_report --max-age-hours 36; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep 30
+            fi
+          done
+          exit 1
+
+      - name: 감시 실패 Issue 생성 또는 갱신
+        if: ${{ failure() }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { handleFailure } = require('./scripts/morning_report_issue.js');
+            await handleFailure({ github, context });
+
+      - name: 복구된 감시 Issue 닫기
+        if: ${{ success() }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { handleRecovery } = require('./scripts/morning_report_issue.js');
+            await handleRecovery({ github, context });
