@@ -45,3 +45,21 @@ def test_zero_eligible_recipients_returns_nonzero(monkeypatch):
         "scheduled_run_diagnosis": "scheduled_run_succeeded_delivery_unverified",
     })
     assert cli.main(["--date", "2026-10-13"]) == 1
+
+
+def test_failed_schedule_even_with_markers_requires_review(monkeypatch):
+    monkeypatch.setattr(cli, "run_audit", lambda *args: {
+        "diagnosis": "no_missing_delivery_markers",
+        "missing_marker_count": 0,
+        "scheduled_run_diagnosis": "scheduled_runs_completed_without_success",
+    })
+    assert cli.main(["--date", "2026-10-13"]) == 1
+
+
+def test_running_schedule_requires_review_after_cutoff(monkeypatch):
+    monkeypatch.setattr(cli, "run_audit", lambda *args: {
+        "diagnosis": "no_missing_delivery_markers",
+        "missing_marker_count": 0,
+        "scheduled_run_diagnosis": "scheduled_run_in_progress",
+    })
+    assert cli.main(["--date", "2026-10-13"]) == 1
