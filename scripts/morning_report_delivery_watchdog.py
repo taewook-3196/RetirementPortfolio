@@ -47,7 +47,7 @@ def evaluate_delivery(
             continue
         eligible += 1
         stamp = recipient.get("sent_at")
-        sent_today = False
+        sent_today = recipient.get("report_date_marker_present") is True
         if stamp:
             try:
                 parsed = dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
