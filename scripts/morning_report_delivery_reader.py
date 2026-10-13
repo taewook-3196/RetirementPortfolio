@@ -38,7 +38,8 @@ def read_recipient_markers(day: date) -> list[dict]:
                 "kakao_enabled": bool(kakao),
                 # Markers are scoped to the report date by the join.
                 # DB timestamps may be naive; normalize at the adapter boundary.
-                "sent_at": sent_at.isoformat() if sent_at else None,
+                "sent_at": None,
+                "report_date_marker_present": sent_at is not None,
             }
             for enabled, kakao, sent_at in rows
         ]
