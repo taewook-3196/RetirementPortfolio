@@ -63,7 +63,8 @@ def audit_runs(day: dt.date, runs: list[dict]) -> dict:
 
 
 def fetch_runs(repository: str, token: str | None = None) -> list[dict]:
-    if not repository or "/" not in repository:
+    parts = repository.split("/")
+    if len(parts) != 2 or not all(parts) or any(not part.replace("-", "").replace("_", "").replace(".", "").isalnum() for part in parts):
         raise ValueError("repository must be owner/name")
     url = "https://api.github.com/repos/" + repository + "/actions/workflows/" + WORKFLOW + "/runs?per_page=100"
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "RetirementPortfolio-schedule-audit"}
