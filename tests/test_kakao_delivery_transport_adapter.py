@@ -169,3 +169,40 @@ def test_disabled_rollout_never_inspects_kakao_credentials():
         )
     assert result.outcome == SendOutcome.DISABLED
     staged.assert_not_called()
+
+
+def test_configuration_check_exception_never_claims_or_sends():
+    fake = FakeKakaoService()
+
+    def unavailable():
+        raise RuntimeError("credential lookup unavailable")
+
+    fake.is_configured = unavailable
+    with patch("services.kakao_delivery_transport_adapter.run_staged_delivery") as staged:
+        with pytest.raises(RuntimeError, match="credential lookup unavailable"):
+            send_staged_morning_report(
+                engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
+                kakao_service=fake, summary_text="report",
+                report_web_url="https://example.com",
+                env={"KAKAO_DELIVERY_STATE_ENABLED": "true",
+                     "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+            )
+    staged.assert_not_called()
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize("missing_method", ["send_morning_report", "is_configured"])
+def test_malformed_kakao_service_never_claims_or_sends(missing_method):
+    fake = FakeKakaoService()
+    setattr(fake, missing_method, None)
+    with patch("services.kakao_delivery_transport_adapter.run_staged_delivery") as staged:
+        with pytest.raises(TypeError, match="Kakao service must implement"):
+            send_staged_morning_report(
+                engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
+                kakao_service=fake, summary_text="report",
+                report_web_url="https://example.com",
+                env={"KAKAO_DELIVERY_STATE_ENABLED": "true",
+                     "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+            )
+    staged.assert_not_called()
+    assert fake.calls == []
