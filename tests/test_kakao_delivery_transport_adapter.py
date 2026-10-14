@@ -251,3 +251,28 @@ def test_claim_database_exception_never_reaches_kakao_service():
         store.finish.assert_not_called()
         store.finish_sent_with_legacy.assert_not_called()
     assert fake.calls == []
+
+
+@pytest.mark.parametrize("response", [
+    False, (False, "provider rejected"), None, (), (True,), (True, "ok", "extra"),
+    ("true", "ok"), {"ok": True},
+])
+def test_ambiguous_or_malformed_provider_response_is_never_recorded_sent(response):
+    fake = FakeKakaoService()
+    fake.send_morning_report = lambda *_: response
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    with patch("services.kakao_delivery_staged.PostgresDeliveryAttempts") as store_class:
+        store = store_class.return_value
+        store.claim.return_value = uuid4()
+        store.finish.return_value = True
+        result = send_staged_morning_report(
+            engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
+            kakao_service=fake, summary_text="report",
+            report_web_url="https://example.com", env=env,
+        )
+        store.claim.assert_called_once()
+        store.finish.assert_called_once()
+        assert store.finish.call_args.args[1] == "uncertain"
+        store.finish_sent_with_legacy.assert_not_called()
+    assert result.outcome == SendOutcome.UNCERTAIN
+    assert result.needs_reconciliation is True
