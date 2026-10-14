@@ -10,7 +10,10 @@ def test_forced_regeneration_never_resends_already_delivered_kakao(legacy_sent, 
         force_regenerate=True, kakao_enabled=True, existing_report=True,
         legacy_sent=legacy_sent, delivery_claim_available=claim,
     )
-    assert intent.action != ReportAction.GENERATE_AND_SEND if legacy_sent else True
+    if legacy_sent:
+        assert intent.action == ReportAction.GENERATE_ONLY
+    else:
+        assert intent.action == (ReportAction.GENERATE_AND_SEND if claim else ReportAction.GENERATE_ONLY)
 
 
 def test_force_regenerate_without_claim_generates_only():
