@@ -21,6 +21,11 @@ CREATE TABLE IF NOT EXISTS public.kakao_delivery_recovery_audit (
         REFERENCES public.kakao_delivery_attempts(user_id, attempt_id)
 );
 
+-- One incident reference may be recorded only once for a given attempt and
+-- decision, including under concurrent transactions.
+CREATE UNIQUE INDEX IF NOT EXISTS kakao_delivery_recovery_audit_dedupe_idx
+ON public.kakao_delivery_recovery_audit (attempt_id, evidence_reference, decision);
+
 CREATE INDEX IF NOT EXISTS kakao_delivery_recovery_audit_target_idx
 ON public.kakao_delivery_recovery_audit (target_user_id, created_at DESC);
 
