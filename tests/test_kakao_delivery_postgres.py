@@ -1042,3 +1042,57 @@ def test_staged_cached_gateway_requires_persisted_identity_and_prevents_resend(p
             "SELECT kakao_sent_at IS NOT NULL FROM public.morning_reports "
             "WHERE user_id = CAST(:u AS uuid)"
         ), {"u": str(user_id)}).scalar_one() is True
+
+
+@pytest.mark.parametrize("first_origin", ["scheduled", "manual", "cli", "cached"])
+def test_verified_dispatch_cross_origin_replay_is_blocked(pg, first_origin):
+    """All staged origins consult persisted report identity and one durable claim."""
+    from datetime import date
+    from services.kakao_delivery_eligibility import DeliveryOrigin
+    from services.kakao_delivery_verified_dispatch import dispatch_verified_staged_report
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    report_date = date(2026, 10, 12)
+    calls = []
+
+    class MockKakao:
+        def is_configured(self):
+            return True
+
+        def send_morning_report(self, summary, url):
+            calls.append(summary)
+            return True, "mock"
+
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    common = dict(
+        engine=pg, user_id=user_id, report_date=report_date,
+        kakao_service=MockKakao(), summary_text="summary",
+        report_web_url="https://example.com/report", force=True, env=env,
+    )
+    assert dispatch_verified_staged_report(
+        origin=DeliveryOrigin(first_origin), **common
+    ).outcome == SendOutcome.NOT_CLAIMED
+    assert calls == []
+
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text(
+            "INSERT INTO public.morning_reports (user_id, report_date) "
+            "VALUES (CAST(:u AS uuid), DATE '2026-10-12')"
+        ), {"u": str(user_id)})
+
+    assert dispatch_verified_staged_report(
+        origin=DeliveryOrigin(first_origin), **common
+    ).outcome == SendOutcome.SENT
+    assert len(calls) == 1
+    for origin in DeliveryOrigin:
+        assert dispatch_verified_staged_report(
+            origin=origin, **common
+        ).outcome == SendOutcome.NOT_CLAIMED
+    assert len(calls) == 1
+    with pg.connect() as conn:
+        assert conn.execute(text(
+            "SELECT count(*) FROM public.kakao_delivery_attempts "
+            "WHERE user_id = CAST(:u AS uuid)"
+        ), {"u": str(user_id)}).scalar_one() == 1
