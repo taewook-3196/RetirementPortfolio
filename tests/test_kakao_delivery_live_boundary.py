@@ -87,9 +87,9 @@ def test_every_python_direct_kakao_transport_call_is_in_reviewed_inventory():
     """New direct transport callsites must be explicitly reviewed before cutover.
 
     This guard intentionally excludes tests and the staged adapter; only the
-    legacy service may invoke the KakaoService transport directly today.
+    legacy service and staged adapter contain the only reviewed callsites.
     """
-    allowed = {"services/daily_report_service.py"}
+    allowed = {"services/daily_report_service.py", "services/kakao_delivery_transport_adapter.py"}
     actual = set()
     for root in ("services", "scripts", "web", "ui"):
         for path in Path(root).rglob("*.py"):
