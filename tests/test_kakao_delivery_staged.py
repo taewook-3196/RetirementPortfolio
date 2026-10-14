@@ -128,3 +128,51 @@ def test_staged_completion_failure_never_claims_success(monkeypatch, finish_mode
     assert events == ["claim", "transport", "finish"]
     assert result.outcome == SendOutcome.UNCERTAIN
     assert result.needs_reconciliation is True
+
+
+@pytest.mark.parametrize("env", [
+    {"KAKAO_DELIVERY_STATE_ENABLED": "true"},
+    {"KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    {"KAKAO_DELIVERY_STATE_ENABLED": "TRUE", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true "},
+])
+def test_staged_partial_or_malformed_flags_never_touch_database(monkeypatch, env):
+    class ForbiddenStore:
+        def __init__(self, engine):
+            pytest.fail("partial rollout initialized the database adapter")
+
+    monkeypatch.setattr("services.kakao_delivery_staged.PostgresDeliveryAttempts", ForbiddenStore)
+    result = run_staged_delivery(
+        engine=None, user_id=uuid4(), report_date=date(2026, 10, 14),
+        transport=lambda: pytest.fail("partial rollout called Kakao transport"), env=env,
+    )
+    assert result.outcome == SendOutcome.DISABLED
+
+
+@pytest.mark.parametrize("response", [None, False, "success", (True,), (1, "accepted"), (True, "ok", "extra")])
+def test_staged_malformed_transport_response_is_uncertain(monkeypatch, response):
+    events = []
+
+    class FakeStore:
+        def __init__(self, engine):
+            pass
+
+        def claim(self, attempt):
+            events.append("claim")
+            return 42
+
+        def finish_sent_with_legacy(self, attempt):
+            pytest.fail("malformed response must never be marked sent")
+
+        def finish(self, attempt, status):
+            events.append(status)
+            return True
+
+    monkeypatch.setattr("services.kakao_delivery_staged.PostgresDeliveryAttempts", FakeStore)
+    result = run_staged_delivery(
+        engine=None, user_id=uuid4(), report_date=date(2026, 10, 14),
+        transport=lambda: events.append("transport") or response, env=ON,
+    )
+    assert events == ["claim", "transport", "uncertain"]
+    assert result.outcome == SendOutcome.UNCERTAIN
+    assert result.needs_reconciliation is True
