@@ -102,3 +102,40 @@ def test_invalid_intent_inputs_never_authorize_send(field, invalid):
     )
     args[field] = invalid
     assert resolve_report_intent(**args).action == ReportAction.SKIP
+
+
+def test_claim_attempt_intent_cannot_bypass_durable_gateway(monkeypatch):
+    """Policy eligibility must not become direct permission to send Kakao."""
+    from datetime import date
+    from uuid import uuid4
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    intent = resolve_report_intent(
+        force_regenerate=True, kakao_enabled=True, existing_report=True,
+        legacy_sent=False, delivery_claim_available=True,
+    )
+    assert intent.action == ReportAction.GENERATE_AND_ATTEMPT_CLAIM
+
+    class DeniedClaim:
+        def __init__(self, engine):
+            pass
+
+        def claim(self, attempt):
+            return None
+
+        def finish(self, attempt, status):
+            pytest.fail("denied claim must never be finalized")
+
+        def finish_sent_with_legacy(self, attempt):
+            pytest.fail("denied claim must never be finalized")
+
+    monkeypatch.setattr(
+        "services.kakao_delivery_staged.PostgresDeliveryAttempts", DeniedClaim
+    )
+    result = run_staged_delivery(
+        engine=None, user_id=uuid4(), report_date=date(2026, 10, 14),
+        transport=lambda: pytest.fail("policy eligibility bypassed database claim"),
+        env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
