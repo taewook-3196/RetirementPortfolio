@@ -206,3 +206,48 @@ def test_malformed_kakao_service_never_claims_or_sends(missing_method):
             )
     staged.assert_not_called()
     assert fake.calls == []
+
+
+def test_transport_exception_after_claim_is_uncertain_and_not_retried():
+    fake = FakeKakaoService()
+    calls = []
+
+    def lost_response(*args):
+        calls.append(args)
+        raise TimeoutError("response lost after dispatch")
+
+    fake.send_morning_report = lost_response
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    with patch("services.kakao_delivery_staged.PostgresDeliveryAttempts") as store_class:
+        store = store_class.return_value
+        store.claim.return_value = uuid4()
+        store.finish.return_value = True
+        result = send_staged_morning_report(
+            engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
+            kakao_service=fake, summary_text="report",
+            report_web_url="https://example.com", env=env,
+        )
+        store.claim.assert_called_once()
+        store.finish.assert_called_once()
+        assert store.finish.call_args.args[1] == "uncertain"
+        store.finish_sent_with_legacy.assert_not_called()
+    assert result.outcome == SendOutcome.UNCERTAIN
+    assert result.needs_reconciliation is True
+    assert len(calls) == 1
+
+
+def test_claim_database_exception_never_reaches_kakao_service():
+    fake = FakeKakaoService()
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    with patch("services.kakao_delivery_staged.PostgresDeliveryAttempts") as store_class:
+        store = store_class.return_value
+        store.claim.side_effect = RuntimeError("database unavailable")
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            send_staged_morning_report(
+                engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
+                kakao_service=fake, summary_text="report",
+                report_web_url="https://example.com", env=env,
+            )
+        store.finish.assert_not_called()
+        store.finish_sent_with_legacy.assert_not_called()
+    assert fake.calls == []
