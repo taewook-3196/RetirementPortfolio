@@ -22,6 +22,14 @@ def test_recovery_audit_append_only_and_client_roles_denied(pg):
         conn.execute(text("""INSERT INTO public.kakao_delivery_recovery_audit
             (actor_id,target_user_id,attempt_id,reviewed_at,evidence_reference,decision,reason)
             VALUES (CAST(:u AS uuid),CAST(:u AS uuid),CAST(:a AS uuid),now(),'ticket-1','denied','not proven')"""), {"u": str(user), "a": str(attempt)})
+        other = uuid4()
+        conn.execute(text("INSERT INTO public.profiles(id) VALUES (:u)"), {"u": str(other)})
+        with conn.begin_nested():
+            with pytest.raises(Exception):
+                conn.execute(text("""INSERT INTO public.kakao_delivery_recovery_audit
+                    (actor_id,target_user_id,attempt_id,reviewed_at,evidence_reference,decision,reason)
+                    VALUES (CAST(:u AS uuid),CAST(:u AS uuid),CAST(:a AS uuid),now(),'ticket-2','denied','wrong owner')"""),
+                    {"u": str(other), "a": str(attempt)})
         for role in ("anon", "authenticated"):
             assert conn.execute(text("SELECT has_table_privilege(:r, 'public.kakao_delivery_recovery_audit', 'SELECT')"), {"r": role}).scalar_one() is False
             assert conn.execute(text("SELECT has_table_privilege(:r, 'public.kakao_delivery_recovery_audit', 'INSERT')"), {"r": role}).scalar_one() is False
