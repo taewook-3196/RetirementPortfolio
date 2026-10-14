@@ -348,29 +348,18 @@ class NewsService:
         if mode == "all":
             collected_economy_news = self.fetch_economy_rss(limit=15)
 
-        # 4. 피드 병합 및 중복 제거 (제목 앞 20글자 기준 유사 중복 방지)
+        # 4. 모든 출처에 동일한 24시간 기준을 먼저 적용합니다.
+        # 오래된 중복 기사가 최신 기사를 밀어내지 않도록 최신순 정렬 후 중복 제거합니다.
+        recent_items = filter_recent_news(
+            collected_stock_news + collected_constituent_news + collected_economy_news
+        )
         seen_titles = set()
         final_feed: List[Dict[str, Any]] = []
-
-        def add_unique(items: List[Dict[str, Any]]):
-            for it in items:
-                norm_title = re.sub(r"[\s\W_]+", "", it.get("title", ""))[:25]
-                if norm_title and norm_title not in seen_titles:
-                    seen_titles.add(norm_title)
-                    final_feed.append(it)
-
-        # 피드가 단조롭지 않도록 종목 뉴스 -> 구성종목 뉴스 -> 경제 속보를 교차 배치
-        max_len = max(len(collected_stock_news), len(collected_constituent_news), len(collected_economy_news), 1)
-        for i in range(max_len):
-            if i < len(collected_stock_news):
-                add_unique([collected_stock_news[i]])
-            if i < len(collected_constituent_news):
-                add_unique([collected_constituent_news[i]])
-            if i < len(collected_economy_news):
-                add_unique([collected_economy_news[i]])
-
-        # 5. 날짜가 확인된 최근 24시간 기사만 사용 (오래된 기사·무날짜 항목 제외)
-        final_feed = filter_recent_news(final_feed)
+        for item in recent_items:
+            norm_title = re.sub(r"[\\s\\W_]+", "", item.get("title", ""))[:25]
+            if norm_title and norm_title not in seen_titles:
+                seen_titles.add(norm_title)
+                final_feed.append(item)
 
         logger.info("뉴스 피드 생성 완료 (모드: %s, 총 %d건)", mode, len(final_feed))
         return final_feed
