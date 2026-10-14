@@ -10,7 +10,7 @@ from enum import Enum
 class ReportAction(str, Enum):
     SKIP = "skip"
     GENERATE_ONLY = "generate_only"
-    GENERATE_AND_SEND = "generate_and_send"
+    GENERATE_AND_ATTEMPT_CLAIM = "generate_and_attempt_claim"
 
 
 @dataclass(frozen=True)
@@ -24,7 +24,7 @@ def resolve_report_intent(*, force_regenerate: bool, kakao_enabled: bool,
                           delivery_claim_available: bool) -> ReportIntent:
     """Never turn a forced regeneration into implicit retransmission.
 
-    delivery_claim_available is only a caller-provided eligibility hint.
+    GENERATE_AND_ATTEMPT_CLAIM means policy eligibility, never send permission.\n    delivery_claim_available is only a caller-provided eligibility hint.
     It is NOT proof of a committed claim and MUST NOT authorize transport.
     Actual dispatch always requires the staged gateway to obtain its own
     authoritative PostgreSQL claim before invoking transport.
@@ -44,4 +44,4 @@ def resolve_report_intent(*, force_regenerate: bool, kakao_enabled: bool,
         return ReportIntent(ReportAction.GENERATE_ONLY, "legacy Kakao delivery already recorded")
     if not delivery_claim_available:
         return ReportIntent(ReportAction.GENERATE_ONLY, "no authoritative Kakao delivery claim")
-    return ReportIntent(ReportAction.GENERATE_AND_SEND, "eligible for separately claimed delivery; no claim acquired")
+    return ReportIntent(ReportAction.GENERATE_AND_ATTEMPT_CLAIM, "eligible to attempt a separate durable claim; no claim acquired")
