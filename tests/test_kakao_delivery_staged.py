@@ -77,3 +77,54 @@ def test_staged_gateway_claims_before_transport_and_finishes(monkeypatch, respon
     )
     assert events == ["claim", "transport", "sent" if response[0] else "uncertain"]
     assert result.outcome == (SendOutcome.SENT if response[0] else SendOutcome.UNCERTAIN)
+
+
+def test_staged_claim_database_exception_never_invokes_transport(monkeypatch):
+    class BrokenStore:
+        def __init__(self, engine):
+            pass
+
+        def claim(self, attempt):
+            raise RuntimeError("database connection lost before committed claim")
+
+    monkeypatch.setattr("services.kakao_delivery_staged.PostgresDeliveryAttempts", BrokenStore)
+    with pytest.raises(RuntimeError, match="database connection lost"):
+        run_staged_delivery(
+            engine=None, user_id=uuid4(), report_date=date(2026, 10, 14),
+            transport=lambda: pytest.fail("Kakao transport called without committed claim"),
+            env=ON,
+        )
+
+
+@pytest.mark.parametrize("finish_mode", ["exception", "false"])
+def test_staged_completion_failure_never_claims_success(monkeypatch, finish_mode):
+    events = []
+
+    class BrokenCompletionStore:
+        def __init__(self, engine):
+            pass
+
+        def claim(self, attempt):
+            events.append("claim")
+            return 42
+
+        def finish_sent_with_legacy(self, attempt):
+            events.append("finish")
+            if finish_mode == "exception":
+                raise RuntimeError("commit outcome unknown")
+            return False
+
+        def finish(self, attempt, status):
+            pytest.fail("success must use atomic legacy completion")
+
+    monkeypatch.setattr(
+        "services.kakao_delivery_staged.PostgresDeliveryAttempts", BrokenCompletionStore
+    )
+    result = run_staged_delivery(
+        engine=None, user_id=uuid4(), report_date=date(2026, 10, 14),
+        transport=lambda: events.append("transport") or (True, "accepted"),
+        env=ON,
+    )
+    assert events == ["claim", "transport", "finish"]
+    assert result.outcome == SendOutcome.UNCERTAIN
+    assert result.needs_reconciliation is True
