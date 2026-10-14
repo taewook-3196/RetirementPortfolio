@@ -45,7 +45,7 @@ const core = {info: () => {}};
 (async () => {
   const dateKey = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date());
+  }).format(new FixedDate());
   const weekday = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Seoul', weekday: 'short',
   }).format(new Date());
@@ -59,12 +59,12 @@ const core = {info: () => {}};
     process.stdout.write('Skipped: test only runs after cutoff on KST Tue-Sat\n');
     return;
   }
-  await execute(context, github, core);
+  await execute(context, github, core, FixedDate);
   assert.equal(issues.length, 1, 'missing schedule creates issue');
   await execute(context, github, core);
   assert.equal(issues.length, 1, 'repeat check does not duplicate issue');
   assert.equal(comments.length, 0);
-  runs.push({created_at: new Date().toISOString(), event: 'schedule',
+  runs.push({created_at: new FixedDate().toISOString(), event: 'schedule',
     html_url: 'https://github.com/example/repo/actions/runs/1'});
   await execute(context, github, core);
   assert.equal(issues[0].state, 'closed', 'scheduled run closes alert');
