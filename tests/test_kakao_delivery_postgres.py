@@ -753,3 +753,42 @@ def test_concurrent_staged_gateways_never_redeliver_after_uncertain_first_send(p
             text("SELECT status FROM public.kakao_delivery_attempts WHERE user_id = :u"),
             {"u": user_id},
         ).scalar_one() in ("uncertain", "sending")
+
+
+def test_concurrent_staged_senders_invoke_only_one_mock_transport(pg):
+    """Concurrent callers must rely on PostgreSQL, not process-local locks."""
+    from datetime import date
+    from threading import Lock
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), DATE '2026-10-12')"), {"u": str(user_id)})
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    lock = Lock()
+    sent = []
+
+    def worker(index):
+        def mock_transport():
+            with lock:
+                sent.append(index)
+            return True, "mock"
+        return run_staged_delivery(
+            engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+            transport=mock_transport, env=env,
+        )
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(worker, range(4)))
+    assert [result.outcome for result in results].count(SendOutcome.SENT) == 1
+    assert [result.outcome for result in results].count(SendOutcome.NOT_CLAIMED) == 3
+    assert len(sent) == 1
+    with pg.connect() as conn:
+        assert conn.execute(text(
+            "SELECT count(*) FROM public.kakao_delivery_attempts WHERE user_id = CAST(:u AS uuid)"
+        ), {"u": str(user_id)}).scalar_one() == 1
+        assert conn.execute(text(
+            "SELECT kakao_sent_at FROM public.morning_reports WHERE user_id = CAST(:u AS uuid)"
+        ), {"u": str(user_id)}).scalar_one() is not None
