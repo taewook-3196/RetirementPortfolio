@@ -48,3 +48,26 @@ def test_pre_send_failure_requires_operator_review_before_new_claim(origin):
     )
     assert result.allowed is False
     assert result.reason == "pre-send failure requires reviewed recovery"
+
+
+@pytest.mark.parametrize("field, invalid", [
+    ("legacy_sent", None), ("legacy_sent", "false"), ("legacy_sent", 0),
+    ("force", None), ("force", "true"), ("force", 1),
+    ("attempt_state", False), ("attempt_state", 0), ("attempt_state", []),
+])
+@pytest.mark.parametrize("origin", list(DeliveryOrigin))
+def test_unknown_delivery_state_fails_closed_for_every_origin(origin, field, invalid):
+    args = dict(origin=origin, legacy_sent=False, attempt_state=None, force=False)
+    args[field] = invalid
+    result = check_delivery_eligibility(**args)
+    assert result.allowed is False
+    assert result.reason == "invalid or unknown delivery state"
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_cached_origin_never_bypasses_prior_attempt(force):
+    result = check_delivery_eligibility(
+        origin=DeliveryOrigin.CACHED, legacy_sent=False,
+        attempt_state="uncertain", force=force,
+    )
+    assert result.allowed is False
