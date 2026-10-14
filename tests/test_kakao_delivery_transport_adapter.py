@@ -41,17 +41,19 @@ def test_adapter_passes_existing_kakao_arguments_only_after_durable_claim():
 
 def test_adapter_does_not_send_when_staged_claim_is_denied():
     fake = FakeKakaoService()
-
-    def staged(**kwargs):
-        return SendOutcome.NOT_CLAIMED
-
-    with patch("services.kakao_delivery_transport_adapter.run_staged_delivery", side_effect=staged):
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    with patch("services.kakao_delivery_staged.PostgresDeliveryAttempts") as store_class:
+        store = store_class.return_value
+        store.claim.return_value = None
         result = send_staged_morning_report(
             engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
             kakao_service=fake, summary_text="test", report_web_url="https://example.com",
-            env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+            env=env,
         )
-    assert result == SendOutcome.NOT_CLAIMED
+        store.claim.assert_called_once()
+        store.finish.assert_not_called()
+        store.finish_sent_with_legacy.assert_not_called()
+    assert result.outcome == SendOutcome.NOT_CLAIMED
     assert fake.calls == []
 
 
