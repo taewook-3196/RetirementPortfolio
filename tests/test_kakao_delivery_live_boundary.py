@@ -66,3 +66,18 @@ def test_live_boundary_inventory_is_explicit_about_manual_and_scheduled_paths():
         source = path.read_text(encoding="utf-8")
         assert "run_staged_delivery(" not in source
         assert "send_with_delivery_claim(" not in source
+
+
+def test_cached_kakao_sender_is_tracked_as_separate_cutover_path():
+    """The cached-payload path also sends Kakao and must not be missed at cutover."""
+    source = Path("services/daily_report_service.py").read_text(encoding="utf-8")
+    cached = source.split("    def send_cached_kakao(", 1)
+    assert len(cached) == 2, "cached Kakao entrypoint was moved or removed"
+    body = cached[1].split("\\ndef run_daily_report_cli(", 1)[0]
+    assert "self.kakao_service.send_morning_report(" in body
+    assert "run_staged_delivery(" not in body
+
+
+def test_cutover_acceptance_document_tracks_cached_sender():
+    document = Path("docs/kakao_delivery_cutover_acceptance.md").read_text(encoding="utf-8")
+    assert "send_cached_kakao" in document
