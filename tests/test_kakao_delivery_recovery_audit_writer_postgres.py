@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from services.kakao_delivery_recovery_audit import RecoveryAuditRecord
 from services.kakao_delivery_recovery_audit_writer import (
@@ -48,7 +49,8 @@ def test_audit_writer_commit_and_rejected_write_rollback(pg):
     def submit(_):
         try:
             return append_recovery_audit(pg, record=make_record(), authenticated_admin_id=user)
-        except Exception:
+        except IntegrityError as exc:
+            assert getattr(exc.orig, 'sqlstate', None) == '23505'
             return None
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -58,7 +60,7 @@ def test_audit_writer_commit_and_rejected_write_rollback(pg):
     assert isinstance(audit_id, int) and audit_id > 0
     # Duplicate requests are rejected by the DB unique index, not by a
     # race-prone read-before-insert check.
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         append_recovery_audit(pg, record=make_record(), authenticated_admin_id=user)
     with pg.begin() as conn:
         assert conn.execute(text("""SELECT count(*) FROM
