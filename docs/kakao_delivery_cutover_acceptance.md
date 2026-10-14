@@ -231,3 +231,20 @@ This section is a **future runbook**, not permission to execute any step.
 retries, cached transport without marker completion, all sender entrypoints,
 migration compatibility, and lack of trusted recovery evidence. Passing the
 current staged CI suite does not waive any of these blockers.
+
+
+## Additional CLI entrypoint review (2026-10-14)
+
+Source inspection confirms `run_daily_report_cli()` has two distinct dispatch
+routes: `--send-kakao-only` invokes `send_cached_kakao()`, while the default
+CLI invocation calls `generate_and_send(send_kakao=True, force_kakao=True)`.
+Neither currently uses the staged claim gateway. The latter's force argument
+is not evidence of an approved recovery or a durable send claim.
+
+The scheduled multi-user worker calls `generate_and_send` with
+`force_kakao=send_kakao` and has its own `force` override. Therefore
+a cutover that updates only the scheduler or only the primary
+`generate_and_send` call is incomplete. Before activating the new sender,
+route **both CLI branches and the cached path** through the same durable
+claim, and disable the legacy direct calls atomically. Do not enable the
+two rollout flags while any direct legacy transport remains reachable.
