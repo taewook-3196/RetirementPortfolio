@@ -7,11 +7,17 @@ caller and the trusted database connection; never accept client role flags.
 from uuid import UUID
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from services.kakao_delivery_recovery_audit import RecoveryAuditRecord
 
 
 class RecoveryAuditWriteForbidden(PermissionError):
+    pass
+
+
+class RecoveryAuditDuplicate(ValueError):
+    """This evidence and decision have already been recorded."""
     pass
 
 
@@ -30,6 +36,17 @@ def append_recovery_audit(engine, *, record: RecoveryAuditRecord,
 
     # Lock the attempt row so status and legacy marker are checked together
     # with the append. A missing row or conflicting marker fails closed.
+    try:
+        return _append_recovery_audit_transaction(engine, record)
+    except IntegrityError as exc:
+        if getattr(exc.orig, "sqlstate", None) == "23505" and getattr(
+            getattr(exc.orig, "diag", None), "constraint_name", None
+        ) == "kakao_delivery_recovery_audit_dedupe_idx":
+            raise RecoveryAuditDuplicate("review evidence already recorded") from exc
+        raise
+
+
+def _append_recovery_audit_transaction(engine, record):
     with engine.begin() as conn:
         row = conn.execute(text("""
             SELECT a.status, r.kakao_sent_at
