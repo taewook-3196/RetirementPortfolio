@@ -843,3 +843,56 @@ def test_claim_without_persisted_report_never_dispatches(pg):
         assert conn.execute(text(
             "SELECT count(*) FROM public.kakao_delivery_attempts WHERE user_id = CAST(:u AS uuid)"
         ), {"u": str(user_id)}).scalar_one() == 0
+
+
+@pytest.mark.parametrize("origin_name", ["scheduled", "manual", "cli", "cached"])
+def test_shared_origin_gateway_uses_real_postgres_claim(pg, origin_name):
+    """The shared facade must not bypass PostgreSQL for any send origin."""
+    from datetime import date
+    from services.kakao_delivery_eligibility import DeliveryOrigin
+    from services.kakao_delivery_origin_gateway import send_staged_for_origin
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text(
+            "INSERT INTO public.morning_reports (user_id, report_date) "
+            "VALUES (CAST(:u AS uuid), DATE '2026-10-12')"
+        ), {"u": str(user_id)})
+
+    class MockKakao:
+        def __init__(self):
+            self.calls = 0
+
+        def is_configured(self):
+            return True
+
+        def send_morning_report(self, summary, url):
+            self.calls += 1
+            return True, "mocked"
+
+    service = MockKakao()
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    args = dict(
+        origin=DeliveryOrigin(origin_name), engine=pg, user_id=user_id,
+        report_date=date(2026, 10, 12), kakao_service=service,
+        summary_text="test summary", report_web_url="https://example.com",
+        legacy_sent=False, attempt_state=None, force=True, env=env,
+    )
+    first = send_staged_for_origin(**args)
+    assert first.outcome == SendOutcome.SENT
+    assert service.calls == 1
+    # Even stale caller hints cannot override the committed database state.
+    second = send_staged_for_origin(**args)
+    assert second.outcome == SendOutcome.NOT_CLAIMED
+    assert service.calls == 1
+    with pg.connect() as conn:
+        assert conn.execute(text(
+            "SELECT count(*) FROM public.kakao_delivery_attempts "
+            "WHERE user_id = CAST(:u AS uuid) AND status = 'sent'"
+        ), {"u": str(user_id)}).scalar_one() == 1
+        assert conn.execute(text(
+            "SELECT kakao_sent_at FROM public.morning_reports "
+            "WHERE user_id = CAST(:u AS uuid)"
+        ), {"u": str(user_id)}).scalar_one() is not None
