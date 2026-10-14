@@ -151,3 +151,33 @@ def test_untrusted_caller_hint_cannot_authorize_transport_when_claim_denied(monk
         legacy_sent=False, attempt_state=None, force=True, env=ENABLED,
     )
     assert result.outcome == SendOutcome.NOT_CLAIMED
+
+
+@pytest.mark.parametrize("url", [
+    "https://localhost/report",
+    "https://localhost.localdomain/report",
+    "https://app.localhost/report",
+    "https://127.0.0.1/report",
+    "https://[::1]/report",
+    "https://0.0.0.0/report",
+    "https://user:password@example.com/report",
+    "https://example.com/report#fragment",
+    "https://example.com:invalid/report",
+    "https://example.com/with space",
+    "https://example.com/with\\nnewline",
+    "https:///missing-host",
+    "HTTPS://example.com/report",
+])
+def test_unsafe_report_url_fails_before_adapter(monkeypatch, url):
+    adapter = Mock()
+    monkeypatch.setattr(
+        "services.kakao_delivery_origin_gateway.send_staged_morning_report", adapter
+    )
+    result = send_staged_for_origin(
+        origin=DeliveryOrigin.CLI, engine=object(), user_id=uuid4(),
+        report_date=date(2026, 10, 14), kakao_service=object(),
+        summary_text="summary", report_web_url=url,
+        legacy_sent=False, attempt_state=None, env=ENABLED,
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
+    adapter.assert_not_called()
