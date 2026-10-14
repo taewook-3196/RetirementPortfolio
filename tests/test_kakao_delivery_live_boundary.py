@@ -52,3 +52,17 @@ def test_staged_modules_do_not_import_live_report_sender():
         assert "from services.daily_report_service import" not in source
         assert "import services.daily_report_service" not in source
         assert "from scripts.run_multi_user_morning_reports import" not in source
+
+
+def test_live_boundary_inventory_is_explicit_about_manual_and_scheduled_paths():
+    """Keep an auditable inventory so a new caller cannot be overlooked."""
+    entrypoints = {
+        "scheduled": Path("scripts/run_multi_user_morning_reports.py"),
+        "report_service": Path("services/daily_report_service.py"),
+        "settings": Path("ui/settings_page.py"),
+    }
+    for name, path in entrypoints.items():
+        assert path.is_file(), f"missing {name} entrypoint: {path}"
+        source = path.read_text(encoding="utf-8")
+        assert "run_staged_delivery(" not in source
+        assert "send_with_delivery_claim(" not in source
