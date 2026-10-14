@@ -48,3 +48,34 @@ including pre-send failures. The partial unique index alone is insufficient.
 **Current implementation deliberately provides no recovery write endpoint.**
 Manual recovery remains blocked until audited approval, DB locking, access
 control, and tests are implemented and reviewed.
+
+
+## Evidence standard for any future positive recovery finding
+
+A database status of `failed_before_send` describes the application's
+classification, **not** independently verified proof that no HTTP request
+left the process. A process crash can occur after network transmission and
+before a durable success marker is written. In that case, retrying could
+deliver a duplicate Kakao message.
+
+- An operator's `request_never_started=True` assertion, free-text reason,
+  ticket number, absence of logs, expired lease, timeout, or a local
+  `failed_before_send` status is insufficient on its own.
+- A positive finding would require trustworthy, correlated evidence from
+  the actual transport boundary, tied to the attempt ID, user/date and
+  exact request lifecycle. The evidence must distinguish a failure before
+  dispatch from an ambiguous post-dispatch outcome, survive process crashes,
+  and be independently reviewable. Do not assume ordinary application logs
+  or provider receipts offer that guarantee.
+- If the transport cannot establish this boundary durably, keep the
+  attempt blocked and reconcile with the provider or recipient rather than
+  automatically retrying.
+- Current `append_recovery_audit` intentionally accepts only `denied`
+  records. A caller-supplied `RecoveryAuditRecord` or a pure
+  `assess_recovery_review` result is not a trusted evidence attestation.
+  No positive decision, new claim, or send is authorized.
+- Before changing that rule, require a separate security review, a
+  server-generated evidence attestation, transactional revalidation,
+  cross-user authorization tests, crash-window tests, and explicit operator
+  approval. Keep the production cutover flags disabled until all acceptance
+  gates are met.
