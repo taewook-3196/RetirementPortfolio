@@ -288,3 +288,15 @@ def test_commit_error_after_transport_never_causes_second_send():
     assert first.needs_reconciliation
     assert second.outcome == SendOutcome.NOT_CLAIMED
     assert calls == ["kakao"]
+
+
+@pytest.mark.parametrize("bad_claim", [0, "", (), [], {}])
+def test_non_authoritative_claim_values_must_not_trigger_transport(bad_claim):
+    """Only a real persisted claim identifier may authorize an external send."""
+    result = send_with_delivery_claim(
+        claim=lambda: bad_claim,
+        transport=lambda: pytest.fail("transport called without a valid claim"),
+        finish=lambda _: pytest.fail("finalized without a valid claim"),
+        env=ON,
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
