@@ -5,6 +5,7 @@ No API route calls this function. Requires a verified admin session from the
 caller and the trusted database connection; never accept client role flags.
 """
 from uuid import UUID
+from datetime import datetime, timezone
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -27,6 +28,10 @@ def append_recovery_audit(engine, *, record: RecoveryAuditRecord,
         raise RecoveryAuditWriteForbidden("verified admin and audit record required")
     if authenticated_admin_id != record.actor_id or record.actor_id != record.target_user_id:
         raise RecoveryAuditWriteForbidden("authenticated actor must own the review")
+    if not isinstance(record.reviewed_at, datetime) or record.reviewed_at.tzinfo is None or record.reviewed_at.utcoffset() is None:
+        raise RecoveryAuditWriteForbidden("timezone-aware review timestamp required")
+    if record.reviewed_at > datetime.now(timezone.utc):
+        raise RecoveryAuditWriteForbidden("future-dated review not allowed")
     if record.decision not in ("denied", "eligible_for_future_recovery"):
         raise RecoveryAuditWriteForbidden("invalid decision")
     if not isinstance(record.evidence_reference, str) or not 1 <= len(record.evidence_reference.strip()) <= 256:
