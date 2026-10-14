@@ -21,23 +21,22 @@ class FakeKakaoService:
         return True, "ok"
 
 
-def test_adapter_passes_existing_kakao_arguments_only_through_claimed_transport():
+def test_adapter_passes_existing_kakao_arguments_only_after_durable_claim():
     fake = FakeKakaoService()
-    captured = {}
-
-    def staged(**kwargs):
-        captured.update(kwargs)
-        return kwargs["transport"]()
-
-    with patch("services.kakao_delivery_transport_adapter.run_staged_delivery", side_effect=staged):
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    with patch("services.kakao_delivery_staged.PostgresDeliveryAttempts") as store_class:
+        store = store_class.return_value
+        store.claim.return_value = uuid4()
+        store.finish_sent_with_legacy.return_value = True
         result = send_staged_morning_report(
             engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
-            kakao_service=fake, summary_text="test summary", report_web_url="https://example.com/report",
-            env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+            kakao_service=fake, summary_text="test summary",
+            report_web_url="https://example.com/report", env=env,
         )
-    assert result == (True, "ok")
+        store.claim.assert_called_once()
+        store.finish_sent_with_legacy.assert_called_once()
+    assert result.outcome == SendOutcome.SENT
     assert fake.calls == [("test summary", "https://example.com/report")]
-    assert callable(captured["transport"])
 
 
 def test_adapter_does_not_send_when_staged_claim_is_denied():
