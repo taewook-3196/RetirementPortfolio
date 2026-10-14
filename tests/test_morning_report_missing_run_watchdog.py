@@ -35,3 +35,12 @@ def test_watchdog_issue_lifecycle():
     assert "github.rest.issues.update" in source
     assert "state: 'closed'" in source
     assert "Missing-run alert already exists for today" in source
+
+
+def test_manual_watchdog_defaults_to_safe_dry_run():
+    source = WATCHDOG.read_text(encoding="utf-8")
+    assert "      dry_run:" in source
+    assert "        default: true" in source
+    assert "context.eventName === 'workflow_dispatch'" in source
+    assert "if (dryRun)" in source
+    assert "DRY RUN: GitHub Issues will not be modified" in source
