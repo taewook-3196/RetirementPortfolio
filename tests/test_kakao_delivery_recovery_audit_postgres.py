@@ -4,6 +4,9 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
+import os
+
+pytestmark = pytest.mark.skipif(not os.getenv("KAKAO_DELIVERY_TEST_DSN"), reason="Disposable PostgreSQL DSN not configured")
 
 from tests.test_kakao_delivery_postgres import pg  # same guarded disposable fixture
 
