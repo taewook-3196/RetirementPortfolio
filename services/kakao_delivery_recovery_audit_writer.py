@@ -39,7 +39,7 @@ def append_recovery_audit(engine, *, record: RecoveryAuditRecord,
     try:
         return _append_recovery_audit_transaction(engine, record)
     except IntegrityError as exc:
-        if getattr(exc.orig, "sqlstate", None) == "23505" and getattr(
+        if (getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)) == "23505" and getattr(
             getattr(exc.orig, "diag", None), "constraint_name", None
         ) == "kakao_delivery_recovery_audit_dedupe_idx":
             raise RecoveryAuditDuplicate("review evidence already recorded") from exc
