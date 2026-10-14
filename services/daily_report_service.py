@@ -1706,17 +1706,30 @@ class DailyReportService:
                                 logger.warning(
                                     "카카오 발송 성공 후 완료 기록 실패 (%d/3): %s",
                                     attempt + 1,
-                                    exc,
+                                    type(exc).__name__,
                                 )
                             if attempt < 2:
                                 time.sleep(1)
 
                         if not delivery_recorded:
+                            # A DB commit may succeed even when the caller sees
+                            # a connection error. Re-read before declaring the
+                            # delivery record missing and risking a retry.
+                            try:
+                                persisted = self.repo.get_morning_report_for_date(report_date)
+                                delivery_recorded = bool(
+                                    persisted is not None
+                                    and getattr(persisted, "kakao_sent_at", None) is not None
+                                )
+                            except Exception as exc:
+                                logger.warning(
+                                    "카카오 발송 기록 재조회 실패: %s", type(exc).__name__
+                                )
+                        if not delivery_recorded:
                             logger.error(
                                 "카카오 메시지는 전송됐지만 완료 기록을 저장하지 못했습니다. "
-                                "다음 스케줄에서 중복 발송될 수 있습니다. user_id=%s error=%s",
-                                self.repo.user_id,
-                                last_record_error,
+                                "다음 스케줄에서 중복 발송될 수 있습니다. error_type=%s",
+                                type(last_record_error).__name__ if last_record_error else "Unknown",
                             )
                             return (
                                 False,
@@ -1731,7 +1744,7 @@ class DailyReportService:
             return True, f"모닝 리포트가 성공적으로 준비되었습니다. ({kakao_status})", html_file
 
         except Exception as e:
-            logger.exception("모닝 리포트 생성 및 발송 실패")
+            logger.error("모닝 리포트 생성 및 발송 실패: %s", type(e).__name__)
             return False, f"오류 발생: {str(e)}", None
 
     def _build_kakao_summary_text(
