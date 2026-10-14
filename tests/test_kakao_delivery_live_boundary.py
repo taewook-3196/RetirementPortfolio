@@ -73,7 +73,7 @@ def test_cached_kakao_sender_is_tracked_as_separate_cutover_path():
     source = Path("services/daily_report_service.py").read_text(encoding="utf-8")
     cached = source.split("    def send_cached_kakao(", 1)
     assert len(cached) == 2, "cached Kakao entrypoint was moved or removed"
-    body = cached[1].split("\\ndef run_daily_report_cli(", 1)[0]
+    body = cached[1].split("def run_daily_report_cli(", 1)[0]
     assert "self.kakao_service.send_morning_report(" in body
     assert "run_staged_delivery(" not in body
 
