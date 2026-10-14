@@ -822,3 +822,24 @@ def test_real_database_legacy_marker_blocks_forced_staged_attempt(pg):
         assert conn.execute(text(
             "SELECT count(*) FROM public.kakao_delivery_attempts WHERE user_id = CAST(:u AS uuid)"
         ), {"u": str(user_id)}).scalar_one() == 0
+
+
+def test_claim_without_persisted_report_never_dispatches(pg):
+    """A durable report row is a prerequisite even with both flags enabled."""
+    from datetime import date
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+    result = run_staged_delivery(
+        engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+        transport=lambda: pytest.fail("missing report must not dispatch"),
+        env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
+    with pg.connect() as conn:
+        assert conn.execute(text(
+            "SELECT count(*) FROM public.kakao_delivery_attempts WHERE user_id = CAST(:u AS uuid)"
+        ), {"u": str(user_id)}).scalar_one() == 0
