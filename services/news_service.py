@@ -17,6 +17,9 @@ import re
 import html
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger("RetirementPortfolio.NewsService")
 
@@ -43,6 +46,70 @@ ETF_CONSTITUENTS_MAP: Dict[str, Dict[str, Any]] = {
         "keywords": ["삼성전자", "SK하이닉스", "코스피"],
     },
 }
+
+
+
+SEOUL = ZoneInfo("Asia/Seoul")
+NEWS_MAX_AGE = timedelta(hours=24)
+
+
+def parse_news_published_at(value: Any) -> Optional[datetime]:
+    """Return an aware datetime; reject absent or unrecognizable timestamps."""
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        try:
+            stamp = float(value)
+            parsed = datetime.fromtimestamp(
+                stamp / 1000 if abs(stamp) >= 1e11 else stamp,
+                tz=timezone.utc,
+            )
+        except (OverflowError, OSError, ValueError):
+            return None
+    elif isinstance(value, str) and value.strip():
+        raw = value.strip()
+        parsed = None
+        if raw.isdigit() and len(raw) in (10, 13):
+            return parse_news_published_at(int(raw))
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                parsed = parsedate_to_datetime(raw)
+            except (TypeError, ValueError, IndexError):
+                for fmt in ("%Y.%m.%d %H:%M", "%Y.%m.%d %H:%M:%S",
+                            "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S",
+                            "%Y%m%d%H%M%S"):
+                    try:
+                        parsed = datetime.strptime(raw, fmt)
+                        break
+                    except ValueError:
+                        continue
+        if parsed is None:
+            return None
+    else:
+        return None
+    # Naver stock-news local timestamps have no offset; interpret as KST.
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=SEOUL)
+    return parsed.astimezone(timezone.utc)
+
+
+def filter_recent_news(
+    items: List[Dict[str, Any]], now: Optional[datetime] = None
+) -> List[Dict[str, Any]]:
+    """Keep only articles published within the last 24 hours, newest first."""
+    reference = now or datetime.now(timezone.utc)
+    if reference.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    reference = reference.astimezone(timezone.utc)
+    recent = []
+    for item in items:
+        published = parse_news_published_at(item.get("datetime"))
+        if published is not None and reference - NEWS_MAX_AGE <= published <= reference:
+            recent.append((published, item))
+    recent.sort(key=lambda pair: pair[0], reverse=True)
+    return [item for _, item in recent]
 
 
 class NewsService:
@@ -302,26 +369,8 @@ class NewsService:
             if i < len(collected_economy_news):
                 add_unique([collected_economy_news[i]])
 
-        # 5. 폴백 (네트워크 미연결 등으로 비어있을 경우 대비)
-        if not final_feed:
-            final_feed = [
-                {
-                    "tag": "금융속보",
-                    "title": "퇴직연금 ETF 포트폴리오를 통한 기계적 분할 매수로 장기 복리 수익을 추구하세요.",
-                    "press": "자산관리시스템",
-                    "datetime": "",
-                    "link": "https://finance.naver.com",
-                    "category": "info",
-                },
-                {
-                    "tag": "미국빅테크",
-                    "title": "글로벌 AI 반도체 및 주요 빅테크 기업들의 실적과 성장 모멘텀이 이어지고 있습니다.",
-                    "press": "글로벌증시",
-                    "datetime": "",
-                    "link": "https://finance.naver.com",
-                    "category": "info",
-                },
-            ]
+        # 5. 날짜가 확인된 최근 24시간 기사만 사용 (오래된 기사·무날짜 항목 제외)
+        final_feed = filter_recent_news(final_feed)
 
         logger.info("뉴스 피드 생성 완료 (모드: %s, 총 %d건)", mode, len(final_feed))
         return final_feed
