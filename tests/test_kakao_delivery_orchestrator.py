@@ -85,7 +85,7 @@ def test_missing_or_malformed_success_is_uncertain(response):
     assert states == ["uncertain"]
 
 
-@pytest.mark.parametrize("origin", ["scheduled", "manual", "cli"])
+@pytest.mark.parametrize("origin", ["scheduled", "manual", "cli", "cached"])
 def test_every_entry_origin_requires_claim_before_transport(origin):
     events = []
     def claim():
