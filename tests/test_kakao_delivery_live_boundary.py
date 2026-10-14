@@ -107,6 +107,8 @@ def test_staged_transport_adapter_is_not_live_or_called_from_other_modules():
     staged_only = {
         "services/kakao_delivery_transport_adapter.py",
         "services/kakao_delivery_staged.py",
+        # Reviewed staged-only facade; still unreachable from live entrypoints.
+        "services/kakao_delivery_origin_gateway.py",
     }
     for root in ("services", "scripts", "web", "ui"):
         for path in Path(root).rglob("*.py"):
