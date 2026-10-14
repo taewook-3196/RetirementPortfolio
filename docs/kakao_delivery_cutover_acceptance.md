@@ -131,3 +131,41 @@ is not wired to production. Do not enable either cutover flag yet.
   and report regeneration must not imply Kakao retransmission. This
   requires a separate product/operations decision, not an automatic
   production behavior change in this draft PR.
+
+
+## Pre-cutover acceptance matrix (2026-10-14)
+
+| Gate | Current evidence | Status |
+| --- | --- | --- |
+| Fail-closed feature flags | Unit tests reject missing, partial, malformed flags before DB adapter initialization | TESTED (staged) |
+| Single durable claim | PostgreSQL concurrent four-worker mock transport test | TESTED (staged) |
+| Ambiguous provider outcome | PostgreSQL concurrent timeout, negative response and missing legacy-row completion tests | TESTED (staged) |
+| Legacy sent marker | PostgreSQL adapter and SQL-function rejection tests | TESTED (staged) |
+| Atomic success markers | PostgreSQL `finish_kakao_delivery_with_legacy` tests | TESTED (staged) |
+| Per-user isolation / RLS | Disposable PostgreSQL permission and cross-user tests | TESTED (staged) |
+| Regeneration separate from retransmission | Pure staged intent policy and boolean matrix tests | TESTED (policy only) |
+| Full live entrypoint inventory and unified gateway | Production `DailyReportService` and CLI still use legacy transport | BLOCKED |
+| Production-compatible migration rehearsal | Disposable PostgreSQL CI exists; production schema compatibility and deployment/rollback rehearsal unverified | BLOCKED |
+| Safe manual force-resend semantics | Workflow currently exposes `force_resend`; no staged integration | BLOCKED |
+| Trusted positive recovery evidence | Writer deliberately denies positive recovery; no trusted dispatch attestation | BLOCKED |
+| Controlled staging E2E, rollback and operator approval | Not performed; no live send authorized | BLOCKED |
+
+**Decision:** remain draft and keep both cutover flags disabled. A green CI
+run only validates staged contracts against test fixtures, not the safety
+of the still-active legacy senders.
+
+### Next engineering sequence (no production effects)
+
+1. Identify every direct call to `send_morning_report` and all web/admin,
+   scheduled, manual, CLI and cached entrypoints. Add source-level guard
+   tests to prevent accidentally omitting a sender during cutover.
+2. Implement a trusted backend-only shared delivery adapter behind the
+   two exact opt-in flags; replace legacy transport only as one complete,
+   separately reviewed cutover change, never a partially migrated path.
+3. Make manual regeneration a report-only operation by default. Require a
+   separate, reviewed action for Kakao retransmission; a `force` boolean
+   must never authorize delivery.
+4. Rehearse schema migration and rollback on a disposable DB mirroring
+   the production schema; verify cross-version lockout and crash windows.
+5. Review runbooks and security, then request explicit approval before
+   any production migration, rollout flag or real Kakao send.
