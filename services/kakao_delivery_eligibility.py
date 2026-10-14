@@ -12,6 +12,7 @@ class DeliveryOrigin(str, Enum):
     SCHEDULED = "scheduled"
     MANUAL = "manual"
     CLI = "cli"
+    CACHED = "cached"
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,10 @@ def check_delivery_eligibility(*, origin: DeliveryOrigin, legacy_sent: bool,
     """
     if not isinstance(origin, DeliveryOrigin):
         return Eligibility(False, "unknown delivery origin")
+    if type(legacy_sent) is not bool or type(force) is not bool:
+        return Eligibility(False, "invalid or unknown delivery state")
+    if attempt_state is not None and type(attempt_state) is not str:
+        return Eligibility(False, "invalid or unknown delivery state")
     if legacy_sent:
         return Eligibility(False, "legacy delivery already recorded")
     if attempt_state is None:
