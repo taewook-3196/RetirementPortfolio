@@ -238,3 +238,53 @@ def test_claim_database_exception_prevents_any_transport_call(origin):
             env=gate,
         )
     assert events == [(origin, "claim")]
+
+
+@pytest.mark.parametrize("response", [(True, "ok"), (False, "timeout"), None])
+def test_two_invocations_with_shared_atomic_claim_never_double_send(response):
+    """A deterministic shared-claim contract, not a substitute for PostgreSQL concurrency tests."""
+    claimed = False
+    calls = []
+
+    def claim():
+        nonlocal claimed
+        if claimed:
+            return None
+        claimed = True
+        return 101
+
+    def transport():
+        calls.append("kakao")
+        return response
+
+    first = send_with_delivery_claim(claim=claim, transport=transport, finish=lambda _: True, env=ON)
+    second = send_with_delivery_claim(claim=claim, transport=transport, finish=lambda _: True, env=ON)
+    assert first.outcome in (SendOutcome.SENT, SendOutcome.UNCERTAIN)
+    assert second.outcome == SendOutcome.NOT_CLAIMED
+    assert calls == ["kakao"]
+
+
+def test_commit_error_after_transport_never_causes_second_send():
+    claimed = False
+    calls = []
+
+    def claim():
+        nonlocal claimed
+        if claimed:
+            return None
+        claimed = True
+        return 101
+
+    def transport():
+        calls.append("kakao")
+        return (True, "accepted")
+
+    def finish(_):
+        raise ConnectionError("commit acknowledgement lost")
+
+    first = send_with_delivery_claim(claim=claim, transport=transport, finish=finish, env=ON)
+    second = send_with_delivery_claim(claim=claim, transport=transport, finish=finish, env=ON)
+    assert first.outcome == SendOutcome.UNCERTAIN
+    assert first.needs_reconciliation
+    assert second.outcome == SendOutcome.NOT_CLAIMED
+    assert calls == ["kakao"]
