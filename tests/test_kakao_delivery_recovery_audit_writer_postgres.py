@@ -47,6 +47,10 @@ def test_audit_writer_commit_and_rejected_write_rollback(pg):
     audit_id = append_recovery_audit(
         pg, record=make_record(), authenticated_admin_id=user)
     assert isinstance(audit_id, int) and audit_id > 0
+    # Duplicate requests are rejected by the DB unique index, not by a
+    # race-prone read-before-insert check.
+    with pytest.raises(Exception):
+        append_recovery_audit(pg, record=make_record(), authenticated_admin_id=user)
     with pg.begin() as conn:
         assert conn.execute(text("""SELECT count(*) FROM
             public.kakao_delivery_recovery_audit""")).scalar_one() == 1
