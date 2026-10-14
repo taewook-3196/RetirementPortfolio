@@ -109,3 +109,38 @@ def test_policy_eligibility_still_requires_committed_database_claim(monkeypatch,
         env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
     )
     assert result.outcome == SendOutcome.NOT_CLAIMED
+
+
+@pytest.mark.parametrize("origin", list(DeliveryOrigin))
+@pytest.mark.parametrize("force", [False, True])
+def test_legacy_marker_prevents_claim_even_when_force_requested(monkeypatch, origin, force):
+    from datetime import date
+    from uuid import uuid4
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    decision = check_delivery_eligibility(
+        origin=origin, legacy_sent=True, attempt_state=None, force=force,
+    )
+    assert decision.allowed is False
+
+    class LegacyGuardStore:
+        def __init__(self, engine):
+            pass
+
+        def claim(self, attempt):
+            return None
+
+        def finish(self, attempt, status):
+            pytest.fail("denied attempt cannot finish")
+
+        def finish_sent_with_legacy(self, attempt):
+            pytest.fail("denied attempt cannot finalize")
+
+    monkeypatch.setattr("services.kakao_delivery_staged.PostgresDeliveryAttempts", LegacyGuardStore)
+    result = run_staged_delivery(
+        engine=None, user_id=uuid4(), report_date=date(2026, 10, 14),
+        transport=lambda: pytest.fail("denied attempt cannot dispatch"),
+        env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
