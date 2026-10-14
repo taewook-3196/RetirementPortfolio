@@ -21,7 +21,10 @@ def test_watchdog_missing_run_issue_lifecycle(tmp_path):
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const script = fs.readFileSync(process.argv[2], 'utf8');
-const execute = new Function('context', 'github', 'core', 'return (async () => {\n' + script + '\n})()');
+const execute = new Function('context', 'github', 'core', 'Date', 'return (async () => {\n' + script + '\n})()');
+const FixedDate = class extends Date {
+  constructor(...args) { super(...(args.length ? args : ['2026-10-13T03:00:00Z'])); }
+};
 const issues = [], comments = [], runs = [];
 const github = {
   paginate: async (fn) => fn === github.rest.issues.listForRepo
@@ -48,25 +51,23 @@ const core = {info: () => {}};
   }).format(new FixedDate());
   const weekday = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Seoul', weekday: 'short',
-  }).format(new Date());
+  }).format(new FixedDate());
   const hour = Number(new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Seoul', hour: '2-digit', hourCycle: 'h23',
-  }).format(new Date()));
+  }).format(new FixedDate()));
   const minute = Number(new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Seoul', minute: '2-digit',
-  }).format(new Date()));
-  if (['Sun','Mon'].includes(weekday) || hour * 60 + minute < 690) {
-    process.stdout.write('Skipped: test only runs after cutoff on KST Tue-Sat\n');
-    return;
-  }
+  }).format(new FixedDate()));
+  assert.equal(weekday, 'Tue');
+  assert.ok(hour * 60 + minute >= 690);
   await execute(context, github, core, FixedDate);
   assert.equal(issues.length, 1, 'missing schedule creates issue');
-  await execute(context, github, core);
+  await execute(context, github, core, FixedDate);
   assert.equal(issues.length, 1, 'repeat check does not duplicate issue');
   assert.equal(comments.length, 0);
   runs.push({created_at: new FixedDate().toISOString(), event: 'schedule',
     html_url: 'https://github.com/example/repo/actions/runs/1'});
-  await execute(context, github, core);
+  await execute(context, github, core, FixedDate);
   assert.equal(issues[0].state, 'closed', 'scheduled run closes alert');
   assert.equal(comments.length, 1);
   process.stdout.write('watchdog mock scenarios passed\n');
