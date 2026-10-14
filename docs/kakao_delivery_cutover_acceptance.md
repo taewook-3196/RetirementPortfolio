@@ -248,3 +248,20 @@ a cutover that updates only the scheduler or only the primary
 route **both CLI branches and the cached path** through the same durable
 claim, and disable the legacy direct calls atomically. Do not enable the
 two rollout flags while any direct legacy transport remains reachable.
+
+
+## Implementation audit — 2026-10-14 (draft PR, no production changes)
+
+The staged facade `services/kakao_delivery_origin_gateway.py` has passed disposable-PostgreSQL tests for all four origins and concurrent cross-origin attempts. **This does not mean any live entrypoint uses it.** The old sender still executes independently. The two rollout environment flags do not switch production routing.
+
+### Required coordinated code change before any cutover
+
+1. Refactor `DailyReportService.generate_and_send` so report generation and transport authorization are separate. Build/persist the report first, then pass the actual authenticated user UUID, KST report date, summary, and validated public URL to a single claim-backed dispatcher. Remove the legacy direct transport and its three independent marker retries **in the same reviewed change**; otherwise a successful Kakao call followed by a failed marker update can resend.
+2. Refactor `send_cached_kakao` to load the persisted user/date/report identity, not merely `exports/.kakao_payload.json`. The current cached payload lacks an authoritative per-user/day claim boundary; never infer identity from an untrusted cache or assume a successful cached send was recorded.
+3. Route scheduled `run_all_users`, manual force, normal CLI, and `--send-kakao-only` through that dispatcher. Force may regenerate a report, but must not override a sent, sending, or uncertain delivery record. Avoid running legacy and new senders in parallel during a partial deployment.
+4. Read legacy `kakao_sent_at` and attempt state from PostgreSQL for diagnostics. Caller-provided `legacy_sent` and `attempt_state` in the staged facade are only fail-closed hints; **the committed claim is authoritative**. If reads fail, do not attempt transport.
+5. Maintain the existing Tue–Sat KST schedule, per-user settings, and <=24-hour news rule. Validate account isolation and report URL ownership.
+6. Validate the migration and all entrypoint routing with disposable PostgreSQL and mock Kakao. Confirm that no duplicate is sent after provider timeout, post-send database error, manual force, cached CLI, or concurrent workers.
+7. Only after reviewed acceptance, stop the old sender, apply an approved production migration, verify markers/read-only audit, explicitly authorize cutover, and enable exactly one sender. No production step is authorized by this draft PR.
+
+**Blocking architectural issue:** `send_cached_kakao` currently invokes Kakao directly without recording the legacy sent marker. It cannot be safely brought under durable deduplication until its report identity and database state are established. Do not treat feature-gate toggles as a substitute for the coordinated routing refactor.
