@@ -630,3 +630,53 @@ def test_parallel_staged_delivery_invokes_mock_transport_once(pg):
     assert outcomes.count(SendOutcome.SENT) == 1
     assert outcomes.count(SendOutcome.NOT_CLAIMED) == 3
     assert calls == ["kakao"]
+
+
+def test_concurrent_staged_gateways_invoke_mock_transport_only_once(pg):
+    """Competing real PostgreSQL claims across entrypoints permit one transport."""
+    from datetime import date
+    from threading import Barrier, Lock
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(
+            text("INSERT INTO public.morning_reports (user_id, report_date) "
+                 "VALUES (CAST(:u AS uuid), DATE '2026-10-12')"),
+            {"u": str(user_id)},
+        )
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    barrier = Barrier(4)
+    lock = Lock()
+    transports = []
+
+    def invoke(origin):
+        barrier.wait(timeout=15)
+
+        def mock_transport():
+            with lock:
+                transports.append(origin)
+            return (True, "mock accepted")
+
+        return run_staged_delivery(
+            engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+            transport=mock_transport, env=env,
+        ).outcome
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        outcomes = list(pool.map(invoke, ("scheduled", "manual", "cli", "cached")))
+
+    assert outcomes.count(SendOutcome.SENT) == 1
+    assert outcomes.count(SendOutcome.NOT_CLAIMED) == 3
+    assert len(transports) == 1
+    with pg.connect() as conn:
+        assert conn.execute(
+            text("SELECT count(*) FROM public.kakao_delivery_attempts WHERE user_id = :u"),
+            {"u": user_id},
+        ).scalar_one() == 1
+        assert conn.execute(
+            text("SELECT kakao_sent_at IS NOT NULL FROM public.morning_reports WHERE user_id = :u"),
+            {"u": user_id},
+        ).scalar_one() is True
