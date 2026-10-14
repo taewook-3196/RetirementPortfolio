@@ -30,6 +30,8 @@ def decide_retry(state: DeliveryState, *, lease_expired: bool = False) -> Delive
         return DeliveryDecision(
             state, False, "active attempt" if not lease_expired else "expired lease requires reconciliation"
         )
-    if state in (DeliveryState.PENDING, DeliveryState.FAILED_BEFORE_SEND):
+    if state == DeliveryState.PENDING:
         return DeliveryDecision(state, True, "no send attempt started")
+    if state == DeliveryState.FAILED_BEFORE_SEND:
+        return DeliveryDecision(state, False, "pre-send failure requires reviewed recovery")
     raise ValueError(f"Unknown delivery state: {state!r}")
