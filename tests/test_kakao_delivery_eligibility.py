@@ -20,7 +20,7 @@ def test_all_paths_block_existing_attempt_even_when_forced(origin, force, state)
 
 @pytest.mark.parametrize("origin", list(DeliveryOrigin))
 @pytest.mark.parametrize("force", [False, True])
-@pytest.mark.parametrize("state", [None, "failed_before_send"])
+@pytest.mark.parametrize("state", [None])
 def test_all_paths_can_request_atomic_claim_only_when_safe(origin, force, state):
     result = check_delivery_eligibility(origin=origin, legacy_sent=False, attempt_state=state, force=force)
     assert result.allowed
@@ -42,9 +42,9 @@ def test_force_never_bypasses_ambiguous_or_confirmed_send_across_entrypoints(ori
 
 
 @pytest.mark.parametrize("origin", list(DeliveryOrigin))
-def test_pre_send_failure_only_permits_new_atomic_claim_not_direct_send(origin):
+def test_pre_send_failure_requires_operator_review_before_new_claim(origin):
     result = check_delivery_eligibility(
         origin=origin, legacy_sent=False, attempt_state="failed_before_send", force=True,
     )
-    assert result.allowed is True
-    assert result.reason == "eligible for atomic claim"
+    assert result.allowed is False
+    assert result.reason == "pre-send failure requires reviewed recovery"
