@@ -7,6 +7,7 @@ NewsService 단위 테스트.
 """
 
 import pytest
+from datetime import datetime, timedelta, timezone
 from services.news_service import NewsService, ETF_CONSTITUENTS_MAP
 from core.config import ETFConfig, WatchlistConfig
 
@@ -43,32 +44,38 @@ def test_get_constituent_query():
     assert q == "NAVER"
 
 
-def test_news_service_get_feed_structure():
-    """피드 반환 데이터 구조 검증"""
+def test_news_service_get_feed_structure(monkeypatch):
+    """외부 API에 의존하지 않고 최신 기사 필터와 피드 구조를 검증"""
     service = NewsService()
+    now = datetime.now(timezone.utc)
+    recent = (now - timedelta(hours=1)).isoformat()
+    monkeypatch.setattr(service, "fetch_stock_news", lambda ticker, name="": [
+        {"title": f"종목 뉴스 {ticker}", "datetime": recent, "tag": name,
+         "link": "https://example.com/stock"}
+    ])
+    monkeypatch.setattr(service, "fetch_keyword_rss", lambda query, tag, limit=6: [
+        {"title": f"구성종목 뉴스 {tag}", "datetime": recent, "tag": tag,
+         "link": "https://example.com/theme"}
+    ])
+    monkeypatch.setattr(service, "fetch_economy_rss", lambda limit=15: [
+        {"title": "경제 뉴스", "datetime": recent, "tag": "경제속보",
+         "link": "https://example.com/economy"}
+    ])
     etfs = [ETFConfig(ticker="381170", name="TIGER 미국테크TOP10 INDXX", target_weight=0.15)]
     watchlist = [WatchlistConfig(ticker="069500", name="KODEX 200")]
 
-    # 1. portfolio_only 모드 테스트
     feed_portfolio = service.get_news_feed(mode="portfolio_only", etfs=etfs, watchlist=watchlist)
     assert isinstance(feed_portfolio, list)
     assert len(feed_portfolio) > 0
-    first_item = feed_portfolio[0]
-    assert "tag" in first_item
-    assert "title" in first_item
-    assert "link" in first_item
+    assert all({"tag", "title", "link"} <= set(item) for item in feed_portfolio)
 
-    # 2. all 모드 테스트 (경제 속보 포함)
     feed_all = service.get_news_feed(mode="all", etfs=etfs, watchlist=watchlist)
     assert isinstance(feed_all, list)
     assert len(feed_all) >= len(feed_portfolio)
+    assert any(item["title"] == "경제 뉴스" for item in feed_all)
 
 
-def test_news_service_fallback():
-    """네트워크 실패 시 안전한 기본값 폴백 검증"""
+def test_news_service_empty_feed_without_fallback():
+    """기사가 없을 때 실제 뉴스가 아닌 안내 문구를 끼워 넣지 않는다."""
     service = NewsService()
-    # 빈 파라미터로 호출 시 최소한의 피드 반환
-    feed = service.get_news_feed(mode="portfolio_only", etfs=[], watchlist=[])
-    assert isinstance(feed, list)
-    assert len(feed) >= 1
-    assert "title" in feed[0]
+    assert service.get_news_feed(mode="portfolio_only", etfs=[], watchlist=[]) == []
