@@ -109,3 +109,25 @@ is not wired to production. Do not enable either cutover flag yet.
    before any controlled cutover; do not attempt a rolling mixed-version rollout.
 6. Keep the staged PR in draft until the full entrypoint inventory, acceptance
    tests, operational review and explicit production approval are complete.
+
+
+## Additional legacy scheduler risks verified in source
+
+- `run_all_users(force=True)` bypasses the existing report's sent-marker
+  skip branch and invokes `generate_and_send(..., force_kakao=send_kakao)`.
+  The manual workflow input is named `force_resend` and explicitly requests
+  Kakao retransmission. **Do not use this workflow input as a recovery
+  mechanism** while the staged claim gateway is not wired.
+- The GitHub Actions `concurrency: group: morning-report` serializes runs
+  of that workflow group only. It cannot coordinate with web, CLI, other
+  workflows, or workers, and is not a substitute for a DB claim.
+- The three UTC cron schedules map to KST Tue–Sat morning (05:35, 07:10,
+  09:00 respectively). Each run must independently respect the user's due
+  time and durable delivery status.
+- Current `run_all_users` can regenerate an existing unsent report and
+  retry Kakao based only on a null legacy marker; null alone does not
+  distinguish never-sent from an unrecorded successful send.
+- During cutover, the `force_resend` UI should be renamed or disabled,
+  and report regeneration must not imply Kakao retransmission. This
+  requires a separate product/operations decision, not an automatic
+  production behavior change in this draft PR.
