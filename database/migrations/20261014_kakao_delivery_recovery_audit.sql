@@ -15,7 +15,10 @@ CREATE TABLE IF NOT EXISTS public.kakao_delivery_recovery_audit (
     ),
     reason text NOT NULL CHECK (length(reason) BETWEEN 1 AND 512),
     created_at timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT kakao_delivery_recovery_same_user CHECK (actor_id = target_user_id)
+    CONSTRAINT kakao_delivery_recovery_same_user CHECK (actor_id = target_user_id),
+    CONSTRAINT kakao_delivery_recovery_attempt_owner_fk
+        FOREIGN KEY (target_user_id, attempt_id)
+        REFERENCES public.kakao_delivery_attempts(user_id, attempt_id)
 );
 
 CREATE INDEX IF NOT EXISTS kakao_delivery_recovery_audit_target_idx
