@@ -592,3 +592,39 @@ def test_python_adapter_rejects_non_atomic_sent_before_database_call(pg):
         adapter.finish(attempt, "sent")
     with pg.connect() as conn:
         assert conn.execute(text("SELECT count(*) FROM public.kakao_delivery_attempts")).scalar_one() == 0
+
+
+def test_parallel_staged_delivery_invokes_mock_transport_once(pg):
+    """Exercise the real PostgreSQL claim under simultaneous sender calls."""
+    from datetime import date
+    from threading import Barrier, Lock
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    day = date(2026, 10, 12)
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text("INSERT INTO public.morning_reports (user_id, report_date) VALUES (CAST(:u AS uuid), :day)"), {"u": str(user_id), "day": day})
+
+    barrier = Barrier(4)
+    lock = Lock()
+    calls = []
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+
+    def transport():
+        with lock:
+            calls.append("kakao")
+        return (True, "mock accepted")
+
+    def worker(_):
+        barrier.wait(timeout=10)
+        return run_staged_delivery(
+            engine=pg, user_id=user_id, report_date=day, transport=transport, env=env,
+        ).outcome
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        outcomes = list(pool.map(worker, range(4)))
+    assert outcomes.count(SendOutcome.SENT) == 1
+    assert outcomes.count(SendOutcome.NOT_CLAIMED) == 3
+    assert calls == ["kakao"]
