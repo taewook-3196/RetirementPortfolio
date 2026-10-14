@@ -65,3 +65,41 @@ def test_all_sources_use_same_cutoff(monkeypatch):
     assert [x["title"] for x in service.get_news_feed(etfs=[Asset()])] == [
         "fresh stock"
     ]
+
+
+def test_stale_duplicate_cannot_hide_fresh_article(monkeypatch):
+    service = NewsService()
+    old = (datetime.now(timezone.utc) - timedelta(hours=30)).isoformat()
+    recent = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+    headline = "같은 회사 실적 발표 뉴스"
+    monkeypatch.setattr(service, "fetch_stock_news", lambda ticker, name="": [
+        {"title": headline, "datetime": old, "link": "https://example.com/old"}
+    ])
+    monkeypatch.setattr(service, "fetch_keyword_rss", lambda *args, **kwargs: [
+        {"title": headline, "datetime": recent, "link": "https://example.com/fresh"}
+    ])
+    class Asset:
+        ticker = "069500"
+        name = "KOSPI"
+    result = service.get_news_feed(mode="portfolio_only", etfs=[Asset()])
+    assert len(result) == 1
+    assert result[0]["link"] == "https://example.com/fresh"
+
+
+def test_newest_duplicate_wins_even_if_collected_later(monkeypatch):
+    service = NewsService()
+    older = (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()
+    newer = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
+    headline = "중복 기사 제목"
+    monkeypatch.setattr(service, "fetch_stock_news", lambda ticker, name="": [
+        {"title": headline, "datetime": older, "link": "https://example.com/older"}
+    ])
+    monkeypatch.setattr(service, "fetch_keyword_rss", lambda *args, **kwargs: [
+        {"title": headline, "datetime": newer, "link": "https://example.com/newer"}
+    ])
+    class Asset:
+        ticker = "069500"
+        name = "KOSPI"
+    result = service.get_news_feed(mode="portfolio_only", etfs=[Asset()])
+    assert len(result) == 1
+    assert result[0]["link"] == "https://example.com/newer"
