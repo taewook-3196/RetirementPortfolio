@@ -71,3 +71,41 @@ def test_cached_origin_never_bypasses_prior_attempt(force):
         attempt_state="uncertain", force=force,
     )
     assert result.allowed is False
+
+
+@pytest.mark.parametrize("origin", list(DeliveryOrigin))
+@pytest.mark.parametrize("force", [False, True])
+def test_policy_eligibility_still_requires_committed_database_claim(monkeypatch, origin, force):
+    """All four origins must fail closed even after optimistic policy approval."""
+    from datetime import date
+    from uuid import uuid4
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    decision = check_delivery_eligibility(
+        origin=origin, legacy_sent=False, attempt_state=None, force=force,
+    )
+    assert decision.allowed
+
+    class RejectingStore:
+        def __init__(self, engine):
+            pass
+
+        def claim(self, attempt):
+            return None
+
+        def finish(self, attempt, status):
+            pytest.fail("denied claim must not finish")
+
+        def finish_sent_with_legacy(self, attempt):
+            pytest.fail("denied claim must not mark legacy sent")
+
+    monkeypatch.setattr(
+        "services.kakao_delivery_staged.PostgresDeliveryAttempts", RejectingStore
+    )
+    result = run_staged_delivery(
+        engine=None, user_id=uuid4(), report_date=date(2026, 10, 14),
+        transport=lambda: pytest.fail(f"{origin.value} bypassed DB claim"),
+        env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
