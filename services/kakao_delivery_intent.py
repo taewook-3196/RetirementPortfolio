@@ -24,9 +24,10 @@ def resolve_report_intent(*, force_regenerate: bool, kakao_enabled: bool,
                           delivery_claim_available: bool) -> ReportIntent:
     """Never turn a forced regeneration into implicit retransmission.
 
-    delivery_claim_available means a separately committed, authoritative
-    claim is available for this user/date, not a caller's retry preference.
-    Actual dispatch still requires the staged gateway's DB claim.
+    delivery_claim_available is only a caller-provided eligibility hint.
+    It is NOT proof of a committed claim and MUST NOT authorize transport.
+    Actual dispatch always requires the staged gateway to obtain its own
+    authoritative PostgreSQL claim before invoking transport.
     """
     if not all(type(value) is bool for value in (
         force_regenerate, kakao_enabled, existing_report,
@@ -43,4 +44,4 @@ def resolve_report_intent(*, force_regenerate: bool, kakao_enabled: bool,
         return ReportIntent(ReportAction.GENERATE_ONLY, "legacy Kakao delivery already recorded")
     if not delivery_claim_available:
         return ReportIntent(ReportAction.GENERATE_ONLY, "no authoritative Kakao delivery claim")
-    return ReportIntent(ReportAction.GENERATE_AND_SEND, "generation with separate claimed delivery")
+    return ReportIntent(ReportAction.GENERATE_AND_SEND, "eligible for separately claimed delivery; no claim acquired")
