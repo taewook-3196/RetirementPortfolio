@@ -32,8 +32,11 @@ def append_recovery_audit(engine, *, record: RecoveryAuditRecord,
         raise RecoveryAuditWriteForbidden("timezone-aware review timestamp required")
     if record.reviewed_at > datetime.now(timezone.utc):
         raise RecoveryAuditWriteForbidden("future-dated review not allowed")
-    if record.decision not in ("denied", "eligible_for_future_recovery"):
-        raise RecoveryAuditWriteForbidden("invalid decision")
+    if record.decision != "denied":
+        # No trusted evidence-verification workflow exists yet. A caller can
+        # construct an arbitrary dataclass claiming that no request started.
+        # Never persist a positive recovery finding on that basis.
+        raise RecoveryAuditWriteForbidden("positive recovery findings require verified server-side evidence")
     if not isinstance(record.evidence_reference, str) or not 1 <= len(record.evidence_reference.strip()) <= 256:
         raise RecoveryAuditWriteForbidden("audit evidence reference required")
     if not isinstance(record.reason, str) or not 1 <= len(record.reason) <= 512:
