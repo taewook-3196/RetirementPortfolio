@@ -5,6 +5,12 @@ on:
   schedule:
     - cron: '30 2 * * 2-6'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Check only; do not create, update or close GitHub Issues'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   actions: read
@@ -23,6 +29,8 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
+            const dryRun = context.eventName === 'workflow_dispatch' && context.payload.inputs?.dry_run !== 'false';
+            if (dryRun) core.info('DRY RUN: GitHub Issues will not be modified');
             const now = new Date();
             const dateKey = new Intl.DateTimeFormat('en-CA', {
               timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -61,6 +69,10 @@ jobs:
               return runDate === dateKey && run.event === 'schedule';
             });
             if (today.length) {
+              if (dryRun) {
+                core.info(`DRY RUN: Found ${today.length} scheduled runs; would close ${alerts.length} alert(s)`);
+                return;
+              }
               for (const issue of alerts) {
                 await github.rest.issues.createComment({
                   owner, repo, issue_number: issue.number,
@@ -72,6 +84,10 @@ jobs:
                 });
               }
               core.info(`Found ${today.length} scheduled run(s) for ${dateKey}`);
+              return;
+            }
+            if (dryRun) {
+              core.warning(`DRY RUN: No scheduled Morning Report run for ${dateKey}; would open/update an alert`);
               return;
             }
             const body = [
