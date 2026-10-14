@@ -169,3 +169,65 @@ of the still-active legacy senders.
    the production schema; verify cross-version lockout and crash windows.
 5. Review runbooks and security, then request explicit approval before
    any production migration, rollout flag or real Kakao send.
+
+
+## Operator-controlled cutover and rollback sequence
+
+This section is a **future runbook**, not permission to execute any step.
+
+### Preflight (all evidence required)
+
+1. Verify the intended deployment revision and inventory **every** running
+   scheduled job, manual workflow, web process, worker and CLI that can invoke
+   `DailyReportService.generate_and_send`, `send_cached_kakao`, or
+   `KakaoService.send_morning_report`. A GitHub Actions concurrency group
+   does not cover non-Actions processes.
+2. Confirm all current-day `morning_reports.kakao_sent_at` markers and all
+   historical delivery attempts with read-only queries. Treat any missing
+   marker with possible provider acceptance as **uncertain**, not unsent.
+3. Rehearse schema migration and application compatibility in a disposable
+   production-shaped PostgreSQL database. Validate privileges, RLS,
+   idempotence, locks, legacy marker preservation, and downgrade strategy.
+4. Obtain explicit deployment, migration and transport approval, with named
+   operator and maintenance window **outside** the Tue–Sat KST delivery period.
+
+### Atomic ownership handoff (requires separate approved implementation)
+
+1. Disable or pause **all** legacy sender entrypoints, including manual
+   `force_resend`, cached CLI and background workers. Verify no in-flight
+   sends remain. Do not perform a rolling deployment with mixed senders.
+2. Record a checkpoint of application revision, DB schema version, current
+   report markers and blocked/uncertain attempts. Preserve sensitive data in
+   access-controlled operator storage, not public CI logs.
+3. Apply only the reviewed database migration, verify its constraints and
+   privileges, and start the reviewed single-sender application with both
+   feature gates still disabled.
+4. Run read-only checks first. Only after an additional explicit operator
+   go/no-go may both opt-in flags be enabled together and a controlled
+   **staging** transport test performed. Production transport needs its own
+   separate authorization.
+5. Verify one authoritative claim per user/date, exactly one transport
+   invocation, atomic legacy + new success markers, and consistent behavior
+   for scheduled, manual, CLI and cached paths.
+
+### Abort and rollback
+
+- On unknown provider outcome, completion DB failure, schema mismatch,
+  missing sender ownership, or mixed-version worker: **stop all senders**.
+  Keep uncertain attempts blocked; never retry merely because a marker is null.
+- Disable the new cutover gates and stop new workers. Do **not** automatically
+  restart legacy workers: that can duplicate a message accepted by Kakao but
+  not durably recorded.
+- Reconcile each in-flight/uncertain user/date against independent evidence
+  before selecting a single safe sender. Preserve the new attempt and audit
+  records; never delete or reset them to make a retry possible.
+- Database rollback is not an automatic `DROP TABLE` or reverse migration:
+  first establish that no new delivery state would be lost and no old process
+  can resend. Otherwise retain the schema and suspend delivery until reviewed.
+- Resume only after explicit operator approval, recorded evidence and
+  repeatable read-only verification.
+
+**No-go until resolved:** existing force-resend behavior, unsent legacy report
+retries, cached transport without marker completion, all sender entrypoints,
+migration compatibility, and lack of trusted recovery evidence. Passing the
+current staged CI suite does not waive any of these blockers.
