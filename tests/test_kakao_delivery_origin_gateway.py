@@ -89,3 +89,65 @@ def test_unknown_origin_fails_closed(monkeypatch):
     )
     assert result.outcome == SendOutcome.NOT_CLAIMED
     adapter.assert_not_called()
+
+
+@pytest.mark.parametrize("overrides", [
+    {"user_id": None},
+    {"user_id": "not-a-uuid"},
+    {"report_date": None},
+    {"report_date": "2026-10-14"},
+    {"summary_text": None},
+    {"summary_text": "  "},
+    {"report_web_url": None},
+    {"report_web_url": "http://example.com"},
+    {"report_web_url": "javascript:alert(1)"},
+])
+def test_invalid_identity_or_payload_never_reaches_adapter(monkeypatch, overrides):
+    adapter = Mock()
+    monkeypatch.setattr(
+        "services.kakao_delivery_origin_gateway.send_staged_morning_report", adapter
+    )
+    args = dict(
+        origin=DeliveryOrigin.SCHEDULED, engine=object(), user_id=uuid4(),
+        report_date=date(2026, 10, 14), kakao_service=object(),
+        summary_text="summary", report_web_url="https://example.com",
+        legacy_sent=False, attempt_state=None, env=ENABLED,
+    )
+    args.update(overrides)
+    result = send_staged_for_origin(**args)
+    assert result.outcome == SendOutcome.NOT_CLAIMED
+    adapter.assert_not_called()
+
+
+@pytest.mark.parametrize("origin", list(DeliveryOrigin))
+def test_untrusted_caller_hint_cannot_authorize_transport_when_claim_denied(monkeypatch, origin):
+    from services.kakao_delivery_staged import run_staged_delivery
+
+    class DeniedStore:
+        def __init__(self, engine):
+            pass
+
+        def claim(self, attempt):
+            return None
+
+        def finish(self, attempt, status):
+            pytest.fail("denied claim must not finish")
+
+        def finish_sent_with_legacy(self, attempt):
+            pytest.fail("denied claim must not finalize")
+
+    class Service:
+        def is_configured(self):
+            return True
+
+        def send_morning_report(self, summary, url):
+            pytest.fail("caller hints must not bypass committed DB claim")
+
+    monkeypatch.setattr("services.kakao_delivery_staged.PostgresDeliveryAttempts", DeniedStore)
+    result = send_staged_for_origin(
+        origin=origin, engine=object(), user_id=uuid4(),
+        report_date=date(2026, 10, 14), kakao_service=Service(),
+        summary_text="summary", report_web_url="https://example.com",
+        legacy_sent=False, attempt_state=None, force=True, env=ENABLED,
+    )
+    assert result.outcome == SendOutcome.NOT_CLAIMED
