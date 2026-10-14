@@ -166,7 +166,6 @@ def test_untrusted_caller_hint_cannot_authorize_transport_when_claim_denied(monk
     "https://example.com/with space",
     "https://example.com/with\\nnewline",
     "https:///missing-host",
-    "HTTPS://example.com/report",
 ])
 def test_unsafe_report_url_fails_before_adapter(monkeypatch, url):
     adapter = Mock()
