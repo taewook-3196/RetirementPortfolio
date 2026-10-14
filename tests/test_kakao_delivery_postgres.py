@@ -947,3 +947,53 @@ def test_shared_gateway_cross_origin_attempts_send_only_once(pg):
             "SELECT count(*) FROM public.kakao_delivery_attempts "
             "WHERE user_id = CAST(:u AS uuid)"
         ), {"u": str(user_id)}).scalar_one() == 1
+
+
+def test_cached_identity_requires_exact_persisted_report_and_tracks_attempt(pg):
+    """Cache payload alone is never sufficient to authorize a staged send."""
+    from datetime import date
+    from services.kakao_delivery_cached_identity import verify_cached_report_identity
+
+    user_id = uuid4()
+    report_date = date(2026, 10, 12)
+    assert verify_cached_report_identity(
+        engine=pg, user_id=user_id, report_date=report_date
+    ) is None
+    assert verify_cached_report_identity(
+        engine=pg, user_id=str(user_id), report_date=report_date
+    ) is None
+
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text(
+            "INSERT INTO public.morning_reports (user_id, report_date) "
+            "VALUES (CAST(:u AS uuid), DATE '2026-10-12')"
+        ), {"u": str(user_id)})
+    verified = verify_cached_report_identity(
+        engine=pg, user_id=user_id, report_date=report_date
+    )
+    assert verified.user_id == user_id
+    assert verified.report_date == report_date
+    assert verified.legacy_sent is False
+    assert verified.attempt_state is None
+
+    with pg.begin() as conn:
+        claimed = conn.execute(text(
+            "SELECT public.claim_kakao_delivery_attempt("
+            "CAST(:u AS uuid), DATE '2026-10-12', CAST(:a AS uuid), 300)"
+        ), {"u": str(user_id), "a": str(uuid4())}).scalar_one()
+    assert claimed is not None
+    verified = verify_cached_report_identity(
+        engine=pg, user_id=user_id, report_date=report_date
+    )
+    assert verified.attempt_state == "sending"
+
+    with pg.begin() as conn:
+        conn.execute(text(
+            "UPDATE public.morning_reports SET kakao_sent_at = now() "
+            "WHERE user_id = CAST(:u AS uuid)"
+        ), {"u": str(user_id)})
+    verified = verify_cached_report_identity(
+        engine=pg, user_id=user_id, report_date=report_date
+    )
+    assert verified.legacy_sent is True
