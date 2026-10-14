@@ -22,6 +22,16 @@ def dispatch_verified_staged_report(*, origin, engine, user_id, report_date,
         return SendResult(SendOutcome.DISABLED)
     if not isinstance(origin, DeliveryOrigin) or type(force) is not bool:
         return SendResult(SendOutcome.NOT_CLAIMED)
+    # Validate the payload before any database read or provider interaction.
+    # The origin gateway independently rechecks these fields before claiming.
+    from datetime import date
+    from uuid import UUID
+    if not isinstance(user_id, UUID) or type(report_date) is not date:
+        return SendResult(SendOutcome.NOT_CLAIMED)
+    if not isinstance(summary_text, str) or not summary_text.strip():
+        return SendResult(SendOutcome.NOT_CLAIMED)
+    if not isinstance(report_web_url, str) or not report_web_url.strip():
+        return SendResult(SendOutcome.NOT_CLAIMED)
     identity = verify_cached_report_identity(
         engine=engine, user_id=user_id, report_date=report_date,
     )
