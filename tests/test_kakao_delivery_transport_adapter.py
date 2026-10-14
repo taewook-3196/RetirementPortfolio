@@ -13,6 +13,9 @@ class FakeKakaoService:
     def __init__(self):
         self.calls = []
 
+    def is_configured(self):
+        return True
+
     def send_morning_report(self, summary_text, report_web_url):
         self.calls.append((summary_text, report_web_url))
         return True, "ok"
@@ -132,3 +135,17 @@ def test_adapter_atomic_finalizer_exception_is_uncertain_without_second_kakao_se
     assert result.outcome == SendOutcome.UNCERTAIN
     assert result.needs_reconciliation
     assert fake.calls == [("report", "https://example.com/report")]
+
+
+def test_unconfigured_kakao_service_does_not_claim_or_send():
+    fake = FakeKakaoService()
+    fake.is_configured = lambda: False
+    with patch("services.kakao_delivery_transport_adapter.run_staged_delivery") as staged:
+        result = send_staged_morning_report(
+            engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
+            kakao_service=fake, summary_text="report", report_web_url="https://example.com",
+            env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+        )
+    assert result.outcome == SendOutcome.FAILED_BEFORE_SEND
+    assert fake.calls == []
+    staged.assert_not_called()
