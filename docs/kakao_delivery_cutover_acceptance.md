@@ -79,3 +79,33 @@ deliver a duplicate Kakao message.
   cross-user authorization tests, crash-window tests, and explicit operator
   approval. Keep the production cutover flags disabled until all acceptance
   gates are met.
+
+
+## Sender entrypoint inventory (source inspection, 2026-10-14)
+
+| Entrypoint | Current transport path | Cutover risk |
+| --- | --- | --- |
+| `scripts/run_multi_user_morning_reports.py` | Calls `DailyReportService.generate_and_send` | Scheduled job checks the legacy sent marker before sending, but a read-before-send check alone is not an atomic claim. |
+| `DailyReportService.generate_and_send` | Calls `kakao_service.send_morning_report` directly, then writes `kakao_sent_at` | Concurrent invocations or a crash after provider acceptance and before marker commit can duplicate delivery. `force_kakao` bypasses the enabled preference, not a durable claim. |
+| `DailyReportService.send_cached_kakao` | Calls `kakao_service.send_morning_report` directly | Does not claim an attempt or write the legacy sent marker; must be included in cutover or explicitly disabled. |
+| `run_daily_report_cli` | Calls `generate_and_send`, or `send_cached_kakao` in cached mode | Both CLI branches must be covered by the same cutover gate. |
+| `.github/workflows/morning_report.yml` | Three weekday cron entries plus manual `workflow_dispatch` with `force_resend` | Multiple scheduled/manual invocations may overlap; review KST conversion and all manual paths before enabling. |
+
+**Current outcome:** these are known unsafe-to-mix legacy entrypoints,
+not evidence of duplicate sends having occurred. The staged state module
+is not wired to production. Do not enable either cutover flag yet.
+
+### Required implementation before rollout
+
+1. Inventory any additional web/admin/CLI callers of the service and ensure
+   every sender is covered; prohibit mixed legacy and staged senders.
+2. Create one trusted transport gateway that atomically claims by user/date
+   **before** any HTTP dispatch, including cached/manual/forced sends.
+3. Preserve existing report-generation behavior while separating regeneration
+   from retransmission; never treat a force flag as permission to bypass claims.
+4. In a disposable database, test simultaneous scheduled/manual/cached calls,
+   a crash after dispatch, a DB completion failure, and a legacy marker conflict.
+5. Freeze old workers and verify all old schedules and endpoints are disabled
+   before any controlled cutover; do not attempt a rolling mixed-version rollout.
+6. Keep the staged PR in draft until the full entrypoint inventory, acceptance
+   tests, operational review and explicit production approval are complete.
