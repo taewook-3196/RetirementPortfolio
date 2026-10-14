@@ -792,3 +792,33 @@ def test_concurrent_staged_senders_invoke_only_one_mock_transport(pg):
         assert conn.execute(text(
             "SELECT kakao_sent_at FROM public.morning_reports WHERE user_id = CAST(:u AS uuid)"
         ), {"u": str(user_id)}).scalar_one() is not None
+
+
+def test_real_database_legacy_marker_blocks_forced_staged_attempt(pg):
+    """A force request cannot override the authoritative legacy sent marker."""
+    from datetime import date
+    from services.kakao_delivery_eligibility import DeliveryOrigin, check_delivery_eligibility
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text(
+            "INSERT INTO public.morning_reports (user_id, report_date, kakao_sent_at) "
+            "VALUES (CAST(:u AS uuid), DATE '2026-10-12', now())"
+        ), {"u": str(user_id)})
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    for origin in DeliveryOrigin:
+        assert not check_delivery_eligibility(
+            origin=origin, legacy_sent=True, attempt_state=None, force=True,
+        ).allowed
+        result = run_staged_delivery(
+            engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+            transport=lambda: pytest.fail("legacy-sent report must not dispatch"), env=env,
+        )
+        assert result.outcome == SendOutcome.NOT_CLAIMED
+    with pg.connect() as conn:
+        assert conn.execute(text(
+            "SELECT count(*) FROM public.kakao_delivery_attempts WHERE user_id = CAST(:u AS uuid)"
+        ), {"u": str(user_id)}).scalar_one() == 0
