@@ -149,3 +149,21 @@ def test_unconfigured_kakao_service_does_not_claim_or_send():
     assert result.outcome == SendOutcome.FAILED_BEFORE_SEND
     assert fake.calls == []
     staged.assert_not_called()
+
+
+def test_disabled_rollout_never_inspects_kakao_credentials():
+    class UnavailableService:
+        def is_configured(self):
+            pytest.fail("disabled rollout inspected Kakao credentials")
+
+        def send_morning_report(self, *_):
+            pytest.fail("disabled rollout sent Kakao message")
+
+    with patch("services.kakao_delivery_transport_adapter.run_staged_delivery") as staged:
+        result = send_staged_morning_report(
+            engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
+            kakao_service=UnavailableService(), summary_text="test",
+            report_web_url="https://example.com", env={},
+        )
+    assert result.outcome == SendOutcome.DISABLED
+    staged.assert_not_called()
