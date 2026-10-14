@@ -12,6 +12,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+import urllib.parse
 from zoneinfo import ZoneInfo
 
 SEOUL = ZoneInfo("Asia/Seoul")
@@ -61,17 +62,24 @@ def audit_runs(day: dt.date, runs: list[dict]) -> dict:
     }
 
 
-def fetch_runs(repository: str, token: str | None = None) -> list[dict]:
+def fetch_runs(repository: str, token: str | None = None, day: dt.date | None = None) -> list[dict]:
     parts = repository.split("/")
     if len(parts) != 2 or not all(parts) or any(not part.replace("-", "").replace("_", "").replace(".", "").isalnum() for part in parts):
         raise ValueError("repository must be owner/name")
-    url = "https://api.github.com/repos/" + repository + "/actions/workflows/" + WORKFLOW + "/runs?per_page=100"
+    params = {"per_page": "100"}
+    if day is not None:
+        start = dt.datetime.combine(day, dt.time.min, SEOUL).astimezone(dt.timezone.utc)
+        end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, SEOUL).astimezone(dt.timezone.utc)
+        params["created"] = start.strftime("%Y-%m-%dT%H:%M:%SZ") + ".." + end.strftime("%Y-%m-%dT%H:%M:%SZ")
+    url = "https://api.github.com/repos/" + repository + "/actions/workflows/" + WORKFLOW + "/runs?" + urllib.parse.urlencode(params)
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "RetirementPortfolio-schedule-audit"}
     if token:
         headers["Authorization"] = "Bearer " + token
     request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request, timeout=20) as response:
         data = json.load(response)
+    if data.get("total_count", 0) > len(data["workflow_runs"]):
+        raise ValueError("workflow run query exceeded single-page audit capacity")
     return data["workflow_runs"]
 
 
@@ -81,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repository", default=os.getenv("GITHUB_REPOSITORY", "taewook-3196/RetirementPortfolio"))
     args = parser.parse_args(argv)
     try:
-        result = audit_runs(args.date, fetch_runs(args.repository, os.getenv("GITHUB_TOKEN")))
+        result = audit_runs(args.date, fetch_runs(args.repository, os.getenv("GITHUB_TOKEN"), args.date))
     except (urllib.error.URLError, KeyError, ValueError, TimeoutError) as exc:
         print("Schedule audit unavailable: " + type(exc).__name__, file=sys.stderr)
         return 2
