@@ -13,7 +13,7 @@ def test_forced_regeneration_never_resends_already_delivered_kakao(legacy_sent, 
     if legacy_sent:
         assert intent.action == ReportAction.GENERATE_ONLY
     else:
-        assert intent.action == (ReportAction.GENERATE_AND_SEND if claim else ReportAction.GENERATE_ONLY)
+        assert intent.action == (ReportAction.GENERATE_AND_ATTEMPT_CLAIM if claim else ReportAction.GENERATE_ONLY)
 
 
 def test_force_regenerate_without_claim_generates_only():
@@ -24,12 +24,12 @@ def test_force_regenerate_without_claim_generates_only():
     assert result.action == ReportAction.GENERATE_ONLY
 
 
-def test_force_regenerate_with_authoritative_claim_allows_separate_delivery():
+def test_force_regenerate_with_eligibility_hint_allows_claim_attempt():
     result = resolve_report_intent(
         force_regenerate=True, kakao_enabled=True, existing_report=True,
         legacy_sent=False, delivery_claim_available=True,
     )
-    assert result.action == ReportAction.GENERATE_AND_SEND
+    assert result.action == ReportAction.GENERATE_AND_ATTEMPT_CLAIM
 
 
 @pytest.mark.parametrize("force", [False, True])
@@ -83,7 +83,7 @@ def test_intent_full_boolean_matrix_never_resends_sent_or_disabled(
         delivery_claim_available=delivery_claim_available,
     )
     if legacy_sent or not kakao_enabled or not delivery_claim_available:
-        assert intent.action != ReportAction.GENERATE_AND_SEND
+        assert intent.action != ReportAction.GENERATE_AND_ATTEMPT_CLAIM
     if existing_report and not force_regenerate:
         assert intent.action == ReportAction.SKIP
     if legacy_sent and not existing_report:
