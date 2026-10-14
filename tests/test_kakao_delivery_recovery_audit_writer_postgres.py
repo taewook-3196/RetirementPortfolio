@@ -1,5 +1,6 @@
 """Transactional recovery audit writer checks in a disposable PostgreSQL DB."""
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -44,8 +45,16 @@ def test_audit_writer_commit_and_rejected_write_rollback(pg):
             reason="verified no network request",
         )
 
-    audit_id = append_recovery_audit(
-        pg, record=make_record(), authenticated_admin_id=user)
+    def submit(_):
+        try:
+            return append_recovery_audit(pg, record=make_record(), authenticated_admin_id=user)
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(submit, range(2)))
+    assert sum(isinstance(value, int) for value in outcomes) == 1
+    audit_id = next(value for value in outcomes if isinstance(value, int))
     assert isinstance(audit_id, int) and audit_id > 0
     # Duplicate requests are rejected by the DB unique index, not by a
     # race-prone read-before-insert check.
