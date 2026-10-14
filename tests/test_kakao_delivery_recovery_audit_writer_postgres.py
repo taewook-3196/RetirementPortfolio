@@ -41,8 +41,8 @@ def test_audit_writer_commit_and_rejected_write_rollback(pg):
             actor_id=user, target_user_id=user, attempt_id=attempt,
             reviewed_at=datetime.now(timezone.utc),
             evidence_reference="incident-123",
-            decision="eligible_for_future_recovery",
-            reason="verified no network request",
+            decision="denied",
+            reason="request start not independently verified",
         )
 
     def submit(_):
