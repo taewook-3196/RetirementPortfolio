@@ -41,7 +41,7 @@ def send_with_delivery_claim(
     if not evaluate_delivery_feature_gate(env).enabled:
         return SendResult(SendOutcome.DISABLED)
     claim_id = claim()  # propagate DB errors: fail closed, do not call transport
-    if claim_id is None or claim_id is False:
+    if not claim_id:
         return SendResult(SendOutcome.NOT_CLAIMED)
     try:
         response = transport()
