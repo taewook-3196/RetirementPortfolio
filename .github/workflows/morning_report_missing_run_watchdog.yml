@@ -1,0 +1,101 @@
+name: Morning Report missing-run watchdog
+
+on:
+  # 02:30 UTC Tue-Sat = 11:30 KST Tue-Sat.
+  schedule:
+    - cron: '30 2 * * 2-6'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  issues: write
+
+concurrency:
+  group: morning-report-missing-run-watchdog
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for today's Morning Report run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const now = new Date();
+            const dateKey = new Intl.DateTimeFormat('en-CA', {
+              timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+            }).format(now);
+            const kstWeekday = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'Asia/Seoul', weekday: 'short',
+            }).format(now);
+            if (['Sun', 'Mon'].includes(kstWeekday)) {
+              core.info('No Morning Report is scheduled on KST Sunday or Monday');
+              return;
+            }
+            // Avoid premature alerts when manually dispatched before the morning cutoff.
+            const kstHour = Number(new Intl.DateTimeFormat('en-GB', {
+              timeZone: 'Asia/Seoul', hour: '2-digit', hourCycle: 'h23',
+            }).format(now));
+            const kstMinute = Number(new Intl.DateTimeFormat('en-GB', {
+              timeZone: 'Asia/Seoul', minute: '2-digit',
+            }).format(now));
+            if (kstHour * 60 + kstMinute < 11 * 60 + 30) {
+              core.info('Before the 11:30 KST monitoring cutoff');
+              return;
+            }
+            const title = '[자동 감시] Morning Report 실행 누락';
+            const issueList = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', per_page: 100,
+            });
+            const alerts = issueList.filter(i => !i.pull_request && i.title === title);
+            const recentRuns = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner, repo, workflow_id: 'morning_report.yml', per_page: 100,
+            });
+            const today = recentRuns.filter(run => {
+              const created = new Date(run.created_at);
+              const runDate = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+              }).format(created);
+              return runDate === dateKey && run.event === 'schedule';
+            });
+            if (today.length) {
+              for (const issue of alerts) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: issue.number,
+                  body: `실행 기록 확인으로 감시 알림을 종료합니다. KST 날짜: ${dateKey}. 최신 실행: ${today[0].html_url}`,
+                });
+                await github.rest.issues.update({
+                  owner, repo, issue_number: issue.number,
+                  state: 'closed', state_reason: 'completed',
+                });
+              }
+              core.info(`Found ${today.length} scheduled run(s) for ${dateKey}`);
+              return;
+            }
+            const body = [
+              `한국시간 ${dateKey} 오전 11:30 이후에도 Morning Report의 예약 실행 기록이 확인되지 않습니다.`,
+              '',
+              'GitHub Actions 스케줄 지연이나 미실행 가능성을 확인하세요.',
+              '이 감시 기능은 보고서를 재생성하거나 카카오톡을 재발송하지 않습니다.',
+              '',
+              `확인 위치: https://github.com/${owner}/${repo}/actions/workflows/morning_report.yml`,
+              `<!-- missing-report-date:${dateKey} -->`,
+            ].join('\n');
+            if (alerts.length) {
+              const latest = alerts[0];
+              if ((latest.body || '').includes(`<!-- missing-report-date:${dateKey} -->`)) {
+                core.info('Missing-run alert already exists for today');
+                return;
+              }
+              await github.rest.issues.update({
+                owner, repo, issue_number: latest.number, body,
+              });
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: latest.number,
+                body: `새로운 실행 누락 감지: ${dateKey}`,
+              });
+            } else {
+              await github.rest.issues.create({ owner, repo, title, body });
+            }
