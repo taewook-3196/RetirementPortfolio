@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS public.kakao_delivery_attempts (
     CONSTRAINT kakao_delivery_attempts_status_check CHECK (
         status IN ('pending', 'sending', 'sent', 'uncertain', 'failed_before_send')
     ),
-    CONSTRAINT kakao_delivery_attempts_date_owner_attempt_unique UNIQUE (user_id, report_date, attempt_id)
+    CONSTRAINT kakao_delivery_attempts_date_owner_attempt_unique UNIQUE (user_id, report_date, attempt_id),
+    CONSTRAINT kakao_delivery_attempts_owner_attempt_unique UNIQUE (user_id, attempt_id)
 );
 
 -- One active or confirmed attempt per user/day. A failed-before-send history
