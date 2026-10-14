@@ -997,3 +997,48 @@ def test_cached_identity_requires_exact_persisted_report_and_tracks_attempt(pg):
         engine=pg, user_id=user_id, report_date=report_date
     )
     assert verified.legacy_sent is True
+
+
+def test_staged_cached_gateway_requires_persisted_identity_and_prevents_resend(pg):
+    """Cache delivery requires a report row and never re-sends a completed day."""
+    from datetime import date
+    from services.kakao_delivery_cached_gateway import send_staged_cached_report
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    report_date = date(2026, 10, 12)
+    calls = []
+
+    class MockKakao:
+        def is_configured(self):
+            return True
+
+        def send_morning_report(self, summary, url):
+            calls.append((summary, url))
+            return True, "mock"
+
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    args = dict(
+        engine=pg, user_id=user_id, report_date=report_date,
+        kakao_service=MockKakao(), summary_text="summary",
+        report_web_url="https://example.com/report", env=env,
+    )
+    assert send_staged_cached_report(**args).outcome == SendOutcome.NOT_CLAIMED
+    assert calls == []
+
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text(
+            "INSERT INTO public.morning_reports (user_id, report_date) "
+            "VALUES (CAST(:u AS uuid), DATE '2026-10-12')"
+        ), {"u": str(user_id)})
+
+    assert send_staged_cached_report(**args).outcome == SendOutcome.SENT
+    assert len(calls) == 1
+    assert send_staged_cached_report(**args).outcome == SendOutcome.NOT_CLAIMED
+    assert len(calls) == 1
+    with pg.connect() as conn:
+        assert conn.execute(text(
+            "SELECT kakao_sent_at IS NOT NULL FROM public.morning_reports "
+            "WHERE user_id = CAST(:u AS uuid)"
+        ), {"u": str(user_id)}).scalar_one() is True
