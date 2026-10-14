@@ -23,3 +23,28 @@ Status: **BLOCKED — no production migration, no cutover, no automatic resend**
 10. **Operational acceptance:** read-only audit against actual delivery markers, controlled staging E2E, and explicit operator signoff outside morning delivery hours.
 
 Do not set `KAKAO_DELIVERY_STATE_ENABLED=true` or `KAKAO_DELIVERY_CUTOVER_APPROVED=true` until these gates pass. Successful unit and disposable-Postgres tests do not establish live delivery correctness.
+
+## Reviewed recovery protocol (not implemented or authorized)
+
+A `failed_before_send` record is **not** a retry permit. The database
+claim function refuses all historical attempts for the same user and date,
+including pre-send failures. The partial unique index alone is insufficient.
+
+1. Freeze the scheduled and manual send entrypoints for the affected user/date;
+   do not toggle cutover flags or use the legacy force-resend path.
+2. Identify the attempt by user, report date and attempt ID using a privileged,
+   read-only inspection. Confirm the legacy `kakao_sent_at` marker is null.
+3. Establish affirmative evidence that the Kakao network request never began.
+   A timeout, missing log, expired lease, or generic API error is **not** proof.
+   If evidence is absent, retain the blocked record and reconcile externally.
+4. Record operator identity, evidence reference, approval time, affected attempt,
+   and the intended recovery action in an access-controlled audit trail.
+5. A future recovery implementation must atomically authorize one new claim
+   under a per-user/date lock and recheck legacy and attempt markers. Never
+   delete the prior attempt or simply flip its status to bypass the guard.
+6. Verify one transport invocation, both success markers, and no other sender
+   during a controlled disposable-DB/staging test before enabling any recovery.
+
+**Current implementation deliberately provides no recovery write endpoint.**
+Manual recovery remains blocked until audited approval, DB locking, access
+control, and tests are implemented and reviewed.
