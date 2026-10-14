@@ -33,7 +33,7 @@ def test_adapter_passes_existing_kakao_arguments_only_through_claimed_transport(
         result = send_staged_morning_report(
             engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
             kakao_service=fake, summary_text="test summary", report_web_url="https://example.com/report",
-            env={},
+            env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
         )
     assert result == (True, "ok")
     assert fake.calls == [("test summary", "https://example.com/report")]
@@ -50,6 +50,7 @@ def test_adapter_does_not_send_when_staged_claim_is_denied():
         result = send_staged_morning_report(
             engine=object(), user_id=uuid4(), report_date=date(2026, 10, 12),
             kakao_service=fake, summary_text="test", report_web_url="https://example.com",
+            env={"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
         )
     assert result == SendOutcome.NOT_CLAIMED
     assert fake.calls == []
