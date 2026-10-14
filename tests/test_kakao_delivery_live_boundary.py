@@ -115,3 +115,22 @@ def test_staged_transport_adapter_is_not_live_or_called_from_other_modules():
             source = path.read_text(encoding="utf-8")
             assert "send_staged_morning_report(" not in source, path
             assert "run_staged_delivery(" not in source, path
+
+
+def test_scheduled_workflow_retains_manual_force_resend_in_inventory():
+    """Until reviewed cutover, any manual resend control must remain visible."""
+    source = Path(".github/workflows/morning_report.yml").read_text(encoding="utf-8")
+    assert "force_resend:" in source
+    assert "FORCE_MORNING_REPORT:" in source
+    assert "scripts.run_multi_user_morning_reports" in source
+
+
+def test_legacy_scheduler_force_path_remains_explicitly_documented():
+    """Do not silently change or overlook legacy force behavior in a draft PR."""
+    source = Path("scripts/run_multi_user_morning_reports.py").read_text(encoding="utf-8")
+    assert "def run_all_users(" in source
+    assert "if force and existing_report is not None:" in source
+    assert "force_kakao=send_kakao" in source
+    document = Path("docs/kakao_delivery_cutover_acceptance.md").read_text(encoding="utf-8")
+    assert "force_resend" in document
+    assert "manual" in document.lower()
