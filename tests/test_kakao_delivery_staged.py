@@ -38,16 +38,11 @@ def test_staged_gateway_never_transports_when_claim_denied(monkeypatch, origin):
 
 
 def test_staged_gateway_disabled_flags_do_not_claim_or_send(monkeypatch):
-    # The current gateway constructs its store before the feature gate runs;
-    # construction alone must not perform I/O or send a message.
-    class PassiveStore:
+    class ForbiddenStore:
         def __init__(self, engine):
-            pass
+            pytest.fail("disabled gateway initialized database adapter")
 
-        def claim(self, attempt):
-            pytest.fail("disabled gateway attempted a claim")
-
-    monkeypatch.setattr("services.kakao_delivery_staged.PostgresDeliveryAttempts", PassiveStore)
+    monkeypatch.setattr("services.kakao_delivery_staged.PostgresDeliveryAttempts", ForbiddenStore)
     result = run_staged_delivery(
         engine=None, user_id=uuid4(), report_date=date(2026, 10, 14),
         transport=lambda: pytest.fail("disabled gateway sent Kakao"), env={},
