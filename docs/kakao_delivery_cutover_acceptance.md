@@ -11,7 +11,7 @@ Status: **BLOCKED — no production migration, no cutover, no automatic resend**
 
 ## Mandatory gates
 
-1. **Single sender:** scheduled, manual and CLI paths must share one durable claim; never run old and new senders concurrently.
+1. **Single sender:** scheduled, manual, CLI and `send_cached_kakao` paths must share one durable claim; never run old and new senders concurrently.
 2. **Database:** validate migration, RLS, grants and rollback on disposable PostgreSQL matching production before any production DDL.
 3. **Concurrency:** simultaneous same-user/day invocations cause at most one transport call.
 4. **Uncertain delivery:** timeouts, connection resets and DB commit uncertainty require manual reconciliation, never automatic resend.
