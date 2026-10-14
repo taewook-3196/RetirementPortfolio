@@ -896,3 +896,54 @@ def test_shared_origin_gateway_uses_real_postgres_claim(pg, origin_name):
             "SELECT kakao_sent_at FROM public.morning_reports "
             "WHERE user_id = CAST(:u AS uuid)"
         ), {"u": str(user_id)}).scalar_one() is not None
+
+
+def test_shared_gateway_cross_origin_attempts_send_only_once(pg):
+    """Four independent entrypoints share one authoritative per-user/day claim."""
+    from datetime import date
+    from threading import Lock
+    from services.kakao_delivery_eligibility import DeliveryOrigin
+    from services.kakao_delivery_origin_gateway import send_staged_for_origin
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text(
+            "INSERT INTO public.morning_reports (user_id, report_date) "
+            "VALUES (CAST(:u AS uuid), DATE '2026-10-12')"
+        ), {"u": str(user_id)})
+
+    lock = Lock()
+    calls = []
+
+    class MockKakao:
+        def is_configured(self):
+            return True
+
+        def send_morning_report(self, summary, url):
+            with lock:
+                calls.append(summary)
+            return True, "mock"
+
+    service = MockKakao()
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+
+    def worker(origin):
+        return send_staged_for_origin(
+            origin=origin, engine=pg, user_id=user_id,
+            report_date=date(2026, 10, 12), kakao_service=service,
+            summary_text=origin.value, report_web_url="https://example.com",
+            legacy_sent=False, attempt_state=None, force=True, env=env,
+        ).outcome
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(worker, list(DeliveryOrigin)))
+    assert results.count(SendOutcome.SENT) == 1
+    assert results.count(SendOutcome.NOT_CLAIMED) == 3
+    assert len(calls) == 1
+    with pg.connect() as conn:
+        assert conn.execute(text(
+            "SELECT count(*) FROM public.kakao_delivery_attempts "
+            "WHERE user_id = CAST(:u AS uuid)"
+        ), {"u": str(user_id)}).scalar_one() == 1
