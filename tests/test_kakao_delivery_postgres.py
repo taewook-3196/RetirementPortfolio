@@ -680,3 +680,76 @@ def test_concurrent_staged_gateways_invoke_mock_transport_only_once(pg):
             text("SELECT kakao_sent_at IS NOT NULL FROM public.morning_reports WHERE user_id = :u"),
             {"u": user_id},
         ).scalar_one() is True
+
+
+@pytest.mark.parametrize("failure_mode", ["timeout", "negative_response", "finalization_failure"])
+def test_concurrent_staged_gateways_never_redeliver_after_uncertain_first_send(pg, failure_mode):
+    """Durable attempt prevents a competing entrypoint from repeating an ambiguous send."""
+    from datetime import date
+    from threading import Barrier, Event, Lock
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(
+            text("INSERT INTO public.morning_reports (user_id, report_date) "
+                 "VALUES (CAST(:u AS uuid), DATE '2026-10-12')"),
+            {"u": str(user_id)},
+        )
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true", "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    barrier = Barrier(4)
+    transport_entered = Event()
+    release_transport = Event()
+    lock = Lock()
+    transport_calls = []
+
+    def invoke(origin):
+        barrier.wait(timeout=15)
+
+        def mock_transport():
+            with lock:
+                transport_calls.append(origin)
+            transport_entered.set()
+            if not release_transport.wait(timeout=15):
+                raise TimeoutError("test transport synchronization expired")
+            if failure_mode == "timeout":
+                raise TimeoutError("Kakao response lost after request")
+            if failure_mode == "negative_response":
+                return (False, "ambiguous provider response")
+            # Simulate a success whose completion cannot be persisted by
+            # deleting the dated report after dispatch, before finalization.
+            with pg.begin() as conn:
+                conn.execute(
+                    text("DELETE FROM public.morning_reports "
+                         "WHERE user_id = :u AND report_date = DATE '2026-10-12'"),
+                    {"u": user_id},
+                )
+            return (True, "accepted")
+
+        return run_staged_delivery(
+            engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+            transport=mock_transport, env=env,
+        ).outcome
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(invoke, origin) for origin in ("scheduled", "manual", "cli", "cached")]
+        try:
+            assert transport_entered.wait(timeout=15)
+        finally:
+            release_transport.set()
+        outcomes = [future.result(timeout=20) for future in futures]
+
+    assert outcomes.count(SendOutcome.UNCERTAIN) == 1
+    assert outcomes.count(SendOutcome.NOT_CLAIMED) == 3
+    assert len(transport_calls) == 1
+    with pg.connect() as conn:
+        assert conn.execute(
+            text("SELECT count(*) FROM public.kakao_delivery_attempts WHERE user_id = :u"),
+            {"u": user_id},
+        ).scalar_one() == 1
+        assert conn.execute(
+            text("SELECT status FROM public.kakao_delivery_attempts WHERE user_id = :u"),
+            {"u": user_id},
+        ).scalar_one() in ("uncertain", "sending")
