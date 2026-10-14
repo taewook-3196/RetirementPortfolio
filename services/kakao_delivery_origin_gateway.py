@@ -5,6 +5,7 @@ precheck; only a committed PostgreSQL claim authorizes Kakao transport.
 """
 from datetime import date
 from uuid import UUID
+from urllib.parse import urlsplit
 
 from services.kakao_delivery_eligibility import check_delivery_eligibility
 from services.kakao_delivery_feature_gate import evaluate_delivery_feature_gate
@@ -24,7 +25,22 @@ def send_staged_for_origin(*, origin, engine, user_id, report_date, kakao_servic
         return SendResult(SendOutcome.NOT_CLAIMED)
     if not isinstance(summary_text, str) or not summary_text.strip():
         return SendResult(SendOutcome.NOT_CLAIMED)
-    if not isinstance(report_web_url, str) or not report_web_url.startswith("https://"):
+    if not isinstance(report_web_url, str):
+        return SendResult(SendOutcome.NOT_CLAIMED)
+    try:
+        parsed = urlsplit(report_web_url)
+        host = parsed.hostname
+        if (
+            parsed.scheme != "https" or not host or parsed.username is not None
+            or parsed.password is not None or parsed.fragment
+            or any(ord(ch) < 33 or ord(ch) == 127 for ch in report_web_url)
+            or host.lower() in ("localhost", "localhost.localdomain")
+            or host.endswith(".localhost")
+            or host.startswith("127.") or host in ("0.0.0.0", "::1")
+        ):
+            return SendResult(SendOutcome.NOT_CLAIMED)
+        _ = parsed.port
+    except ValueError:
         return SendResult(SendOutcome.NOT_CLAIMED)
     eligibility = check_delivery_eligibility(
         origin=origin, legacy_sent=legacy_sent,
