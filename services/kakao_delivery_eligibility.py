@@ -31,6 +31,11 @@ def check_delivery_eligibility(*, origin: DeliveryOrigin, legacy_sent: bool,
         return Eligibility(False, "unknown delivery origin")
     if legacy_sent:
         return Eligibility(False, "legacy delivery already recorded")
-    if attempt_state is None or attempt_state == "failed_before_send":
+    if attempt_state is None:
         return Eligibility(True, "eligible for atomic claim")
+    # The active-attempt partial unique index excludes failed_before_send,
+    # but only an operator-confirmed pre-transport failure is safe to retry.
+    # This policy intentionally fails closed until that recovery is explicit.
+    if attempt_state == "failed_before_send":
+        return Eligibility(False, "pre-send failure requires reviewed recovery")
     return Eligibility(False, "existing or ambiguous delivery attempt")
