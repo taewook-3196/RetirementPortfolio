@@ -103,3 +103,23 @@ def test_newest_duplicate_wins_even_if_collected_later(monkeypatch):
     result = service.get_news_feed(mode="portfolio_only", etfs=[Asset()])
     assert len(result) == 1
     assert result[0]["link"] == "https://example.com/newer"
+
+
+def test_duplicate_titles_ignore_whitespace_and_punctuation(monkeypatch):
+    service = NewsService()
+    older = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
+    newer = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    monkeypatch.setattr(service, "fetch_stock_news", lambda ticker, name="": [
+        {"title": "삼성전자, 실적 발표!", "datetime": older,
+         "link": "https://example.com/older"}
+    ])
+    monkeypatch.setattr(service, "fetch_keyword_rss", lambda *args, **kwargs: [
+        {"title": "삼성전자 실적발표", "datetime": newer,
+         "link": "https://example.com/newer"}
+    ])
+    class Asset:
+        ticker = "069500"
+        name = "KOSPI"
+    result = service.get_news_feed(mode="portfolio_only", etfs=[Asset()])
+    assert len(result) == 1
+    assert result[0]["link"] == "https://example.com/newer"
