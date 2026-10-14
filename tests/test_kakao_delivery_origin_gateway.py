@@ -164,7 +164,7 @@ def test_untrusted_caller_hint_cannot_authorize_transport_when_claim_denied(monk
     "https://example.com/report#fragment",
     "https://example.com:invalid/report",
     "https://example.com/with space",
-    "https://example.com/with\\nnewline",
+    "https://example.com/with\nnewline",
     "https:///missing-host",
 ])
 def test_unsafe_report_url_fails_before_adapter(monkeypatch, url):
