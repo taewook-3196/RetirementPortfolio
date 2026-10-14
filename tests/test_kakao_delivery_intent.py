@@ -64,3 +64,41 @@ def test_inconsistent_legacy_marker_fails_closed():
         legacy_sent=True, delivery_claim_available=True,
     )
     assert result.action == ReportAction.SKIP
+
+
+@pytest.mark.parametrize("force_regenerate", [False, True])
+@pytest.mark.parametrize("kakao_enabled", [False, True])
+@pytest.mark.parametrize("existing_report", [False, True])
+@pytest.mark.parametrize("legacy_sent", [False, True])
+@pytest.mark.parametrize("delivery_claim_available", [False, True])
+def test_intent_full_boolean_matrix_never_resends_sent_or_disabled(
+    force_regenerate, kakao_enabled, existing_report, legacy_sent,
+    delivery_claim_available,
+):
+    intent = resolve_report_intent(
+        force_regenerate=force_regenerate,
+        kakao_enabled=kakao_enabled,
+        existing_report=existing_report,
+        legacy_sent=legacy_sent,
+        delivery_claim_available=delivery_claim_available,
+    )
+    if legacy_sent or not kakao_enabled or not delivery_claim_available:
+        assert intent.action != ReportAction.GENERATE_AND_SEND
+    if existing_report and not force_regenerate:
+        assert intent.action == ReportAction.SKIP
+    if legacy_sent and not existing_report:
+        assert intent.action == ReportAction.SKIP
+
+
+@pytest.mark.parametrize("field", [
+    "force_regenerate", "kakao_enabled", "existing_report",
+    "legacy_sent", "delivery_claim_available",
+])
+@pytest.mark.parametrize("invalid", [None, "true", 1, [], {}])
+def test_invalid_intent_inputs_never_authorize_send(field, invalid):
+    args = dict(
+        force_regenerate=True, kakao_enabled=True, existing_report=True,
+        legacy_sent=False, delivery_claim_available=True,
+    )
+    args[field] = invalid
+    assert resolve_report_intent(**args).action == ReportAction.SKIP
