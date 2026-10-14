@@ -1,9 +1,14 @@
 from services.kakao_delivery_state import DeliveryState, decide_retry
 
 
-def test_pending_and_pre_send_failure_can_retry():
-    for state in (DeliveryState.PENDING, DeliveryState.FAILED_BEFORE_SEND):
-        assert decide_retry(state).automatic_retry_allowed is True
+def test_pending_can_retry_before_any_send_attempt():
+    assert decide_retry(DeliveryState.PENDING).automatic_retry_allowed is True
+
+
+def test_pre_send_failure_requires_operator_review():
+    decision = decide_retry(DeliveryState.FAILED_BEFORE_SEND)
+    assert decision.automatic_retry_allowed is False
+    assert "reviewed recovery" in decision.reason
 
 
 def test_sent_and_uncertain_never_auto_retry():
