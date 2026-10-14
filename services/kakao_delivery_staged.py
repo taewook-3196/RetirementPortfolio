@@ -7,7 +7,8 @@ supplying an appropriately configured transport only after approved cutover.
 
 from uuid import uuid4
 
-from services.kakao_delivery_orchestrator import send_with_delivery_claim
+from services.kakao_delivery_orchestrator import SendOutcome, SendResult, send_with_delivery_claim
+from services.kakao_delivery_feature_gate import evaluate_delivery_feature_gate
 from services.kakao_delivery_postgres import DeliveryAttempt, PostgresDeliveryAttempts
 
 
@@ -17,6 +18,8 @@ def run_staged_delivery(*, engine, user_id, report_date, transport, env=None):
     Each invocation gets a unique attempt ID. If a prior attempt is ambiguous,
     the database's active-attempt constraint prevents automatic redelivery.
     """
+    if not evaluate_delivery_feature_gate(env).enabled:
+        return SendResult(SendOutcome.DISABLED)
     attempt = DeliveryAttempt(user_id=user_id, report_date=report_date, attempt_id=uuid4())
     store = PostgresDeliveryAttempts(engine)
     return send_with_delivery_claim(
