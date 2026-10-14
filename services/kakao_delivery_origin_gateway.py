@@ -3,6 +3,9 @@
 This is not wired into production. Eligibility is an advisory fail-closed
 precheck; only a committed PostgreSQL claim authorizes Kakao transport.
 """
+from datetime import date
+from uuid import UUID
+
 from services.kakao_delivery_eligibility import check_delivery_eligibility
 from services.kakao_delivery_feature_gate import evaluate_delivery_feature_gate
 from services.kakao_delivery_orchestrator import SendOutcome, SendResult
@@ -15,6 +18,14 @@ def send_staged_for_origin(*, origin, engine, user_id, report_date, kakao_servic
     """Unify origin policy while preserving the authoritative database gate."""
     if not evaluate_delivery_feature_gate(env).enabled:
         return SendResult(SendOutcome.DISABLED)
+    # Validate trusted routing identity before any service or database access.
+    # bool is an int subclass, so require exact date and UUID types.
+    if not isinstance(user_id, UUID) or type(report_date) is not date:
+        return SendResult(SendOutcome.NOT_CLAIMED)
+    if not isinstance(summary_text, str) or not summary_text.strip():
+        return SendResult(SendOutcome.NOT_CLAIMED)
+    if not isinstance(report_web_url, str) or not report_web_url.startswith("https://"):
+        return SendResult(SendOutcome.NOT_CLAIMED)
     eligibility = check_delivery_eligibility(
         origin=origin, legacy_sent=legacy_sent,
         attempt_state=attempt_state, force=force,
