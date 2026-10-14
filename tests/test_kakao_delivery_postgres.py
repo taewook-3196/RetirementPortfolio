@@ -34,6 +34,8 @@ def pg():
         conn.execute(text("DROP FUNCTION IF EXISTS public.finish_kakao_delivery_with_legacy(uuid, uuid)"))
         conn.execute(text("DROP FUNCTION IF EXISTS public.finish_kakao_delivery_attempt(uuid, uuid, text, text)"))
         conn.execute(text("DROP FUNCTION IF EXISTS public.claim_kakao_delivery_attempt(uuid, date, uuid, integer)"))
+        conn.execute(text("DROP TABLE IF EXISTS public.kakao_delivery_recovery_audit"))
+        conn.execute(text("DROP FUNCTION IF EXISTS public.reject_kakao_recovery_audit_mutation()"))
         conn.execute(text("DROP TABLE IF EXISTS public.kakao_delivery_attempts"))
         conn.execute(text("DROP TABLE IF EXISTS public.morning_reports"))
         conn.execute(text("DROP TABLE IF EXISTS public.profiles"))
