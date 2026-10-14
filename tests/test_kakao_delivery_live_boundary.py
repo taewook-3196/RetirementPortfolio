@@ -81,3 +81,37 @@ def test_cached_kakao_sender_is_tracked_as_separate_cutover_path():
 def test_cutover_acceptance_document_tracks_cached_sender():
     document = Path("docs/kakao_delivery_cutover_acceptance.md").read_text(encoding="utf-8")
     assert "send_cached_kakao" in document
+
+
+def test_every_python_direct_kakao_transport_call_is_in_reviewed_inventory():
+    """New direct transport callsites must be explicitly reviewed before cutover.
+
+    This guard intentionally excludes tests and the staged adapter; only the
+    legacy service may invoke the KakaoService transport directly today.
+    """
+    allowed = {"services/daily_report_service.py"}
+    actual = set()
+    for root in ("services", "scripts", "web", "ui"):
+        for path in Path(root).rglob("*.py"):
+            source = path.read_text(encoding="utf-8")
+            if ".send_morning_report(" in source:
+                actual.add(path.as_posix())
+    assert actual == allowed, (
+        "Unexpected direct Kakao sender detected; review and update the "
+        f"cutover inventory before proceeding: {actual ^ allowed}"
+    )
+
+
+def test_staged_transport_adapter_is_not_live_or_called_from_other_modules():
+    """Prevent an unnoticed partial rollout that bypasses the approved cutover."""
+    staged_only = {
+        "services/kakao_delivery_transport_adapter.py",
+        "services/kakao_delivery_staged.py",
+    }
+    for root in ("services", "scripts", "web", "ui"):
+        for path in Path(root).rglob("*.py"):
+            if path.as_posix() in staged_only:
+                continue
+            source = path.read_text(encoding="utf-8")
+            assert "send_staged_morning_report(" not in source, path
+            assert "run_staged_delivery(" not in source, path
