@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 
 import pytest
@@ -57,3 +57,14 @@ def test_rejected_web_admin_never_writes(monkeypatch):
                         lambda *a, **k: pytest.fail("write must not occur"))
     with pytest.raises(HTTPException):
         append_for_authenticated_operator(object(), authorization="bad", record=None)
+
+
+@pytest.mark.parametrize("reviewed_at", [
+    datetime(2026, 10, 14),
+    datetime.now(timezone.utc) + timedelta(days=1),
+    None,
+])
+def test_invalid_review_timestamp_denied_before_db_access(reviewed_at):
+    record = make_record(reviewed_at=reviewed_at)
+    with pytest.raises(RecoveryAuditWriteForbidden):
+        append_recovery_audit(None, record=record, authenticated_admin_id=record.actor_id)
