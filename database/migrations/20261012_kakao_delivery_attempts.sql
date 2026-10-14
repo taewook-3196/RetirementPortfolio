@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS public.kakao_delivery_attempts (
     CONSTRAINT kakao_delivery_attempts_date_owner_attempt_unique UNIQUE (user_id, report_date, attempt_id)
 );
 
--- One active or confirmed attempt per user/day. Multiple historical attempts
--- are possible only after explicit resolution to failed_before_send.
+-- One active or confirmed attempt per user/day. A failed-before-send history
+-- also blocks new claims until a separately reviewed recovery path exists.
 CREATE UNIQUE INDEX IF NOT EXISTS kakao_delivery_attempts_one_active_per_day
 ON public.kakao_delivery_attempts (user_id, report_date)
 WHERE status IN ('pending', 'sending', 'sent', 'uncertain');
@@ -68,6 +68,14 @@ BEGIN
         SELECT 1 FROM public.morning_reports
         WHERE user_id = p_user_id AND report_date = p_report_date
           AND kakao_sent_at IS NOT NULL
+    ) THEN
+        RETURN NULL;
+    END IF;
+    -- The partial unique index excludes failed_before_send; explicitly block
+    -- all historical attempts until operator-reviewed recovery is implemented.
+    IF EXISTS (
+        SELECT 1 FROM public.kakao_delivery_attempts
+        WHERE user_id = p_user_id AND report_date = p_report_date
     ) THEN
         RETURN NULL;
     END IF;
