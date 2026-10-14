@@ -38,10 +38,6 @@ def test_staged_gateway_never_transports_when_claim_denied(monkeypatch, origin):
 
 
 def test_staged_gateway_disabled_flags_do_not_claim_or_send(monkeypatch):
-    class ForbiddenStore:
-        def __init__(self, engine):
-            pytest.fail("disabled gateway should not even initialize DB store")
-
     # The current gateway constructs its store before the feature gate runs;
     # construction alone must not perform I/O or send a message.
     class PassiveStore:
