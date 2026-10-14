@@ -68,3 +68,9 @@ def test_invalid_review_timestamp_denied_before_db_access(reviewed_at):
     record = make_record(reviewed_at=reviewed_at)
     with pytest.raises(RecoveryAuditWriteForbidden):
         append_recovery_audit(None, record=record, authenticated_admin_id=record.actor_id)
+
+
+def test_unverified_positive_recovery_decision_is_denied_before_db_access():
+    record = make_record()
+    with pytest.raises(RecoveryAuditWriteForbidden, match="verified server-side evidence"):
+        append_recovery_audit(None, record=record, authenticated_admin_id=record.actor_id)
