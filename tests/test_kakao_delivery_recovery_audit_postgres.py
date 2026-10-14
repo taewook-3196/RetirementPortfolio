@@ -24,8 +24,8 @@ def test_recovery_audit_append_only_and_client_roles_denied(pg):
             VALUES (CAST(:u AS uuid),CAST(:u AS uuid),CAST(:a AS uuid),now(),'ticket-1','denied','not proven')"""), {"u": str(user), "a": str(attempt)})
         other = uuid4()
         conn.execute(text("INSERT INTO public.profiles(id) VALUES (:u)"), {"u": str(other)})
-        with conn.begin_nested():
-            with pytest.raises(Exception):
+        with pytest.raises(Exception):
+            with conn.begin_nested():
                 conn.execute(text("""INSERT INTO public.kakao_delivery_recovery_audit
                     (actor_id,target_user_id,attempt_id,reviewed_at,evidence_reference,decision,reason)
                     VALUES (CAST(:u AS uuid),CAST(:u AS uuid),CAST(:a AS uuid),now(),'ticket-2','denied','wrong owner')"""),
