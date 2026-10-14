@@ -91,7 +91,7 @@ def test_uncertain_outcome_blocks_next_claim_even_after_lease_expiry(pg):
         assert conn.execute(claim, {**args, "a": str(uuid4())}).scalar_one() is None
 
 
-def test_failed_before_send_allows_explicit_new_attempt(pg):
+def test_failed_before_send_blocks_new_claim_until_reviewed_recovery(pg):
     user_id, attempt_id = uuid4(), uuid4()
     with pg.begin() as conn:
         conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
@@ -101,7 +101,7 @@ def test_failed_before_send_allows_explicit_new_attempt(pg):
         assert conn.execute(claim, args).scalar_one() is not None
         finish = text("SELECT public.finish_kakao_delivery_attempt(CAST(:u AS uuid), CAST(:a AS uuid), :status, NULL)")
         assert conn.execute(finish, {**args, "status": "failed_before_send"}).scalar_one() is True
-        assert conn.execute(claim, {**args, "a": str(uuid4())}).scalar_one() is not None
+        assert conn.execute(claim, {**args, "a": str(uuid4())}).scalar_one() is None
 
 
 def test_legacy_sent_marker_prevents_new_claim(pg):
