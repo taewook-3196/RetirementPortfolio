@@ -309,39 +309,28 @@ class NewsService:
 
         collected_stock_news: List[Dict[str, Any]] = []
         collected_constituent_news: List[Dict[str, Any]] = []
+        fetched_tickers: set[str] = set()
+        fetched_queries: set[str] = set()
 
-        # 1. 내 ETF 종목별 뉴스 및 핵심 구성종목 뉴스 수집
+        def collect_asset(ticker: str, name: str) -> None:
+            clean_ticker = str(ticker or "").strip()
+            if clean_ticker and clean_ticker not in fetched_tickers:
+                fetched_tickers.add(clean_ticker)
+                collected_stock_news.extend(self.fetch_stock_news(clean_ticker, name))
+            const_info = self.get_constituent_query(clean_ticker, name)
+            if const_info:
+                query, tag = const_info
+                if query not in fetched_queries:
+                    fetched_queries.add(query)
+                    collected_constituent_news.extend(self.fetch_keyword_rss(query, tag=tag, limit=4))
+
+        # 1. 보유종목과 관심종목이 겹치더라도 같은 뉴스 소스를 중복 요청하지 않습니다.
         for etf in etf_list:
-            ticker = getattr(etf, "ticker", "")
-            name = getattr(etf, "name", "")
-            if not ticker:
-                continue
+            collect_asset(getattr(etf, "ticker", ""), getattr(etf, "name", ""))
 
-            # (1) ETF 자체 종목 뉴스
-            stock_items = self.fetch_stock_news(ticker, name)
-            collected_stock_news.extend(stock_items)
-
-            # (2) ETF 핵심 편입종목 뉴스 (예: 381170 -> 엔비디아, 애플 등 또는 지능형 테마 검색)
-            const_info = self.get_constituent_query(ticker, name)
-            if const_info:
-                c_query, c_tag = const_info
-                const_items = self.fetch_keyword_rss(c_query, tag=c_tag, limit=4)
-                collected_constituent_news.extend(const_items)
-
-        # 2. 관심종목(Watchlist) 뉴스 수집
+        # 2. 종목코드가 없는 관심종목도 이름으로 검색합니다.
         for w in watch_list:
-            ticker = getattr(w, "ticker", "")
-            name = getattr(w, "name", "")
-            if ticker:
-                stock_items = self.fetch_stock_news(ticker, name)
-                collected_stock_news.extend(stock_items)
-
-            # Watchlist entries may identify overseas stocks by name only.
-            const_info = self.get_constituent_query(ticker, name)
-            if const_info:
-                c_query, c_tag = const_info
-                const_items = self.fetch_keyword_rss(c_query, tag=c_tag, limit=4)
-                collected_constituent_news.extend(const_items)
+            collect_asset(getattr(w, "ticker", ""), getattr(w, "name", ""))
 
         # 3. 전체 경제 뉴스 수집 (mode == 'all'인 경우)
         collected_economy_news: List[Dict[str, Any]] = []

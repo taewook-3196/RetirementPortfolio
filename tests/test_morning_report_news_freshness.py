@@ -150,3 +150,29 @@ def test_name_only_watchlist_still_gets_keyword_news(monkeypatch):
                                    watchlist=[SimpleNamespace(ticker="", name="엔비디아")])
     assert calls == [("엔비디아", "엔비디아")]
     assert [item["title"] for item in result] == ["해외 관심종목 최신 기사"]
+
+
+def test_overlapping_portfolio_watchlist_fetches_each_source_once(monkeypatch):
+    from types import SimpleNamespace
+
+    service = NewsService()
+    stock_calls = []
+    keyword_calls = []
+    monkeypatch.setattr(service, "fetch_stock_news", lambda ticker, name="": stock_calls.append(ticker) or [])
+    monkeypatch.setattr(service, "fetch_keyword_rss", lambda query, tag, limit=4: keyword_calls.append(query) or [])
+    asset = SimpleNamespace(ticker="069500", name="코스피 대형주")
+    assert service.get_news_feed(mode="portfolio_only", etfs=[asset], watchlist=[asset]) == []
+    assert stock_calls == ["069500"]
+    assert len(keyword_calls) == 1
+
+
+def test_same_theme_query_is_fetched_once_for_different_tickers(monkeypatch):
+    from types import SimpleNamespace
+
+    service = NewsService()
+    keyword_calls = []
+    monkeypatch.setattr(service, "fetch_stock_news", lambda ticker, name="": [])
+    monkeypatch.setattr(service, "fetch_keyword_rss", lambda query, tag, limit=4: keyword_calls.append(query) or [])
+    assets = [SimpleNamespace(ticker="A", name="반도체"), SimpleNamespace(ticker="B", name="반도체")]
+    service.get_news_feed(mode="portfolio_only", watchlist=assets)
+    assert len(keyword_calls) == 1
