@@ -209,3 +209,13 @@ def test_news_html_rejects_non_http_and_hostless_links():
     render = ReportHtmlGenerator()._render_news_section
     for bad in ("javascript:alert(1)", "https:///missing-host", "data:text/html,hello"):
         assert 'href="#"' in render([{"title": "기사", "link": bad}])
+
+
+def test_news_section_omits_blank_headlines_and_empty_cards():
+    from services.report_html_generator import ReportHtmlGenerator
+
+    render = ReportHtmlGenerator()._render_news_section
+    assert render([{"title": "  "}, {"title": ""}]) == ""
+    result = render([{"title": ""}, {"title": "정상 뉴스", "link": "https://example.com"}])
+    assert result.count('class="news-item"') == 1
+    assert "정상 뉴스" in result
