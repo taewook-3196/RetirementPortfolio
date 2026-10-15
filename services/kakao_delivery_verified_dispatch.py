@@ -3,6 +3,9 @@
 This module is deliberately not imported by live services, scripts, or web
 routes. A read-only preflight never replaces the atomic PostgreSQL claim.
 """
+from datetime import date
+from uuid import UUID
+
 from services.kakao_delivery_cached_identity import verify_cached_report_identity
 from services.kakao_delivery_eligibility import DeliveryOrigin
 from services.kakao_delivery_feature_gate import evaluate_delivery_feature_gate
@@ -24,8 +27,6 @@ def dispatch_verified_staged_report(*, origin, engine, user_id, report_date,
         return SendResult(SendOutcome.NOT_CLAIMED)
     # Validate the payload before any database read or provider interaction.
     # The origin gateway independently rechecks these fields before claiming.
-    from datetime import date
-    from uuid import UUID
     if not isinstance(user_id, UUID) or type(report_date) is not date:
         return SendResult(SendOutcome.NOT_CLAIMED)
     if not isinstance(summary_text, str) or not summary_text.strip():
