@@ -130,3 +130,23 @@ def test_report_assembly_rechecks_news_freshness():
 
     source = (Path(__file__).resolve().parents[1] / "services" / "daily_report_service.py").read_text(encoding="utf-8")
     assert "for item in filter_recent_news(feed)[:8]:" in source
+
+
+def test_name_only_watchlist_still_gets_keyword_news(monkeypatch):
+    from types import SimpleNamespace
+
+    service = NewsService()
+    calls = []
+    monkeypatch.setattr(service, "fetch_stock_news", lambda *args: [])
+
+    def keyword_news(query, tag, limit=4):
+        calls.append((query, tag))
+        return [{"title": "해외 관심종목 최신 기사",
+                 "datetime": datetime.now(timezone.utc).isoformat(),
+                 "tag": tag}]
+
+    monkeypatch.setattr(service, "fetch_keyword_rss", keyword_news)
+    result = service.get_news_feed(mode="portfolio_only",
+                                   watchlist=[SimpleNamespace(ticker="", name="엔비디아")])
+    assert calls == [("엔비디아", "엔비디아")]
+    assert [item["title"] for item in result] == ["해외 관심종목 최신 기사"]
