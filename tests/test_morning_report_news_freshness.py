@@ -352,3 +352,18 @@ def test_rss_limits_count_valid_articles_not_blank_headlines(monkeypatch):
     keyword = service.fetch_keyword_rss("반도체", "테마", limit=2)
     assert [item["title"] for item in economy] == ["첫 기사", "둘째 기사"]
     assert [item["title"] for item in keyword] == ["첫 기사", "둘째 기사"]
+
+
+
+def test_rss_nonpositive_limits_do_not_fetch(monkeypatch):
+    import urllib.request
+
+    service = NewsService()
+
+    def unexpected_fetch(*args, **kwargs):
+        raise AssertionError("RSS fetch must not run for a nonpositive limit")
+
+    monkeypatch.setattr(urllib.request, "urlopen", unexpected_fetch)
+    for limit in (0, -1):
+        assert service.fetch_economy_rss(limit=limit) == []
+        assert service.fetch_keyword_rss("반도체", "테마", limit=limit) == []
