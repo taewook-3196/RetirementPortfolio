@@ -12,8 +12,8 @@ from web.app import home
 def test_period_returns_require_baseline_and_newer_data():
     today = date.today()
     values = [(today - timedelta(days=100), 100), (today, 120)]
-    assert _return_for_period(values, today - timedelta(days=90)) == 0.0
-    assert _return_for_period(values, today - timedelta(days=110)) == 20.0
+    assert _return_for_period(values, today - timedelta(days=90)) is None
+    assert _return_for_period(values, today - timedelta(days=110)) is None
 
 
 def test_non_trading_boundary_uses_next_available_close():
@@ -51,3 +51,17 @@ def test_sector_mobile_controls(monkeypatch):
     assert 'id="sector-period-select"' in html
     assert '/api/sector-momentum/' in html
     assert 'refreshSectorMomentum()' in html
+
+
+
+def test_momentum_does_not_report_zero_when_history_is_too_short():
+    today = date.today()
+    values = [(today - timedelta(days=20), 100), (today, 110)]
+    assert _return_for_period(values, today - timedelta(days=90)) is None
+    assert _return_for_period(values, today - timedelta(days=20)) == 10.0
+
+
+def test_momentum_requires_distinct_close_after_baseline():
+    today = date.today()
+    values = [(today, 120)]
+    assert _return_for_period(values, today - timedelta(days=2)) is None
