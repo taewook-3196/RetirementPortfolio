@@ -1688,55 +1688,13 @@ class DailyReportService:
                     if not self.kakao_service.is_configured():
                         return False, "카카오톡 토큰이 설정되지 않았습니다. [환경 설정]에서 토큰을 입력해주세요.", html_file
 
-                    ok, msg = self.kakao_service.send_morning_report(summary_text, report_web_url)
-                    if not ok:
-                        return False, f"리포트 HTML은 생성되었으나 카카오톡 전송에 실패했습니다: {msg}", html_file
-                    if self.repo.user_id:
-                        delivery_recorded = False
-                        last_record_error = None
-                        for attempt in range(3):
-                            try:
-                                delivery_recorded = bool(
-                                    self.repo.mark_morning_report_kakao_sent(report_date)
-                                )
-                                if delivery_recorded:
-                                    break
-                            except Exception as exc:
-                                last_record_error = exc
-                                logger.warning(
-                                    "카카오 발송 성공 후 완료 기록 실패 (%d/3): %s",
-                                    attempt + 1,
-                                    type(exc).__name__,
-                                )
-                            if attempt < 2:
-                                time.sleep(1)
-
-                        if not delivery_recorded:
-                            # A DB commit may succeed even when the caller sees
-                            # a connection error. Re-read before declaring the
-                            # delivery record missing and risking a retry.
-                            try:
-                                persisted = self.repo.get_morning_report_for_date(report_date)
-                                delivery_recorded = bool(
-                                    persisted is not None
-                                    and getattr(persisted, "kakao_sent_at", None) is not None
-                                )
-                            except Exception as exc:
-                                logger.warning(
-                                    "카카오 발송 기록 재조회 실패: %s", type(exc).__name__
-                                )
-                        if not delivery_recorded:
-                            logger.error(
-                                "카카오 메시지는 전송됐지만 완료 기록을 저장하지 못했습니다. "
-                                "다음 스케줄에서 중복 발송될 수 있습니다. error_type=%s",
-                                type(last_record_error).__name__ if last_record_error else "Unknown",
-                            )
-                            return (
-                                False,
-                                "카카오톡 전송은 성공했지만 발송 완료 기록 저장에 실패했습니다. "
-                                "자동 재시도 시 중복 발송 가능성이 있습니다.",
-                                html_file,
-                            )
+                    delivery_ok, delivery_message = self._send_legacy_report_and_record(
+                        report_date=report_date,
+                        summary_text=summary_text,
+                        report_web_url=report_web_url,
+                    )
+                    if not delivery_ok:
+                        return False, delivery_message, html_file
                     kakao_status = "카카오톡 발송 성공!"
                 else:
                     kakao_status = "카카오톡 미발송 (설정에서 모닝 리포트 발송 기능이 꺼져 있음)"
@@ -1746,6 +1704,95 @@ class DailyReportService:
         except Exception as e:
             logger.error("모닝 리포트 생성 및 발송 실패: %s", type(e).__name__)
             return False, f"오류 발생: {str(e)}", None
+
+    def _send_verified_report_staged(
+        self, *, engine, origin, user_id, report_date: date,
+        summary_text: str, report_web_url: str, force: bool = False,
+        env=None,
+    ) -> Tuple[bool, str]:
+        """Dormant cutover candidate: never called by production entrypoints.
+
+        This explicit method is for integration tests and reviewed migration.
+        No environment flag can switch the live callsite to this path.
+        """
+        from uuid import UUID
+
+        from services.kakao_delivery_eligibility import DeliveryOrigin
+        from services.kakao_delivery_report_bridge import send_persisted_report_staged
+
+        # This dormant seam must not send for a different account, even if a
+        # caller supplies an otherwise valid persisted report identity.
+        owner = getattr(self.repo, "user_id", None)
+        if not isinstance(user_id, UUID) or not isinstance(owner, (UUID, str)):
+            return False, "발송 사용자 식별 정보가 올바르지 않습니다."
+        if str(owner) != str(user_id):
+            return False, "요청 사용자와 보고서 소유자가 일치하지 않습니다."
+        if not isinstance(origin, DeliveryOrigin):
+            return False, "발송 경로가 올바르지 않습니다."
+
+        result = send_persisted_report_staged(
+            origin=origin, engine=engine, user_id=user_id,
+            report_date=report_date, kakao_service=self.kakao_service,
+            summary_text=summary_text, report_web_url=report_web_url,
+            force=force, env=env,
+        )
+        return result.ok, result.message
+
+    def _send_legacy_report_and_record(
+        self, *, report_date: date, summary_text: str, report_web_url: str
+    ) -> Tuple[bool, str]:
+        """Isolated legacy transport; NOT the durable claim-backed sender.
+
+        Preserve the existing behavior until an approved atomic cutover.
+        Never call this as a fallback from a denied staged claim.
+        """
+        ok, msg = self.kakao_service.send_morning_report(summary_text, report_web_url)
+        if not ok:
+            return False, f"리포트 HTML은 생성되었으나 카카오톡 전송에 실패했습니다: {msg}"
+        if self.repo.user_id:
+            delivery_recorded = False
+            last_record_error = None
+            for attempt in range(3):
+                try:
+                    delivery_recorded = bool(
+                        self.repo.mark_morning_report_kakao_sent(report_date)
+                    )
+                    if delivery_recorded:
+                        break
+                except Exception as exc:
+                    last_record_error = exc
+                    logger.warning(
+                        "카카오 발송 성공 후 완료 기록 실패 (%d/3): %s",
+                        attempt + 1,
+                        type(exc).__name__,
+                    )
+                if attempt < 2:
+                    time.sleep(1)
+            if not delivery_recorded:
+                # A successful DB commit may be followed by a connection error.
+                # Re-read the marker before reporting a possible duplicate.
+                try:
+                    persisted = self.repo.get_morning_report_for_date(report_date)
+                    delivery_recorded = bool(
+                        persisted is not None
+                        and getattr(persisted, "kakao_sent_at", None) is not None
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "카카오 발송 기록 재조회 실패: %s", type(exc).__name__
+                    )
+            if not delivery_recorded:
+                logger.error(
+                    "카카오 메시지는 전송됐지만 완료 기록을 저장하지 못했습니다. "
+                    "다음 스케줄에서 중복 발송될 수 있습니다. error_type=%s",
+                    type(last_record_error).__name__ if last_record_error else "Unknown",
+                )
+                return (
+                    False,
+                    "카카오톡 전송은 성공했지만 발송 완료 기록 저장에 실패했습니다. "
+                    "자동 재시도 시 중복 발송 가능성이 있습니다.",
+                )
+        return True, "카카오톡 발송 성공!"
 
     def _build_kakao_summary_text(
         self,
