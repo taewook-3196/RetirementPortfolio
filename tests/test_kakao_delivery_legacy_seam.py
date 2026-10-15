@@ -146,3 +146,39 @@ def test_dormant_staged_report_rejects_missing_owner_and_invalid_origin():
         )
         assert not ok
     service.kakao_service.send_morning_report.assert_not_called()
+
+
+def test_legacy_sender_reconciles_committed_marker_after_exception():
+    """A commit may succeed before a connection error reaches the caller."""
+    from types import SimpleNamespace
+
+    service = service_with_mocks()
+    service.repo.mark_morning_report_kakao_sent.side_effect = ConnectionError("secret")
+    service.repo.get_morning_report_for_date = Mock(
+        return_value=SimpleNamespace(kakao_sent_at="persisted")
+    )
+    with patch("services.daily_report_service.time.sleep"):
+        ok, message = service._send_legacy_report_and_record(
+            report_date=date(2026, 10, 15),
+            summary_text="summary", report_web_url="https://example.com/report",
+        )
+    assert ok
+    assert "성공" in message
+    service.kakao_service.send_morning_report.assert_called_once()
+    service.repo.get_morning_report_for_date.assert_called_once_with(date(2026, 10, 15))
+
+
+def test_legacy_sender_does_not_resend_when_marker_recheck_fails():
+    service = service_with_mocks(marker=False)
+    service.repo.get_morning_report_for_date = Mock(
+        side_effect=ConnectionError("secret")
+    )
+    with patch("services.daily_report_service.time.sleep"):
+        ok, message = service._send_legacy_report_and_record(
+            report_date=date(2026, 10, 15),
+            summary_text="summary", report_web_url="https://example.com/report",
+        )
+    assert not ok
+    assert "중복 발송" in message
+    service.kakao_service.send_morning_report.assert_called_once()
+    service.repo.get_morning_report_for_date.assert_called_once()
