@@ -41,3 +41,32 @@ def test_index_mobile_controls(monkeypatch):
     assert 'id="market-index-select"' in html
     assert 'data-index-period="5y"' in html
     assert '/api/market-indices/' in html
+
+
+
+def test_index_rejects_incomplete_history_instead_of_reporting_false_return():
+    dates = pd.date_range(end=pd.Timestamp.now(tz="UTC"), periods=5, freq="D")
+    frame = pd.DataFrame({"Close": [100.0, 102.0, 101.0, 103.0, 105.0]}, index=dates)
+
+    class FakeTicker:
+        def history(self, **kwargs):
+            return frame
+
+    _CACHE.clear()
+    with patch("yfinance.Ticker", return_value=FakeTicker()):
+        with pytest.raises(RuntimeError, match="부족"):
+            load_index_series("sp500", "1y")
+
+
+def test_index_rejects_series_entirely_outside_requested_period():
+    dates = pd.date_range(end=pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=90), periods=5, freq="D")
+    frame = pd.DataFrame({"Close": [100.0] * 5}, index=dates)
+
+    class FakeTicker:
+        def history(self, **kwargs):
+            return frame
+
+    _CACHE.clear()
+    with patch("yfinance.Ticker", return_value=FakeTicker()):
+        with pytest.raises(RuntimeError, match="해당"):
+            load_index_series("sp500", "1m")
