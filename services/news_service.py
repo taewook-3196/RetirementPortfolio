@@ -345,7 +345,10 @@ class NewsService:
         seen_titles = set()
         final_feed: List[Dict[str, Any]] = []
         for item in recent_items:
-            norm_title = re.sub(r"[\s\W_]+", "", item.get("title", ""))[:25]
+            title = item.get("title")
+            if not isinstance(title, str) or not title.strip():
+                continue
+            norm_title = re.sub(r"[\s\W_]+", "", title).casefold()[:25]
             if norm_title and norm_title not in seen_titles:
                 seen_titles.add(norm_title)
                 final_feed.append(item)
