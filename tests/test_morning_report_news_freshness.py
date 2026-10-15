@@ -219,3 +219,13 @@ def test_news_section_omits_blank_headlines_and_empty_cards():
     result = render([{"title": ""}, {"title": "정상 뉴스", "link": "https://example.com"}])
     assert result.count('class="news-item"') == 1
     assert "정상 뉴스" in result
+
+
+def test_news_card_limit_counts_only_rendered_headlines():
+    from services.report_html_generator import ReportHtmlGenerator
+
+    news = [{"title": "  "}] * 4 + [{"title": f"기사 {i}"} for i in range(10)]
+    result = ReportHtmlGenerator()._render_news_section(news)
+    assert result.count('class="news-item"') == 8
+    assert "기사 7" in result
+    assert "기사 8" not in result
