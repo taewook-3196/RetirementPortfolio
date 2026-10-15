@@ -239,3 +239,20 @@ def test_report_assembly_skips_blank_headlines_before_limit():
     assert 'for item in filter_recent_news(feed):' in source
     assert 'if not str(item.get("title", "") or "").strip():' in source
     assert 'if len(news_items) >= 8:' in source
+
+
+def test_news_feed_ignores_malformed_headlines_and_case_duplicates(monkeypatch):
+    from datetime import datetime, timezone
+
+    service = NewsService()
+    stamp = datetime.now(timezone.utc).isoformat()
+    articles = [
+        {"title": None, "datetime": stamp},
+        {"title": 123, "datetime": stamp},
+        {"title": "  ", "datetime": stamp},
+        {"title": "Market Rally", "datetime": stamp},
+        {"title": "market rally", "datetime": stamp},
+    ]
+    monkeypatch.setattr(service, "fetch_economy_rss", lambda limit=15: articles)
+    result = service.get_news_feed(mode="all")
+    assert [item["title"] for item in result] == ["Market Rally"]
