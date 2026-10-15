@@ -180,7 +180,7 @@ class NewsService:
             with urllib.request.urlopen(req, context=self.ssl_context, timeout=6) as resp:
                 root = ET.fromstring(resp.read())
                 items = root.findall(".//item")
-                for it in items[:limit]:
+                for it in items:
                     title_elem = it.find("title")
                     link_elem = it.find("link")
                     source_elem = it.find("source")
@@ -200,6 +200,9 @@ class NewsService:
                     else:
                         clean_title = raw_title.strip()
 
+                    if not clean_title:
+                        continue
+
                     link = link_elem.text if link_elem is not None else ""
                     wdate = date_elem.text if date_elem is not None else ""
 
@@ -211,6 +214,8 @@ class NewsService:
                         "link": link,
                         "category": "economy",
                     })
+                    if len(results) >= limit:
+                        break
         except Exception as e:
             logger.warning("구글 경제 RSS 수집 실패: %s", e)
 
@@ -227,7 +232,7 @@ class NewsService:
             with urllib.request.urlopen(req, context=self.ssl_context, timeout=6) as resp:
                 root = ET.fromstring(resp.read())
                 items = root.findall(".//item")
-                for it in items[:limit]:
+                for it in items:
                     title_elem = it.find("title")
                     link_elem = it.find("link")
                     source_elem = it.find("source")
@@ -246,6 +251,9 @@ class NewsService:
                     else:
                         clean_title = raw_title.strip()
 
+                    if not clean_title:
+                        continue
+
                     link = link_elem.text if link_elem is not None else ""
                     wdate = date_elem.text if date_elem is not None else ""
 
@@ -257,6 +265,8 @@ class NewsService:
                         "link": link,
                         "category": "constituent",
                     })
+                    if len(results) >= limit:
+                        break
         except Exception as e:
             logger.warning("키워드 RSS 수집 실패 (%s): %s", tag, e)
 
