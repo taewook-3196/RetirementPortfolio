@@ -1096,3 +1096,57 @@ def test_verified_dispatch_cross_origin_replay_is_blocked(pg, first_origin):
             "SELECT count(*) FROM public.kakao_delivery_attempts "
             "WHERE user_id = CAST(:u AS uuid)"
         ), {"u": str(user_id)}).scalar_one() == 1
+
+
+def test_verified_dispatch_concurrent_cross_origin_has_one_provider_call(pg):
+    """All four real preflights race; only one committed claim may send."""
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import date
+    from threading import Barrier, Lock
+    from services.kakao_delivery_eligibility import DeliveryOrigin
+    from services.kakao_delivery_verified_dispatch import dispatch_verified_staged_report
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    report_date = date(2026, 10, 12)
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text(
+            "INSERT INTO public.morning_reports (user_id, report_date) "
+            "VALUES (CAST(:u AS uuid), DATE '2026-10-12')"
+        ), {"u": str(user_id)})
+
+    barrier = Barrier(4)
+    lock = Lock()
+    calls = []
+
+    class MockKakao:
+        def is_configured(self):
+            return True
+
+        def send_morning_report(self, summary, url):
+            with lock:
+                calls.append(summary)
+            return True, "mock"
+
+    def worker(origin):
+        barrier.wait(timeout=10)
+        return dispatch_verified_staged_report(
+            origin=origin, engine=pg, user_id=user_id,
+            report_date=report_date, kakao_service=MockKakao(),
+            summary_text="summary", report_web_url="https://example.com/report",
+            force=True,
+            env={"KAKAO_DELIVERY_STATE_ENABLED": "true",
+                 "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+        ).outcome
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        outcomes = list(executor.map(worker, list(DeliveryOrigin)))
+    assert outcomes.count(SendOutcome.SENT) == 1
+    assert outcomes.count(SendOutcome.NOT_CLAIMED) == 3
+    assert len(calls) == 1
+    with pg.connect() as conn:
+        assert conn.execute(text(
+            "SELECT count(*) FROM public.kakao_delivery_attempts "
+            "WHERE user_id = CAST(:u AS uuid) AND status = 'sent'"
+        ), {"u": str(user_id)}).scalar_one() == 1
