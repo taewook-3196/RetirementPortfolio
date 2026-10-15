@@ -275,3 +275,45 @@ def test_naver_news_skips_malformed_entries_but_keeps_valid(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", lambda *args, **kwargs: FakeResponse(json.dumps(payload).encode("utf-8")))
     result = service.fetch_stock_news("005930", "삼성전자")
     assert [item["title"] for item in result] == ["정상 기사"]
+
+
+
+def test_naver_news_skips_invalid_containers_and_accepts_titlefull(monkeypatch):
+    import io
+    import json
+    import urllib.request
+
+    service = NewsService()
+    payload = [
+        {"items": None},
+        {"items": "invalid"},
+        {"titleFull": "정상 제목", "datetime": "2026-10-15T09:00:00+09:00"},
+        {"items": [{"title": "다른 정상 기사"}]},
+    ]
+
+    class FakeResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.close()
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *args, **kwargs: FakeResponse(json.dumps(payload).encode("utf-8")))
+    result = service.fetch_stock_news("005930")
+    assert [item["title"] for item in result] == ["정상 제목", "다른 정상 기사"]
+
+
+def test_naver_news_rejects_nonlist_top_level_items(monkeypatch):
+    import io
+    import json
+    import urllib.request
+
+    service = NewsService()
+
+    class FakeResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.close()
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *args, **kwargs: FakeResponse(json.dumps({"items": {"title": "invalid"}}).encode("utf-8")))
+    assert service.fetch_stock_news("005930") == []

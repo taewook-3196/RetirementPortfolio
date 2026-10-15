@@ -136,12 +136,13 @@ class NewsService:
                 item_lists = []
                 if isinstance(data, list):
                     for entry in data:
-                        if isinstance(entry, dict) and "items" in entry:
-                            item_lists.extend(entry.get("items", []))
-                        elif isinstance(entry, dict) and "title" in entry:
+                        if isinstance(entry, dict) and isinstance(entry.get("items"), list):
+                            item_lists.extend(entry["items"])
+                        elif isinstance(entry, dict) and ("title" in entry or "titleFull" in entry):
                             item_lists.append(entry)
                 elif isinstance(data, dict):
-                    item_lists = data.get("items", []) or data.get("content", [])
+                    candidate = data.get("items") or data.get("content") or []
+                    item_lists = candidate if isinstance(candidate, list) else []
 
                 for it in item_lists:
                     if not isinstance(it, dict):
