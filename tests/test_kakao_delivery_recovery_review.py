@@ -47,3 +47,14 @@ def test_auditable_evidence_and_time_required():
     assert not decide(make_review(evidence_reference="x" * 257)).eligible_for_future_recovery
     assert not decide(make_review(approved_at=datetime.now())).eligible_for_future_recovery
     assert not decide(make_review(approved_at=datetime.now(timezone.utc) + timedelta(days=1))).eligible_for_future_recovery
+
+
+def test_audit_reference_rejects_control_characters():
+    for reference in ("ticket\\nspoofed", "ticket\\rspoofed", "ticket\\tspoofed", "ticket\\x00spoofed", "ticket\\x7fspoofed"):
+        decision = decide(make_review(evidence_reference=reference))
+        assert not decision.eligible_for_future_recovery
+        assert "control characters" in decision.reason
+
+
+def test_audit_reference_allows_regular_ticket_identifiers():
+    assert decide(make_review(evidence_reference="OPS-2026/10/15 #42")).eligible_for_future_recovery
