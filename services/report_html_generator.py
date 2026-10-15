@@ -2626,7 +2626,7 @@ class ReportHtmlGenerator:
                     <span class="card-icon">📰</span>
                     <h2 class="card-title">맞춤 시황 & 관심종목 뉴스</h2>
                 </div>
-                <span class="badge badge-info">실시간 픽</span>
+                <span class="badge badge-info">최근 24시간 뉴스</span>
             </div>
             {items_html}
         </section>
