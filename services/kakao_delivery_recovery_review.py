@@ -48,6 +48,8 @@ def assess_recovery_review(*, review: RecoveryReview, actor_is_admin: bool,
         return deny("audit evidence reference required")
     if len(review.evidence_reference) > 256:
         return deny("audit evidence reference too long")
+    if any(ord(char) < 32 or ord(char) == 127 for char in review.evidence_reference):
+        return deny("audit evidence reference contains control characters")
     if not isinstance(review.approved_at, datetime) or review.approved_at.tzinfo is None:
         return deny("timezone-aware approval time required")
     if review.approved_at > datetime.now(timezone.utc):
