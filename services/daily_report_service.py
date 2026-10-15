@@ -1391,7 +1391,9 @@ class DailyReportService:
                     watchlist=[SimpleNamespace(**item) for item in self.repo.get_watchlist()],
                 )
                 # Revalidate at report assembly, even if a news provider returns stale data.
-                for item in filter_recent_news(feed)[:8]:
+                for item in filter_recent_news(feed):
+                    if not str(item.get("title", "") or "").strip():
+                        continue
                     news_items.append({
                         "title": item.get("title", ""),
                         "media": item.get("press", "금융뉴스"),
@@ -1399,6 +1401,8 @@ class DailyReportService:
                         "link": item.get("link", "#"),
                         "tag": item.get("tag", "증시"),
                     })
+                    if len(news_items) >= 8:
+                        break
 
             # 3. 시장 지수 요약 (대표 지수 샘플)
             market_indices = {}

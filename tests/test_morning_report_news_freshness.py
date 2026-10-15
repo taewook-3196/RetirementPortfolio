@@ -129,7 +129,8 @@ def test_report_assembly_rechecks_news_freshness():
     from pathlib import Path
 
     source = (Path(__file__).resolve().parents[1] / "services" / "daily_report_service.py").read_text(encoding="utf-8")
-    assert "for item in filter_recent_news(feed)[:8]:" in source
+    assert "for item in filter_recent_news(feed):" in source
+    assert 'if len(news_items) >= 8:' in source
 
 
 def test_name_only_watchlist_still_gets_keyword_news(monkeypatch):
@@ -229,3 +230,12 @@ def test_news_card_limit_counts_only_rendered_headlines():
     assert result.count('class="news-item"') == 8
     assert "기사 7" in result
     assert "기사 8" not in result
+
+
+def test_report_assembly_skips_blank_headlines_before_limit():
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "services" / "daily_report_service.py").read_text(encoding="utf-8")
+    assert 'for item in filter_recent_news(feed):' in source
+    assert 'if not str(item.get("title", "") or "").strip():' in source
+    assert 'if len(news_items) >= 8:' in source
