@@ -1321,3 +1321,54 @@ def test_concurrent_staged_dispatch_invokes_provider_once(pg):
                  "WHERE user_id = CAST(:u AS uuid)"),
             {"u": str(user_id)},
         ).scalar_one() == 1
+
+
+def test_uncertain_attempt_survives_new_engine_and_blocks_resend(pg):
+    """Simulate process restart by replacing SQLAlchemy engine and transport."""
+    from datetime import date
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
+        conn.execute(
+            text("INSERT INTO public.morning_reports (user_id, report_date) "
+                 "VALUES (CAST(:u AS uuid), DATE '2026-10-12')"),
+            {"u": str(user_id)},
+        )
+
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true",
+           "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    calls = []
+
+    def timeout_after_attempt():
+        calls.append("first")
+        raise TimeoutError("provider response lost")
+
+    first = run_staged_delivery(
+        engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+        transport=timeout_after_attempt, env=env,
+    )
+    assert first.outcome is SendOutcome.UNCERTAIN
+
+    # A distinct pool represents a new worker process reading persisted state.
+    restarted_engine = create_engine(DSN)
+    try:
+        second = run_staged_delivery(
+            engine=restarted_engine, user_id=user_id,
+            report_date=date(2026, 10, 12),
+            transport=lambda: calls.append("duplicate") or (True, "mock"),
+            env=env,
+        )
+        assert second.outcome is SendOutcome.NOT_CLAIMED
+    finally:
+        restarted_engine.dispose()
+
+    assert calls == ["first"]
+    with pg.connect() as conn:
+        assert conn.execute(
+            text("SELECT status FROM public.kakao_delivery_attempts "
+                 "WHERE user_id = CAST(:u AS uuid)"),
+            {"u": str(user_id)},
+        ).scalar_one() == "uncertain"
