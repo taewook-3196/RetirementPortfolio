@@ -176,3 +176,11 @@ def test_same_theme_query_is_fetched_once_for_different_tickers(monkeypatch):
     assets = [SimpleNamespace(ticker="A", name="반도체"), SimpleNamespace(ticker="B", name="반도체")]
     service.get_news_feed(mode="portfolio_only", watchlist=assets)
     assert len(keyword_calls) == 1
+
+
+def test_news_section_uses_accurate_freshness_label():
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "services" / "report_html_generator.py").read_text(encoding="utf-8")
+    assert '<span class="badge badge-info">최근 24시간 뉴스</span>' in source
+    assert '<span class="badge badge-info">실시간 픽</span>' not in source
