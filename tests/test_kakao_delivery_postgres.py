@@ -1150,3 +1150,68 @@ def test_verified_dispatch_concurrent_cross_origin_has_one_provider_call(pg):
             "SELECT count(*) FROM public.kakao_delivery_attempts "
             "WHERE user_id = CAST(:u AS uuid) AND status = 'sent'"
         ), {"u": str(user_id)}).scalar_one() == 1
+
+
+def test_report_service_staged_seam_end_to_end_without_real_kakao(pg):
+    """Exercise the actual report service method through PostgreSQL claim/finish."""
+    from datetime import date
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from services.daily_report_service import DailyReportService
+    from services.kakao_delivery_eligibility import DeliveryOrigin
+
+    user_id = uuid4()
+    report_date = date(2026, 10, 15)
+    provider = Mock(return_value=(True, "mock"))
+    service = DailyReportService.__new__(DailyReportService)
+    service.kakao_service = SimpleNamespace(
+        is_configured=lambda: True,
+        send_morning_report=provider,
+    )
+    service.repo = SimpleNamespace(
+        user_id=user_id,
+        mark_morning_report_kakao_sent=Mock(
+            side_effect=AssertionError("legacy marker must not run")
+        ),
+    )
+    common = dict(
+        engine=pg, origin=DeliveryOrigin.SCHEDULED,
+        user_id=user_id, report_date=report_date,
+        summary_text="summary", report_web_url="https://example.com/report",
+        env={"KAKAO_DELIVERY_STATE_ENABLED": "true",
+             "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    )
+    # Report must be persisted before the provider is ever contacted.
+    ok, message = service._send_verified_report_staged(**common)
+    assert not ok
+    assert "발송 권한" in message
+    provider.assert_not_called()
+
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text(
+            "INSERT INTO public.morning_reports (user_id, report_date) "
+            "VALUES (CAST(:u AS uuid), DATE '2026-10-15')"
+        ), {"u": str(user_id)})
+
+    ok, message = service._send_verified_report_staged(**common)
+    assert ok
+    assert "성공" in message
+    provider.assert_called_once_with("summary", "https://example.com/report")
+    service.repo.mark_morning_report_kakao_sent.assert_not_called()
+
+    ok, message = service._send_verified_report_staged(
+        **{**common, "origin": DeliveryOrigin.MANUAL, "force": True}
+    )
+    assert not ok
+    assert "발송 권한" in message
+    provider.assert_called_once()
+
+    with pg.connect() as conn:
+        row = conn.execute(text(
+            "SELECT m.kakao_sent_at IS NOT NULL, a.status "
+            "FROM public.morning_reports m JOIN public.kakao_delivery_attempts a "
+            "ON a.user_id=m.user_id AND a.report_date=m.report_date "
+            "WHERE m.user_id=CAST(:u AS uuid)"
+        ), {"u": str(user_id)}).one()
+    assert row == (True, "sent")
