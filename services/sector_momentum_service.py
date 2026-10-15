@@ -49,8 +49,13 @@ def _return_for_period(values, cutoff):
         return None
     # Use the first trading close on or after the period boundary. This
     # avoids requiring a price on a market holiday or non-trading day.
-    baseline = next((price for day, price in values if day >= cutoff), None)
-    if baseline is None or baseline <= 0:
+    baseline_point = next(((day, price) for day, price in values if day >= cutoff), None)
+    # An ETF with only recent observations must not display a misleading 0%
+    # return for periods it cannot actually cover.
+    if baseline_point is None or baseline_point[0] - cutoff > timedelta(days=7):
+        return None
+    baseline = baseline_point[1]
+    if baseline <= 0 or baseline_point[0] >= values[-1][0]:
         return None
     return round((values[-1][1] / baseline - 1) * 100, 2)
 
