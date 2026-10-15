@@ -1215,3 +1215,60 @@ def test_report_service_staged_seam_end_to_end_without_real_kakao(pg):
             "WHERE m.user_id=CAST(:u AS uuid)"
         ), {"u": str(user_id)}).one()
     assert row == (True, "sent")
+
+
+def test_report_service_staged_seam_uncertain_result_never_retries_provider(pg):
+    """A provider timeout after claim must block every later origin."""
+    from datetime import date
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from services.daily_report_service import DailyReportService
+    from services.kakao_delivery_eligibility import DeliveryOrigin
+
+    user_id = uuid4()
+    report_date = date(2026, 10, 15)
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:u)"), {"u": str(user_id)})
+        conn.execute(text(
+            "INSERT INTO public.morning_reports (user_id, report_date) "
+            "VALUES (CAST(:u AS uuid), DATE '2026-10-15')"
+        ), {"u": str(user_id)})
+
+    provider = Mock(side_effect=TimeoutError("simulated provider timeout"))
+    service = DailyReportService.__new__(DailyReportService)
+    service.kakao_service = SimpleNamespace(
+        is_configured=lambda: True, send_morning_report=provider,
+    )
+    service.repo = SimpleNamespace(
+        user_id=user_id,
+        mark_morning_report_kakao_sent=Mock(
+            side_effect=AssertionError("legacy fallback forbidden")
+        ),
+    )
+    common = dict(
+        engine=pg, user_id=user_id, report_date=report_date,
+        summary_text="summary", report_web_url="https://example.com/report",
+        env={"KAKAO_DELIVERY_STATE_ENABLED": "true",
+             "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"},
+    )
+    ok, message = service._send_verified_report_staged(
+        origin=DeliveryOrigin.SCHEDULED, **common,
+    )
+    assert not ok
+    assert "불확실" in message
+    for origin in DeliveryOrigin:
+        ok, _ = service._send_verified_report_staged(
+            origin=origin, force=True, **common,
+        )
+        assert not ok
+    provider.assert_called_once()
+    service.repo.mark_morning_report_kakao_sent.assert_not_called()
+
+    with pg.connect() as conn:
+        row = conn.execute(text(
+            "SELECT m.kakao_sent_at IS NULL, a.status "
+            "FROM public.morning_reports m JOIN public.kakao_delivery_attempts a "
+            "ON a.user_id=m.user_id AND a.report_date=m.report_date "
+            "WHERE m.user_id=CAST(:u AS uuid)"
+        ), {"u": str(user_id)}).one()
+    assert row == (True, "uncertain")
