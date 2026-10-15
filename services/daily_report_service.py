@@ -1715,7 +1715,20 @@ class DailyReportService:
         This explicit method is for integration tests and reviewed migration.
         No environment flag can switch the live callsite to this path.
         """
+        from uuid import UUID
+
+        from services.kakao_delivery_eligibility import DeliveryOrigin
         from services.kakao_delivery_report_bridge import send_persisted_report_staged
+
+        # This dormant seam must not send for a different account, even if a
+        # caller supplies an otherwise valid persisted report identity.
+        owner = getattr(self.repo, "user_id", None)
+        if not isinstance(user_id, UUID) or not isinstance(owner, (UUID, str)):
+            return False, "발송 사용자 식별 정보가 올바르지 않습니다."
+        if str(owner) != str(user_id):
+            return False, "요청 사용자와 보고서 소유자가 일치하지 않습니다."
+        if not isinstance(origin, DeliveryOrigin):
+            return False, "발송 경로가 올바르지 않습니다."
 
         result = send_persisted_report_staged(
             origin=origin, engine=engine, user_id=user_id,
