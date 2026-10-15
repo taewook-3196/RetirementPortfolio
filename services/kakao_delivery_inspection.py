@@ -15,7 +15,7 @@ class DeliveryInspection:
     user_id: UUID
     report_date: date
     status: str
-    legacy_sent: bool
+    legacy_sent: bool | None
     requires_review: bool
 
 
@@ -31,7 +31,8 @@ def inspect_delivery_attempts(engine, *, user_id: UUID, limit: int = 30) -> list
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT a.user_id, a.report_date, a.status,
-                   (r.kakao_sent_at IS NOT NULL) AS legacy_sent
+                   CASE WHEN r.user_id IS NULL THEN NULL
+                        ELSE (r.kakao_sent_at IS NOT NULL) END AS legacy_sent
             FROM public.kakao_delivery_attempts AS a
             LEFT JOIN public.morning_reports AS r
               ON r.user_id = a.user_id AND r.report_date = a.report_date
