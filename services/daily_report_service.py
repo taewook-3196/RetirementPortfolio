@@ -35,7 +35,7 @@ from database.connection import init_db
 from database.repository import Repository
 from services.portfolio_service import PortfolioService
 from services.recommendation_service import RecommendationService
-from services.news_service import NewsService
+from services.news_service import NewsService, filter_recent_news
 from services.report_html_generator import ReportHtmlGenerator
 from services.kakao_service import KakaoService
 from services.gemini_service import GeminiService
@@ -1390,7 +1390,8 @@ class DailyReportService:
                     etfs=all_registered_objs,
                     watchlist=[SimpleNamespace(**item) for item in self.repo.get_watchlist()],
                 )
-                for item in feed[:8]:
+                # Revalidate at report assembly, even if a news provider returns stale data.
+                for item in filter_recent_news(feed)[:8]:
                     news_items.append({
                         "title": item.get("title", ""),
                         "media": item.get("press", "금융뉴스"),
