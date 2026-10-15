@@ -2592,7 +2592,8 @@ class ReportHtmlGenerator:
             return ""
 
         items_html = ""
-        for n in news_items[:8]:  # 최대 8건
+        rendered_count = 0
+        for n in news_items:
             raw_title = str(n.get("title", "") or "").strip()
             if not raw_title:
                 continue
@@ -2609,6 +2610,7 @@ class ReportHtmlGenerator:
             )
             link = html.escape(raw_link if valid_link else "#", quote=True)
 
+            rendered_count += 1
             items_html += f"""
             <div class="news-item">
                 <div class="news-tag-box">
@@ -2619,6 +2621,8 @@ class ReportHtmlGenerator:
                 <span class="news-time">{date_time}</span>
             </div>
             """
+            if rendered_count >= 8:
+                break
 
         if not items_html:
             return ""
