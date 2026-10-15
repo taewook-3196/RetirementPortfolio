@@ -48,3 +48,10 @@ def test_unrecognized_state_fails_closed_even_after_lease_expiry():
     result = advise_reconciliation(attempt_status="unexpected", lease_expired=True)
     assert result.action == ReconciliationAction.NO_ACTION
     assert not result.automatic_resend_allowed
+
+
+@pytest.mark.parametrize("status", ["uncertain", "sending", "failed_before_send", "pending"])
+def test_unknown_legacy_marker_requires_verification(status):
+    result = advise_reconciliation(attempt_status=status, legacy_sent=None)
+    assert result.action == ReconciliationAction.VERIFY_EXTERNALLY
+    assert not result.automatic_resend_allowed
