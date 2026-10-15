@@ -1688,42 +1688,13 @@ class DailyReportService:
                     if not self.kakao_service.is_configured():
                         return False, "카카오톡 토큰이 설정되지 않았습니다. [환경 설정]에서 토큰을 입력해주세요.", html_file
 
-                    ok, msg = self.kakao_service.send_morning_report(summary_text, report_web_url)
-                    if not ok:
-                        return False, f"리포트 HTML은 생성되었으나 카카오톡 전송에 실패했습니다: {msg}", html_file
-                    if self.repo.user_id:
-                        delivery_recorded = False
-                        last_record_error = None
-                        for attempt in range(3):
-                            try:
-                                delivery_recorded = bool(
-                                    self.repo.mark_morning_report_kakao_sent(report_date)
-                                )
-                                if delivery_recorded:
-                                    break
-                            except Exception as exc:
-                                last_record_error = exc
-                                logger.warning(
-                                    "카카오 발송 성공 후 완료 기록 실패 (%d/3): %s",
-                                    attempt + 1,
-                                    exc,
-                                )
-                            if attempt < 2:
-                                time.sleep(1)
-
-                        if not delivery_recorded:
-                            logger.error(
-                                "카카오 메시지는 전송됐지만 완료 기록을 저장하지 못했습니다. "
-                                "다음 스케줄에서 중복 발송될 수 있습니다. user_id=%s error=%s",
-                                self.repo.user_id,
-                                last_record_error,
-                            )
-                            return (
-                                False,
-                                "카카오톡 전송은 성공했지만 발송 완료 기록 저장에 실패했습니다. "
-                                "자동 재시도 시 중복 발송 가능성이 있습니다.",
-                                html_file,
-                            )
+                    delivery_ok, delivery_message = self._send_legacy_report_and_record(
+                        report_date=report_date,
+                        summary_text=summary_text,
+                        report_web_url=report_web_url,
+                    )
+                    if not delivery_ok:
+                        return False, delivery_message, html_file
                     kakao_status = "카카오톡 발송 성공!"
                 else:
                     kakao_status = "카카오톡 미발송 (설정에서 모닝 리포트 발송 기능이 꺼져 있음)"
@@ -1733,6 +1704,50 @@ class DailyReportService:
         except Exception as e:
             logger.exception("모닝 리포트 생성 및 발송 실패")
             return False, f"오류 발생: {str(e)}", None
+
+    def _send_legacy_report_and_record(
+        self, *, report_date: date, summary_text: str, report_web_url: str
+    ) -> Tuple[bool, str]:
+        """Isolated legacy transport; NOT the durable claim-backed sender.
+
+        Preserve the existing behavior until an approved atomic cutover.
+        Never call this as a fallback from a denied staged claim.
+        """
+        ok, msg = self.kakao_service.send_morning_report(summary_text, report_web_url)
+        if not ok:
+            return False, f"리포트 HTML은 생성되었으나 카카오톡 전송에 실패했습니다: {msg}"
+        if self.repo.user_id:
+            delivery_recorded = False
+            last_record_error = None
+            for attempt in range(3):
+                try:
+                    delivery_recorded = bool(
+                        self.repo.mark_morning_report_kakao_sent(report_date)
+                    )
+                    if delivery_recorded:
+                        break
+                except Exception as exc:
+                    last_record_error = exc
+                    logger.warning(
+                        "카카오 발송 성공 후 완료 기록 실패 (%d/3): %s",
+                        attempt + 1,
+                        exc,
+                    )
+                if attempt < 2:
+                    time.sleep(1)
+            if not delivery_recorded:
+                logger.error(
+                    "카카오 메시지는 전송됐지만 완료 기록을 저장하지 못했습니다. "
+                    "다음 스케줄에서 중복 발송될 수 있습니다. user_id=%s error=%s",
+                    self.repo.user_id,
+                    last_record_error,
+                )
+                return (
+                    False,
+                    "카카오톡 전송은 성공했지만 발송 완료 기록 저장에 실패했습니다. "
+                    "자동 재시도 시 중복 발송 가능성이 있습니다.",
+                )
+        return True, "카카오톡 발송 성공!"
 
     def _build_kakao_summary_text(
         self,
