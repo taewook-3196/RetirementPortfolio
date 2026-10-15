@@ -66,8 +66,8 @@ def test_dormant_staged_report_method_delegates_without_legacy_send():
     from services.kakao_delivery_orchestrator import SendOutcome
     from services.kakao_delivery_report_bridge import ReportDeliveryResult
 
-    service = service_with_mocks()
     user_id = uuid4()
+    service = service_with_mocks(user_id=user_id)
     staged = Mock(return_value=ReportDeliveryResult(
         False, "발송 권한 없음", SendOutcome.NOT_CLAIMED,
     ))
@@ -99,3 +99,50 @@ def test_live_report_sender_still_calls_only_legacy_method():
     )[0]
     assert "self._send_legacy_report_and_record(" in live_section
     assert "self._send_verified_report_staged(" not in live_section
+
+
+def test_dormant_staged_report_rejects_other_user_without_database_or_provider():
+    from uuid import uuid4
+    from services.kakao_delivery_eligibility import DeliveryOrigin
+
+    owner_id = uuid4()
+    service = service_with_mocks(user_id=owner_id)
+    with patch(
+        "services.kakao_delivery_report_bridge.send_persisted_report_staged",
+        side_effect=AssertionError("must not access staged transport"),
+    ):
+        ok, message = service._send_verified_report_staged(
+            engine=object(), origin=DeliveryOrigin.MANUAL,
+            user_id=uuid4(), report_date=date(2026, 10, 15),
+            summary_text="summary", report_web_url="https://example.com/report",
+        )
+    assert not ok
+    assert "일치하지" in message
+    service.kakao_service.send_morning_report.assert_not_called()
+    service.repo.mark_morning_report_kakao_sent.assert_not_called()
+
+
+def test_dormant_staged_report_rejects_missing_owner_and_invalid_origin():
+    from uuid import uuid4
+    from services.kakao_delivery_eligibility import DeliveryOrigin
+
+    user_id = uuid4()
+    service = service_with_mocks(user_id=None)
+    with patch(
+        "services.kakao_delivery_report_bridge.send_persisted_report_staged",
+        side_effect=AssertionError("must not dispatch"),
+    ):
+        ok, _ = service._send_verified_report_staged(
+            engine=object(), origin=DeliveryOrigin.SCHEDULED,
+            user_id=user_id, report_date=date(2026, 10, 15),
+            summary_text="summary", report_web_url="https://example.com/report",
+        )
+        assert not ok
+        service.repo.user_id = user_id
+        ok, _ = service._send_verified_report_staged(
+            engine=object(), origin="scheduled",
+            user_id=user_id, report_date=date(2026, 10, 15),
+            summary_text="summary", report_web_url="https://example.com/report",
+        )
+        assert not ok
+    service.kakao_service.send_morning_report.assert_not_called()
