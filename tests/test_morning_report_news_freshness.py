@@ -326,3 +326,29 @@ def test_freshness_filter_skips_non_mapping_entries():
     now = datetime.now(timezone.utc)
     valid = {"title": "정상 기사", "datetime": now.isoformat()}
     assert filter_recent_news([None, "broken", 123, valid], now=now) == [valid]
+
+
+
+def test_rss_limits_count_valid_articles_not_blank_headlines(monkeypatch):
+    import io
+    import urllib.request
+
+    service = NewsService()
+    xml = """<rss><channel>
+      <item><title>  </title></item>
+      <item><title>첫 기사 - 매체</title><pubDate>Thu, 15 Oct 2026 01:00:00 GMT</pubDate></item>
+      <item><title>둘째 기사</title></item>
+      <item><title>셋째 기사</title></item>
+    </channel></rss>"""
+
+    class FakeResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.close()
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *args, **kwargs: FakeResponse(xml.encode("utf-8")))
+    economy = service.fetch_economy_rss(limit=2)
+    keyword = service.fetch_keyword_rss("반도체", "테마", limit=2)
+    assert [item["title"] for item in economy] == ["첫 기사", "둘째 기사"]
+    assert [item["title"] for item in keyword] == ["첫 기사", "둘째 기사"]
