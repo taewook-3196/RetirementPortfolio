@@ -1272,3 +1272,52 @@ def test_report_service_staged_seam_uncertain_result_never_retries_provider(pg):
             "WHERE m.user_id=CAST(:u AS uuid)"
         ), {"u": str(user_id)}).one()
     assert row == (True, "uncertain")
+
+
+def test_concurrent_staged_dispatch_invokes_provider_once(pg):
+    """Concurrent workers must share one durable claim, not merely one precheck."""
+    from datetime import date
+    from threading import Barrier, Lock
+    from services.kakao_delivery_staged import run_staged_delivery
+    from services.kakao_delivery_orchestrator import SendOutcome
+
+    user_id = uuid4()
+    with pg.begin() as conn:
+        conn.execute(text("INSERT INTO public.profiles (id) VALUES (:id)"), {"id": str(user_id)})
+        conn.execute(
+            text("INSERT INTO public.morning_reports (user_id, report_date) "
+                 "VALUES (CAST(:u AS uuid), DATE '2026-10-12')"),
+            {"u": str(user_id)},
+        )
+
+    env = {"KAKAO_DELIVERY_STATE_ENABLED": "true",
+           "KAKAO_DELIVERY_CUTOVER_APPROVED": "true"}
+    barrier = Barrier(4)
+    lock = Lock()
+    calls = []
+
+    def worker(_):
+        barrier.wait(timeout=10)
+
+        def transport():
+            with lock:
+                calls.append("send")
+            return (True, "mock")
+
+        return run_staged_delivery(
+            engine=pg, user_id=user_id, report_date=date(2026, 10, 12),
+            transport=transport, env=env,
+        ).outcome
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        outcomes = list(pool.map(worker, range(4)))
+
+    assert outcomes.count(SendOutcome.SENT) == 1
+    assert outcomes.count(SendOutcome.NOT_CLAIMED) == 3
+    assert calls == ["send"]
+    with pg.connect() as conn:
+        assert conn.execute(
+            text("SELECT count(*) FROM public.kakao_delivery_attempts "
+                 "WHERE user_id = CAST(:u AS uuid)"),
+            {"u": str(user_id)},
+        ).scalar_one() == 1
