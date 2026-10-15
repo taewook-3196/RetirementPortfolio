@@ -317,3 +317,12 @@ def test_naver_news_rejects_nonlist_top_level_items(monkeypatch):
 
     monkeypatch.setattr(urllib.request, "urlopen", lambda *args, **kwargs: FakeResponse(json.dumps({"items": {"title": "invalid"}}).encode("utf-8")))
     assert service.fetch_stock_news("005930") == []
+
+
+def test_freshness_filter_skips_non_mapping_entries():
+    from datetime import datetime, timezone
+    from services.news_service import filter_recent_news
+
+    now = datetime.now(timezone.utc)
+    valid = {"title": "정상 기사", "datetime": now.isoformat()}
+    assert filter_recent_news([None, "broken", 123, valid], now=now) == [valid]
