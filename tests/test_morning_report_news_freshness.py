@@ -184,3 +184,28 @@ def test_news_section_uses_accurate_freshness_label():
     source = (Path(__file__).resolve().parents[1] / "services" / "report_html_generator.py").read_text(encoding="utf-8")
     assert '<span class="badge badge-info">최근 24시간 뉴스</span>' in source
     assert '<span class="badge badge-info">실시간 픽</span>' not in source
+
+
+def test_news_html_escapes_external_metadata_and_link_attributes():
+    from services.report_html_generator import ReportHtmlGenerator
+
+    result = ReportHtmlGenerator()._render_news_section([{
+        "title": '<img src=x onerror="alert(1)">',
+        "media": "<script>alert(1)</script>",
+        "tag": "<b>risk</b>",
+        "date": "<svg/onload=alert(1)>",
+        "link": 'https://example.com/?q=" onclick="alert(1)',
+    }])
+    assert "<script>" not in result
+    assert "<img src=x" not in result
+    assert "<b>risk</b>" not in result
+    assert "&lt;svg" in result
+    assert 'href="https://example.com/?q=&quot; onclick=&quot;alert(1)"' in result
+
+
+def test_news_html_rejects_non_http_and_hostless_links():
+    from services.report_html_generator import ReportHtmlGenerator
+
+    render = ReportHtmlGenerator()._render_news_section
+    for bad in ("javascript:alert(1)", "https:///missing-host", "data:text/html,hello"):
+        assert 'href="#"' in render([{"title": "기사", "link": bad}])
