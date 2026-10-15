@@ -332,11 +332,11 @@ class NewsService:
         for w in watch_list:
             ticker = getattr(w, "ticker", "")
             name = getattr(w, "name", "")
-            if not ticker:
-                continue
-            stock_items = self.fetch_stock_news(ticker, name)
-            collected_stock_news.extend(stock_items)
+            if ticker:
+                stock_items = self.fetch_stock_news(ticker, name)
+                collected_stock_news.extend(stock_items)
 
+            # Watchlist entries may identify overseas stocks by name only.
             const_info = self.get_constituent_query(ticker, name)
             if const_info:
                 c_query, c_tag = const_info
