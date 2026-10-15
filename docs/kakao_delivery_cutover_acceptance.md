@@ -265,3 +265,10 @@ The staged facade `services/kakao_delivery_origin_gateway.py` has passed disposa
 7. Only after reviewed acceptance, stop the old sender, apply an approved production migration, verify markers/read-only audit, explicitly authorize cutover, and enable exactly one sender. No production step is authorized by this draft PR.
 
 **Blocking architectural issue:** `send_cached_kakao` currently invokes Kakao directly without recording the legacy sent marker. It cannot be safely brought under durable deduplication until its report identity and database state are established. Do not treat feature-gate toggles as a substitute for the coordinated routing refactor.
+
+
+### Staged report-service integration seam (2026-10-15)
+
+`services/kakao_delivery_report_bridge.py` now exposes `send_persisted_report_staged(...)`, an inert, typed adapter for all four origins. It maps `SendOutcome` to report-service success/failure text, explicitly treats uncertain/denied/disabled as **not sent**, and never falls back to the legacy Kakao transport. It has no production import. This is **not a live sender cutover**.
+
+The remaining live wiring is a coordinated change: (a) persist the report before claim, (b) determine the correct origin and authenticated UUID/date at each entrypoint, (c) replace both direct sends and the independent legacy marker retry, (d) ensure cached CLI supplies trusted persisted identity, (e) apply approved DB migrations and use exactly one sending path. Production migration, activation, and sending remain prohibited without separate approval.
