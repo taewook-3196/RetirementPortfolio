@@ -54,7 +54,12 @@ def load_index_series(index: str, period: str = "1y") -> dict:
     first_date = (end - timedelta(days=PERIOD_DAYS[period])).date().isoformat()
     visible = [point for point in points if point["date"] >= first_date]
     if not visible:
-        visible = points[-1:]
+        raise RuntimeError("조회 기간에 해당하는 지수 가격 데이터가 없습니다.")
+    # Do not label a short history as a full-period return or drawdown.
+    earliest = datetime.fromisoformat(visible[0]["date"]).date()
+    cutoff = datetime.fromisoformat(first_date).date()
+    if (earliest - cutoff).days > 7 or len(visible) < 2:
+        raise RuntimeError("조회 기간의 지수 가격 데이터가 부족합니다.")
     first, last = visible[0]["close"], visible[-1]["close"]
     peak, max_drawdown = first, 0.0
     for point in visible:
