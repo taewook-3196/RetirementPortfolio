@@ -23,8 +23,10 @@ class ReconciliationAdvice:
 
 def advise_reconciliation(*, attempt_status: str, lease_expired: bool = False,
                           legacy_sent: bool = False) -> ReconciliationAdvice:
-    if legacy_sent or attempt_status == "sent":
+    if legacy_sent is True or attempt_status == "sent":
         return ReconciliationAdvice(ReconciliationAction.NO_ACTION, False, "delivery recorded")
+    if legacy_sent is not False:
+        return ReconciliationAdvice(ReconciliationAction.VERIFY_EXTERNALLY, False, "legacy delivery marker unknown")
     if attempt_status == "uncertain":
         return ReconciliationAdvice(ReconciliationAction.VERIFY_EXTERNALLY, False, "transport outcome ambiguous")
     if attempt_status == "sending":
