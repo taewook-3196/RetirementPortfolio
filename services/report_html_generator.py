@@ -2593,7 +2593,10 @@ class ReportHtmlGenerator:
 
         items_html = ""
         for n in news_items[:8]:  # 최대 8건
-            title = html.escape(str(n.get("title", "") or ""))
+            raw_title = str(n.get("title", "") or "").strip()
+            if not raw_title:
+                continue
+            title = html.escape(raw_title)
             media = html.escape(str(n.get("media", "언론사") or ""))
             date_time = html.escape(str(n.get("date", "") or ""))
             tag = html.escape(str(n.get("tag", "증시") or ""))
@@ -2616,6 +2619,9 @@ class ReportHtmlGenerator:
                 <span class="news-time">{date_time}</span>
             </div>
             """
+
+        if not items_html:
+            return ""
 
         return f"""
         <section class="card">
