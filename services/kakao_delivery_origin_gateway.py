@@ -4,6 +4,7 @@ This is not wired into production. Eligibility is an advisory fail-closed
 precheck; only a committed PostgreSQL claim authorizes Kakao transport.
 """
 from datetime import date
+from ipaddress import ip_address
 from uuid import UUID
 from urllib.parse import urlsplit
 
@@ -40,6 +41,12 @@ def send_staged_for_origin(*, origin, engine, user_id, report_date, kakao_servic
         ):
             return SendResult(SendOutcome.NOT_CLAIMED)
         _ = parsed.port
+        try:
+            parsed_ip = ip_address(host)
+        except ValueError:
+            parsed_ip = None
+        if parsed_ip is not None and not parsed_ip.is_global:
+            return SendResult(SendOutcome.NOT_CLAIMED)
     except ValueError:
         return SendResult(SendOutcome.NOT_CLAIMED)
     eligibility = check_delivery_eligibility(

@@ -155,6 +155,8 @@ def test_untrusted_caller_hint_cannot_authorize_transport_when_claim_denied(monk
 
 @pytest.mark.parametrize("url", [
     "https://localhost/report",
+    "https://192.168.1.1/report",
+    "https://[fc00::1]/report",
     "https://localhost.localdomain/report",
     "https://app.localhost/report",
     "https://127.0.0.1/report",
