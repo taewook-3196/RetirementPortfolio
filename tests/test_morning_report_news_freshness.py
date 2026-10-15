@@ -256,3 +256,22 @@ def test_news_feed_ignores_malformed_headlines_and_case_duplicates(monkeypatch):
     monkeypatch.setattr(service, "fetch_economy_rss", lambda limit=15: articles)
     result = service.get_news_feed(mode="all")
     assert [item["title"] for item in result] == ["Market Rally"]
+
+
+def test_naver_news_skips_malformed_entries_but_keeps_valid(monkeypatch):
+    import io
+    import json
+    import urllib.request
+
+    service = NewsService()
+    payload = [{"items": [None, "broken", {"title": 123}, {"title": "정상 기사", "datetime": "2026-10-15T09:00:00+09:00"}]}]
+
+    class FakeResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.close()
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *args, **kwargs: FakeResponse(json.dumps(payload).encode("utf-8")))
+    result = service.fetch_stock_news("005930", "삼성전자")
+    assert [item["title"] for item in result] == ["정상 기사"]
