@@ -2593,20 +2593,18 @@ class ReportHtmlGenerator:
 
         items_html = ""
         for n in news_items[:8]:  # 최대 8건
-            title = n.get("title", "")
-            media = n.get("media", "언론사")
-            date_time = n.get("date", "")
-            raw_link = str(n.get("link", "") or "").strip()
-            parsed_link = urllib.parse.urlparse(raw_link)
-            link = (
-                raw_link
-                if parsed_link.scheme.lower() in {"http", "https"}
-                else "#"
+            title = html.escape(str(n.get("title", "") or ""))
+            media = html.escape(str(n.get("media", "언론사") or ""))
+            date_time = html.escape(str(n.get("date", "") or ""))
+            tag = html.escape(str(n.get("tag", "증시") or ""))
+            raw_link = html.unescape(str(n.get("link", "") or "").strip())
+            parsed_link = urlparse(raw_link)
+            valid_link = (
+                parsed_link.scheme.lower() in {"http", "https"}
+                and bool(parsed_link.netloc)
+                and not any(ord(char) < 32 or ord(char) == 127 for char in raw_link)
             )
-            parsed_link = urlparse(html.unescape(str(link)))
-            if parsed_link.scheme not in ("http", "https"):
-                link = "#"
-            tag = n.get("tag", "증시")
+            link = html.escape(raw_link if valid_link else "#", quote=True)
 
             items_html += f"""
             <div class="news-item">
