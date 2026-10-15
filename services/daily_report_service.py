@@ -1705,6 +1705,26 @@ class DailyReportService:
             logger.exception("모닝 리포트 생성 및 발송 실패")
             return False, f"오류 발생: {str(e)}", None
 
+    def _send_verified_report_staged(
+        self, *, engine, origin, user_id, report_date: date,
+        summary_text: str, report_web_url: str, force: bool = False,
+        env=None,
+    ) -> Tuple[bool, str]:
+        """Dormant cutover candidate: never called by production entrypoints.
+
+        This explicit method is for integration tests and reviewed migration.
+        No environment flag can switch the live callsite to this path.
+        """
+        from services.kakao_delivery_report_bridge import send_persisted_report_staged
+
+        result = send_persisted_report_staged(
+            origin=origin, engine=engine, user_id=user_id,
+            report_date=report_date, kakao_service=self.kakao_service,
+            summary_text=summary_text, report_web_url=report_web_url,
+            force=force, env=env,
+        )
+        return result.ok, result.message
+
     def _send_legacy_report_and_record(
         self, *, report_date: date, summary_text: str, report_web_url: str
     ) -> Tuple[bool, str]:
