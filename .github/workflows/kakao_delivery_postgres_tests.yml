@@ -7,7 +7,9 @@ on:
       - 'database/migrations/20261014_kakao_delivery_recovery_audit.sql'
       - 'tests/test_kakao_delivery_postgres.py'
       - 'services/kakao_delivery_*.py'
+      - 'services/daily_report_service.py'
       - 'tests/test_kakao_delivery_*.py'
+      - 'tests/test_kakao_delivery_legacy_seam.py'
       - '.github/workflows/kakao_delivery_postgres_tests.yml'
   workflow_dispatch:
 
@@ -42,7 +44,7 @@ jobs:
           python -m pip install pytest psycopg2-binary
       - name: Compile staged Kakao delivery modules and tests
         run: |
-          python -m compileall -q services/kakao_delivery_*.py tests/test_kakao_delivery_*.py
+          python -m compileall -q services/daily_report_service.py services/kakao_delivery_*.py tests/test_kakao_delivery_*.py
       - name: Test atomic claim and completion against disposable PostgreSQL
         env:
           KAKAO_DELIVERY_TEST_DSN: postgresql+psycopg2://testuser:testpassword@localhost:5432/kakao_delivery_ci
