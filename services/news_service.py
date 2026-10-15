@@ -105,6 +105,8 @@ def filter_recent_news(
     reference = reference.astimezone(timezone.utc)
     recent = []
     for item in items:
+        if not isinstance(item, dict):
+            continue
         published = parse_news_published_at(item.get("datetime"))
         if published is not None and reference - NEWS_MAX_AGE <= published <= reference:
             recent.append((published, item))
