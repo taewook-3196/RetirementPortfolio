@@ -123,3 +123,10 @@ def test_duplicate_titles_ignore_whitespace_and_punctuation(monkeypatch):
     result = service.get_news_feed(mode="portfolio_only", etfs=[Asset()])
     assert len(result) == 1
     assert result[0]["link"] == "https://example.com/newer"
+
+
+def test_report_assembly_rechecks_news_freshness():
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "services" / "daily_report_service.py").read_text(encoding="utf-8")
+    assert "for item in filter_recent_news(feed)[:8]:" in source
