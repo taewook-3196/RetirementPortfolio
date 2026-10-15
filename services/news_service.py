@@ -144,7 +144,11 @@ class NewsService:
                     item_lists = data.get("items", []) or data.get("content", [])
 
                 for it in item_lists:
+                    if not isinstance(it, dict):
+                        continue
                     raw_title = it.get("titleFull") or it.get("title", "")
+                    if not isinstance(raw_title, str):
+                        continue
                     clean_title = html.unescape(re.sub(r"<[^>]+>", "", raw_title).strip())
                     if not clean_title:
                         continue
