@@ -50,7 +50,7 @@ def test_auditable_evidence_and_time_required():
 
 
 def test_audit_reference_rejects_control_characters():
-    for reference in ("ticket\\nspoofed", "ticket\\rspoofed", "ticket\\tspoofed", "ticket\\x00spoofed", "ticket\\x7fspoofed"):
+    for reference in ("ticket\nspoofed", "ticket\rspoofed", "ticket\tspoofed", "ticket\x00spoofed", "ticket\x7fspoofed"):
         decision = decide(make_review(evidence_reference=reference))
         assert not decision.eligible_for_future_recovery
         assert "control characters" in decision.reason
