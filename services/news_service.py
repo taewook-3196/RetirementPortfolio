@@ -172,6 +172,8 @@ class NewsService:
 
     def fetch_economy_rss(self, limit: int = 15) -> List[Dict[str, Any]]:
         """구글 뉴스 비즈니스/경제 RSS를 통해 주요 실시간 경제 속보를 수집합니다."""
+        if limit <= 0:
+            return []
         url = "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=ko&gl=KR&ceid=KR:ko"
         req = urllib.request.Request(url, headers={"User-Agent": self.USER_AGENT})
 
@@ -223,6 +225,8 @@ class NewsService:
 
     def fetch_keyword_rss(self, keyword_query: str, tag: str, limit: int = 6) -> List[Dict[str, Any]]:
         """구글 뉴스 키워드 검색 RSS를 통해 ETF 핵심 편입종목 뉴스를 수집합니다."""
+        if limit <= 0:
+            return []
         encoded_query = urllib.parse.quote(keyword_query)
         url = f"https://news.google.com/rss/search?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko"
         req = urllib.request.Request(url, headers={"User-Agent": self.USER_AGENT})
