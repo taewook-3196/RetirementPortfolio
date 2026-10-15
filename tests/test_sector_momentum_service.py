@@ -13,7 +13,7 @@ def test_period_returns_require_baseline_and_newer_data():
     today = date.today()
     values = [(today - timedelta(days=100), 100), (today, 120)]
     assert _return_for_period(values, today - timedelta(days=90)) is None
-    assert _return_for_period(values, today - timedelta(days=110)) == 20.0
+    assert _return_for_period(values, today - timedelta(days=110)) is None
 
 
 def test_non_trading_boundary_uses_next_available_close():
