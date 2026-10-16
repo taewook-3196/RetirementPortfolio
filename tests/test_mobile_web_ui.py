@@ -508,3 +508,12 @@ def test_home_response_has_browser_security_headers(monkeypatch):
     assert response.headers["x-frame-options"] == "DENY"
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
     assert "base-uri 'none'" in response.headers["content-security-policy"]
+
+
+def test_sector_cards_display_evidence_separately_from_score(monkeypatch):
+    html = _html(monkeypatch)
+    assert '" · 참고 점수 " + sectorValueMetric(item.score)' in html
+    assert '" · 근거 확보율 " + sectorValueMetric(item.coverage_pct, "%")' in html
+    assert '(item.evidence_level || "확인 불가")' in html
+    assert 'label.textContent = item.valuation_label || "평가 보류";' in html
+    assert 'details.textContent = "PER "' in html
