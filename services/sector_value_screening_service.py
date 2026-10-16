@@ -55,7 +55,27 @@ def _finite(value):
 
 def _fetch_info(ticker):
     import yfinance as yf
-    return yf.Ticker(ticker).info or {}
+    try:
+        info = yf.Ticker(ticker).info or {}
+        if any(_finite(info.get(field)) is not None for field in FIELDS):
+            return info
+    except Exception:
+        info = {}
+    # Annual SEC figures do not replace forecasts or live prices.
+    if not ticker.endswith((".KS", ".KQ")):
+        from services.sec_edgar_fundamentals import fetch_sec_fundamentals
+        fundamentals = fetch_sec_fundamentals(ticker)
+        # Price history is separate from Yahoo's restricted company-info API.
+        try:
+            history = yf.Ticker(ticker).history(period="1y", auto_adjust=True)
+            closes = history["Close"].dropna()
+            if len(closes) >= 2 and float(closes.iloc[0]) > 0:
+                fundamentals["fiftyTwoWeekChange"] = float(closes.iloc[-1] / closes.iloc[0] - 1)
+                fundamentals["price_as_of"] = str(closes.index[-1].date())
+        except Exception:
+            pass
+        return {**info, **fundamentals}
+    return info
 
 
 def _score(info, sector_pe_median=None):
@@ -122,6 +142,14 @@ def screen_sector(market, sector):
     )
     if usable == 0:
         raise RuntimeError("Fundamental data unavailable for all sampled companies")
+    # SEC-only annual profit margin is insufficient for a multi-factor screen.
+    # Keep this endpoint unavailable rather than render non-actionable cards.
+    sufficient = sum(
+        sum(_finite(info.get(field)) is not None for field in FIELDS) >= 4
+        for _, info in records
+    )
+    if sufficient == 0:
+        raise RuntimeError("Insufficient multi-factor data for sector screening")
     records.sort(key=lambda item: item[0])
     # Curated sample: never claim an industry-wide benchmark. Require 5
     # comparable positive forward PEs before allowing valuation labels.
