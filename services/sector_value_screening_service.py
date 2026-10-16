@@ -183,6 +183,7 @@ def screen_sector(market, sector):
     results.sort(key=lambda item: (
         not item["eligible"],
         -(item["score"] if item["score"] is not None else -1),
+        -item["coverage"],
         item["ticker"],
     ))
     result = {

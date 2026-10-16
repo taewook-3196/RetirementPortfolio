@@ -51,3 +51,27 @@ def test_financials_pbr_roe_label(monkeypatch):
         assert all("PBR/ROE" in row["valuation_basis"] for row in rows)
     finally:
         svc.CACHE.clear()
+
+
+def test_equal_scores_prefer_greater_metric_coverage(monkeypatch):
+    from services import sector_value_screening_service as svc
+
+    tickers = svc.UNIVERSE["us"]["technology"]
+    first, second = tickers[:2]
+    def fake_info(ticker):
+        base = {"forwardPE": 10.0, "priceToBook": 2.0, "returnOnEquity": 0.2,
+                "revenueGrowth": 0.1, "profitMargins": 0.2, "fiftyTwoWeekChange": 0.1}
+        if ticker == first:
+            return {"forwardPE": 10.0, "priceToBook": 2.0,
+                    "returnOnEquity": 0.2, "revenueGrowth": 0.1}
+        if ticker == second:
+            return base
+        return {"forwardPE": 10.0}
+    monkeypatch.setattr(svc, "_fetch_info", fake_info)
+    svc.CACHE.clear()
+    try:
+        rows = svc.screen_sector("us", "technology")["results"]
+        assert rows[0]["ticker"] == second
+        assert rows[0]["coverage"] == 6
+    finally:
+        svc.CACHE.clear()
