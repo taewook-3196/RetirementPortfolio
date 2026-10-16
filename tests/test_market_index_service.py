@@ -108,3 +108,21 @@ def test_index_sorts_prices_and_excludes_future_observations():
     assert result["points"][-1]["close"] == 204.0
     assert all(point["close"] != 99999.0 for point in result["points"])
     assert result["points"] == sorted(result["points"], key=lambda p: p["date"])
+
+
+def test_index_skips_malformed_close_values_without_losing_valid_history():
+    dates = pd.date_range(end=pd.Timestamp.now(tz="UTC").normalize(), periods=105, freq="D")
+    closes = [100.0 + i for i in range(105)]
+    closes[40] = None
+    closes[70] = "invalid"
+    frame = pd.DataFrame({"Close": closes}, index=dates)
+
+    class FakeTicker:
+        def history(self, **kwargs):
+            return frame
+
+    _CACHE.clear()
+    with patch("yfinance.Ticker", return_value=FakeTicker()):
+        result = load_index_series("sp500", "3m")
+    assert result["points"][-1]["close"] == 204.0
+    assert all(point["close"] > 0 for point in result["points"])
