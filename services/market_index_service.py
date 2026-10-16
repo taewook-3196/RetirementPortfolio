@@ -38,9 +38,10 @@ def load_index_series(index: str, period: str = "1y") -> dict:
         raise RuntimeError("지수 가격 데이터를 가져오지 못했습니다.")
     points = []
     closes = []
+    seen_dates = set()
     today = datetime.now(timezone.utc).date()
     for dt, row in frame.sort_index().iterrows():
-        if dt.date() > today:
+        if dt.date() > today or dt.date() in seen_dates:
             continue
         try:
             close = float(row["Close"])
@@ -48,6 +49,7 @@ def load_index_series(index: str, period: str = "1y") -> dict:
             continue
         if not math.isfinite(close) or close <= 0:
             continue
+        seen_dates.add(dt.date())
         closes.append(close)
         date = dt.strftime("%Y-%m-%d")
         points.append({
