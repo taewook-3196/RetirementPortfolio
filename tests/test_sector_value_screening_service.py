@@ -83,3 +83,20 @@ def test_semiconductors_do_not_claim_normalized_earnings():
         result = screen_sector("kr", "semiconductors")
     assert result["semiconductor_cycle"]["status"] == "not_verified"
     assert all(row["valuation_label"] == "평가 보류" for row in result["results"])
+
+
+def test_score_and_evidence_coverage_are_distinct():
+    complete = _score({"forwardPE": 10, "priceToBook": 2, "returnOnEquity": .2,
+                       "revenueGrowth": .1, "profitMargins": .2,
+                       "fiftyTwoWeekChange": .1}, sector_pe_median=20)
+    partial = _score({"forwardPE": 10, "priceToBook": 2, "returnOnEquity": .2,
+                      "revenueGrowth": .1}, sector_pe_median=20)
+    sparse = _score({"forwardPE": 10}, sector_pe_median=20)
+    assert complete["score"] == partial["score"] == 100
+    assert complete["coverage_pct"] == 100
+    assert complete["evidence_level"] == "충분"
+    assert partial["coverage_pct"] == 66.7
+    assert partial["evidence_level"] == "부분"
+    assert sparse["coverage_pct"] == 16.7
+    assert sparse["evidence_level"] == "부족"
+    assert sparse["eligible"] is False
