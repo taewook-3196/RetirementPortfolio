@@ -88,3 +88,23 @@ def test_index_rejects_stale_last_close_even_with_full_period_coverage():
     with patch("yfinance.Ticker", return_value=FakeTicker()):
         with pytest.raises(RuntimeError, match="오래되었습니다"):
             load_index_series("sp500", "1y")
+
+
+def test_index_sorts_prices_and_excludes_future_observations():
+    dates = pd.date_range(end=pd.Timestamp.now(tz="UTC").normalize(), periods=105, freq="D")
+    closes = [100.0 + i for i in range(105)]
+    frame = pd.DataFrame({"Close": closes}, index=dates)
+    future = pd.DataFrame(
+        {"Close": [99999.0]},
+        index=[pd.Timestamp.now(tz="UTC").normalize() + pd.Timedelta(days=3)],
+    )
+    frame = pd.concat([future, frame.iloc[::-1]])
+    class FakeTicker:
+        def history(self, **kwargs):
+            return frame
+    _CACHE.clear()
+    with patch("yfinance.Ticker", return_value=FakeTicker()):
+        result = load_index_series("sp500", "3m")
+    assert result["points"][-1]["close"] == 204.0
+    assert all(point["close"] != 99999.0 for point in result["points"])
+    assert result["points"] == sorted(result["points"], key=lambda p: p["date"])
