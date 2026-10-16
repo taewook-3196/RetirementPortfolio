@@ -88,6 +88,8 @@ def _score(info, sector_pe_median=None):
                     if comparable_forward_pe is not None and sector_pe_median else None},
         "checks": checks,
         "coverage": len(available), "total_metrics": len(checks),
+        "coverage_pct": round(100 * len(available) / len(checks), 1),
+        "evidence_level": "충분" if len(available) == len(checks) else "부분" if len(available) >= 4 else "부족",
         "score": round(100 * sum(available) / len(available), 1) if available else None,
         "eligible": len(available) >= 4,
     }
@@ -196,7 +198,7 @@ def screen_sector(market, sector):
         "pe_benchmark": {"type": "curated_sample", "median": sector_pe_median,
                          "mean": round(sector_pe_mean, 2) if sector_pe_mean is not None else None,
                          "valid_count": len(valid_pe), "minimum_count": 5},
-        "method": "임시 탐색 점수(6개 지표). PER 상대평가는 Forward PER 유효 표본 5개 이상인 경우만 사용. 가치평가와 투자매력도는 별개입니다.",
+        "method": "임시 탐색 점수(확보된 지표 중 충족 비율)와 근거 확보율(전체 6개 지표 중 확보 비율)은 별개입니다. PER 상대평가는 Forward PER 유효 표본 5개 이상인 경우만 사용. 가치평가와 투자매력도는 별개입니다.",
         "disclaimer": "제한된 표본의 정량 선별 결과이며 저평가 확정 또는 매수 추천이 아닙니다. PER 기준은 소규모 표본 중앙값이며 섹터 전체 평균이 아닙니다. 표본이 부족하면 가치평가를 보류합니다. 업종별 적정 PER/PBR이 달라 직접 비교에 주의하세요.",
     }
     CACHE[key] = (time.monotonic(), result)
