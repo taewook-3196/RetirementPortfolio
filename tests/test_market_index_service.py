@@ -70,3 +70,21 @@ def test_index_rejects_series_entirely_outside_requested_period():
     with patch("yfinance.Ticker", return_value=FakeTicker()):
         with pytest.raises(RuntimeError, match="해당"):
             load_index_series("sp500", "1m")
+
+
+
+def test_index_rejects_stale_last_close_even_with_full_period_coverage():
+    dates = pd.date_range(
+        end=pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=12),
+        periods=390, freq="D",
+    )
+    frame = pd.DataFrame({"Close": [100.0 + i / 10 for i in range(390)]}, index=dates)
+
+    class FakeTicker:
+        def history(self, **kwargs):
+            return frame
+
+    _CACHE.clear()
+    with patch("yfinance.Ticker", return_value=FakeTicker()):
+        with pytest.raises(RuntimeError, match="오래되었습니다"):
+            load_index_series("sp500", "1y")

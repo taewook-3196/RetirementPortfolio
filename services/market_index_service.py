@@ -60,6 +60,9 @@ def load_index_series(index: str, period: str = "1y") -> dict:
     cutoff = datetime.fromisoformat(first_date).date()
     if (earliest - cutoff).days > 7 or len(visible) < 2:
         raise RuntimeError("조회 기간의 지수 가격 데이터가 부족합니다.")
+    latest = datetime.fromisoformat(visible[-1]["date"]).date()
+    if (datetime.now(timezone.utc).date() - latest).days > 7:
+        raise RuntimeError("최신 지수 가격 데이터가 오래되었습니다.")
     first, last = visible[0]["close"], visible[-1]["close"]
     peak, max_drawdown = first, 0.0
     for point in visible:
