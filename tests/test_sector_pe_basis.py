@@ -75,3 +75,30 @@ def test_equal_scores_prefer_greater_metric_coverage(monkeypatch):
         assert rows[0]["coverage"] == 6
     finally:
         svc.CACHE.clear()
+
+
+def test_screen_ranking_accounts_for_missing_evidence(monkeypatch):
+    from services import sector_value_screening_service as svc
+
+    tickers = svc.UNIVERSE["us"]["technology"]
+    partial, complete = tickers[:2]
+    def fake_info(ticker):
+        base = {"forwardPE": 10, "priceToBook": 2, "returnOnEquity": .2,
+                "revenueGrowth": .1, "profitMargins": .2,
+                "fiftyTwoWeekChange": -.1}
+        if ticker == partial:
+            return {"forwardPE": 10, "priceToBook": 2, "returnOnEquity": .2,
+                    "revenueGrowth": .1}
+        if ticker == complete:
+            return base
+        return {"forwardPE": 10}
+    monkeypatch.setattr(svc, "_fetch_info", fake_info)
+    svc.CACHE.clear()
+    try:
+        rows = svc.screen_sector("us", "technology")["results"]
+        assert rows[0]["ticker"] == complete
+        assert rows[0]["coverage"] == 6
+        assert rows[0]["score"] < 100
+        assert next(row for row in rows if row["ticker"] == partial)["score"] == 100
+    finally:
+        svc.CACHE.clear()
