@@ -42,7 +42,10 @@ def load_index_series(index: str, period: str = "1y") -> dict:
     for dt, row in frame.sort_index().iterrows():
         if dt.date() > today:
             continue
-        close = float(row["Close"])
+        try:
+            close = float(row["Close"])
+        except (TypeError, ValueError, OverflowError):
+            continue
         if not math.isfinite(close) or close <= 0:
             continue
         closes.append(close)
