@@ -395,3 +395,14 @@ def test_report_news_decodes_entities_and_formats_dates():
     assert "<script>" not in rendered
     assert "2026-10-16 08:03" in rendered
     assert "2026-10-16 08:12" in rendered
+
+
+
+def test_malformed_twelve_digit_news_date_does_not_abort_fresh_feed():
+    now = datetime(2026, 10, 16, 1, 0, tzinfo=timezone.utc)
+    items = [
+        {"title": "bad provider date", "datetime": "202613990812"},
+        {"title": "valid article", "datetime": "202610160812"},
+    ]
+    assert parse_news_published_at("202613990812") is None
+    assert [item["title"] for item in filter_recent_news(items, now=now)] == ["valid article"]
