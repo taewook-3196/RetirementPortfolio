@@ -70,7 +70,7 @@ def test_banks_require_specialized_valuation_inputs():
         result = screen_sector("us", "financials")
     assert result["valuation_policy"]["primary"] == "pbr_roe"
     assert result["bank_pbr_roe_benchmark"]["valid_count"] >= 5
-    assert all(row["valuation_label"] == "은행 상대가치 참고" for row in result["results"])
+    assert all(row["valuation_label"] == "PBR/ROE 상대가치 참고" for row in result["results"])
     assert all(row["bank_pbr_roe_discount_pct"] == 0 for row in result["results"])
 
 
