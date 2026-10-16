@@ -158,7 +158,7 @@ def screen_sector(market, sector):
                          if bank_median is not None and pb is not None and pb > 0
                          and roe_value is not None and roe_value > 0 else None)
         if policy["primary"] == "pbr_roe":
-            valuation = "은행 상대가치 참고" if bank_discount is not None else "평가 보류"
+            valuation = "PBR/ROE 상대가치 참고" if bank_discount is not None else "평가 보류"
         elif not policy["automatic_valuation"] or discount is None or not healthy:
             valuation = "평가 보류"
         elif discount >= 20:
@@ -174,7 +174,7 @@ def screen_sector(market, sector):
         results.append({
             "valuation_label": valuation,
             "bank_pbr_roe_discount_pct": round(bank_discount, 2) if bank_discount is not None else None,
-            "valuation_basis": ("표본 Forward PER 및 최소 성장·수익성 검증" if policy["automatic_valuation"] else "업종 전용 재무지표 미검증"),
+            "valuation_basis": ("표본 Forward PER 및 최소 성장·수익성 검증" if policy["automatic_valuation"] else "표본 PBR/ROE 상대비교(투자판단 불가)" if policy["primary"] == "pbr_roe" and bank_discount is not None else "업종 전용 재무지표 미검증"),
             "ticker": ticker,
             "name": str(info.get("shortName") or ticker)[:120],
             "currency": str(info.get("currency") or ""),
