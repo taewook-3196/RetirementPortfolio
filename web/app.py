@@ -7937,6 +7937,7 @@ async function refreshSectorValue() {
                 + " · ROE " + sectorValueMetric(metrics.roe == null ? null : metrics.roe * 100, "%")
                 + " · PER 할인율 " + sectorValueMetric(metrics.pe_discount_pct, "%")
                 + " · 참고 점수 " + sectorValueMetric(item.score)
+                + " · 근거 반영 점수 " + sectorValueMetric(item.evidence_adjusted_score)
                 + " · 근거 확보율 " + sectorValueMetric(item.coverage_pct, "%")
                 + " (" + (item.evidence_level || "확인 불가") + ")";
             card.appendChild(details);
