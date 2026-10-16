@@ -79,7 +79,7 @@ def parse_news_published_at(value: Any) -> Optional[datetime]:
             except (TypeError, ValueError, IndexError):
                 for fmt in ("%Y.%m.%d %H:%M", "%Y.%m.%d %H:%M:%S",
                             "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S",
-                            "%Y%m%d%H%M%S"):
+                            "%Y%m%d%H%M%S", "%Y%m%d%H%M"):
                     try:
                         parsed = datetime.strptime(raw, fmt)
                         break
