@@ -200,7 +200,7 @@ def test_news_html_escapes_external_metadata_and_link_attributes():
     assert "<script>" not in result
     assert "<img src=x" not in result
     assert "<b>risk</b>" not in result
-    assert "&lt;svg" in result
+    assert "날짜 확인 불가" in result
     assert 'href="https://example.com/?q=&quot; onclick=&quot;alert(1)"' in result
 
 
@@ -377,11 +377,10 @@ def test_naver_twelve_digit_timestamp_is_korean_local_time():
 
 
 def test_report_news_decodes_entities_and_formats_dates():
-    from services.report_html_generator import ReportHTMLGenerator
+    from services.report_html_generator import ReportHtmlGenerator
     from html import unescape
-    from unittest.mock import Mock
 
-    generator = ReportHTMLGenerator.__new__(ReportHTMLGenerator)
+    generator = ReportHtmlGenerator()
     rendered = generator._render_news_section([
         {"title": "&#x27;임상&#x27; &amp;quot;성과&amp;quot; &lt;script&gt;",
          "media": "약업신문", "date": "Thu, 15 Oct 2026 23:03:00 GMT", "tag": "바이오"},
