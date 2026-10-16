@@ -38,3 +38,16 @@ def test_upper_comparable_forward_pe_boundary():
     row = _score({"forwardPE": 200}, sector_pe_median=20)
     assert row["metrics"]["pe_discount_pct"] == -900.0
     assert row["checks"]["reasonable_pe"] is False
+
+
+def test_financials_pbr_roe_label(monkeypatch):
+    from services import sector_value_screening_service as svc
+    monkeypatch.setattr(svc, "_fetch_info", lambda ticker: {"priceToBook": 1.0, "returnOnEquity": 0.1, "forwardPE": 12.0})
+    svc.CACHE.clear()
+    try:
+        rows = svc.screen_sector("us", "financials")["results"]
+        assert rows
+        assert all(row["valuation_label"] == "PBR/ROE 상대가치 참고" for row in rows)
+        assert all("PBR/ROE" in row["valuation_basis"] for row in rows)
+    finally:
+        svc.CACHE.clear()
