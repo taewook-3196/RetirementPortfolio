@@ -71,6 +71,8 @@ def parse_news_published_at(value: Any) -> Optional[datetime]:
         parsed = None
         if raw.isdigit() and len(raw) in (10, 13):
             return parse_news_published_at(int(raw))
+        if raw.isdigit() and len(raw) == 12:
+            return datetime.strptime(raw, "%Y%m%d%H%M").replace(tzinfo=SEOUL).astimezone(timezone.utc)
         try:
             parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
         except ValueError:
@@ -79,7 +81,7 @@ def parse_news_published_at(value: Any) -> Optional[datetime]:
             except (TypeError, ValueError, IndexError):
                 for fmt in ("%Y.%m.%d %H:%M", "%Y.%m.%d %H:%M:%S",
                             "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S",
-                            "%Y%m%d%H%M%S"):
+                            "%Y%m%d%H%M%S", "%Y%m%d%H%M"):
                     try:
                         parsed = datetime.strptime(raw, fmt)
                         break

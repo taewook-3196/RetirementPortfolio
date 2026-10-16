@@ -200,7 +200,7 @@ def test_news_html_escapes_external_metadata_and_link_attributes():
     assert "<script>" not in result
     assert "<img src=x" not in result
     assert "<b>risk</b>" not in result
-    assert "&lt;svg" in result
+    assert "날짜 확인 불가" in result
     assert 'href="https://example.com/?q=&quot; onclick=&quot;alert(1)"' in result
 
 
@@ -367,3 +367,31 @@ def test_rss_nonpositive_limits_do_not_fetch(monkeypatch):
     for limit in (0, -1):
         assert service.fetch_economy_rss(limit=limit) == []
         assert service.fetch_keyword_rss("반도체", "테마", limit=limit) == []
+
+
+
+def test_naver_twelve_digit_timestamp_is_korean_local_time():
+    assert parse_news_published_at("202610160812") == datetime(
+        2026, 10, 15, 23, 12, tzinfo=timezone.utc
+    )
+
+
+def test_report_news_decodes_entities_and_formats_dates():
+    from services.report_html_generator import ReportHtmlGenerator
+    from html import unescape
+
+    generator = ReportHtmlGenerator()
+    rendered = generator._render_news_section([
+        {"title": "&#x27;임상&#x27; &amp;quot;성과&amp;quot; &lt;script&gt;",
+         "media": "약업신문", "date": "Thu, 15 Oct 2026 23:03:00 GMT", "tag": "바이오"},
+        {"title": "&#x27;최소 329만원&#x27; 아이폰", "media": "이데일리",
+         "date": "202610160812", "tag": "삼성전자"},
+    ])
+    assert "&amp;#x27;" not in rendered
+    assert "&amp;quot;" not in rendered
+    assert "'임상'" in unescape(rendered)
+    assert '"성과"' in unescape(rendered)
+    assert "&lt;script&gt;" in rendered
+    assert "<script>" not in rendered
+    assert "2026-10-16 08:03" in rendered
+    assert "2026-10-16 08:12" in rendered
