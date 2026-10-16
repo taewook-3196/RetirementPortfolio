@@ -126,3 +126,19 @@ def test_index_skips_malformed_close_values_without_losing_valid_history():
         result = load_index_series("sp500", "3m")
     assert result["points"][-1]["close"] == 204.0
     assert all(point["close"] > 0 for point in result["points"])
+
+
+def test_index_deduplicates_multiple_closes_for_same_calendar_day():
+    dates = pd.date_range(end=pd.Timestamp.now(tz="UTC").normalize(), periods=105, freq="D")
+    frame = pd.DataFrame({"Close": [100.0 + i for i in range(105)]}, index=dates)
+    duplicate = pd.DataFrame({"Close": [9999.0]}, index=[dates[80] + pd.Timedelta(hours=12)])
+    frame = pd.concat([frame, duplicate])
+    class FakeTicker:
+        def history(self, **kwargs):
+            return frame
+    _CACHE.clear()
+    with patch("yfinance.Ticker", return_value=FakeTicker()):
+        result = load_index_series("sp500", "3m")
+    point_dates = [point["date"] for point in result["points"]]
+    assert len(point_dates) == len(set(point_dates))
+    assert all(point["close"] != 9999.0 for point in result["points"])
