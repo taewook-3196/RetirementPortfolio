@@ -100,3 +100,16 @@ def test_score_and_evidence_coverage_are_distinct():
     assert sparse["coverage_pct"] == 16.7
     assert sparse["evidence_level"] == "부족"
     assert sparse["eligible"] is False
+
+
+def test_evidence_adjusted_score_matches_six_check_ranking_basis():
+    complete = _score({"forwardPE": 10, "priceToBook": 2, "returnOnEquity": .2,
+                       "revenueGrowth": .1, "profitMargins": .2,
+                       "fiftyTwoWeekChange": -.1}, sector_pe_median=20)
+    partial = _score({"forwardPE": 10, "priceToBook": 2, "returnOnEquity": .2,
+                      "revenueGrowth": .1}, sector_pe_median=20)
+    assert complete["score"] == 83.3
+    assert complete["evidence_adjusted_score"] == 83.3
+    assert partial["score"] == 100
+    assert partial["evidence_adjusted_score"] == 66.7
+    assert _score({})["evidence_adjusted_score"] == 0
