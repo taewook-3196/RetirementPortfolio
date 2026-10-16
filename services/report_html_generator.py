@@ -2597,10 +2597,15 @@ class ReportHtmlGenerator:
             raw_title = str(n.get("title", "") or "").strip()
             if not raw_title:
                 continue
-            title = html.escape(raw_title)
-            media = html.escape(str(n.get("media", "언론사") or ""))
-            date_time = html.escape(str(n.get("date", "") or ""))
-            tag = html.escape(str(n.get("tag", "증시") or ""))
+            # Providers may send already-escaped entities; escape only after
+            # decoding to avoid exposing &#x27; and &quot; to readers.
+            title = html.escape(html.unescape(html.unescape(raw_title)))
+            media = html.escape(html.unescape(str(n.get("media", "언론사") or "")))
+            from services.news_service import parse_news_published_at, SEOUL
+            published = parse_news_published_at(n.get("date"))
+            date_time = (published.astimezone(SEOUL).strftime("%Y-%m-%d %H:%M")
+                         if published else "날짜 확인 불가")
+            tag = html.escape(html.unescape(str(n.get("tag", "증시") or "")))
             raw_link = html.unescape(str(n.get("link", "") or "").strip())
             parsed_link = urlparse(raw_link)
             valid_link = (
