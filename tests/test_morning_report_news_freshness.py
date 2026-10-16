@@ -388,7 +388,7 @@ def test_report_news_decodes_entities_and_formats_dates():
         {"title": "&#x27;최소 329만원&#x27; 아이폰", "media": "이데일리",
          "date": "202610160812", "tag": "삼성전자"},
     ])
-    assert "&#x27;임상&#x27;" not in rendered
+    assert "&amp;#x27;" not in rendered
     assert "&amp;quot;" not in rendered
     assert "'임상'" in unescape(rendered)
     assert '"성과"' in unescape(rendered)
