@@ -11525,8 +11525,26 @@ function createTransactionForm(
                                 .toUpperCase();
 
 
+                            // Account targets are selectable even if the asset
+                            // search endpoint returns no matching master row.
+                            const matchingTargets = targets.filter(
+                                target => String(target.ticker || "").toUpperCase().includes(cleanKeyword)
+                                    || String(target.name || "").toUpperCase().includes(cleanKeyword)
+                            );
+                            const matchedAssets = assets.slice();
+                            for (const target of matchingTargets) {
+                                if (!matchedAssets.some(asset => asset.ticker === target.ticker)) {
+                                    matchedAssets.push({
+                                        ticker: target.ticker,
+                                        name: target.name,
+                                        currency: "KRW",
+                                        market: "KR"
+                                    });
+                                }
+                            }
+
                             const exactAsset =
-                                assets.find(
+                                matchedAssets.find(
                                     asset =>
                                         String(
                                             asset.ticker
@@ -11544,7 +11562,7 @@ function createTransactionForm(
                             if (exactAsset) {
 
                                 renderAssetOptions(
-                                    assets,
+                                    matchedAssets,
                                     exactAsset.ticker
                                 );
 
@@ -11560,10 +11578,10 @@ function createTransactionForm(
                             "Apple" 검색
                             */
 
-                            if (assets.length > 0) {
+                            if (matchedAssets.length > 0) {
 
                                 renderAssetOptions(
-                                    assets
+                                    matchedAssets
                                 );
 
                                 return;
