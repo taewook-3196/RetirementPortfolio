@@ -40,3 +40,17 @@ def test_missing_and_confirmed_snapshot_cannot_confirm():
     assert not check_opening_snapshot_confirmation(None)["can_confirm"]
     confirmed = {**_snapshot(), "status": "confirmed"}
     assert not check_opening_snapshot_confirmation(confirmed)["can_confirm"]
+
+
+def test_same_day_event_requires_reconciliation():
+    flow = SimpleNamespace(flow_date=date(2026, 1, 1))
+    result = check_opening_snapshot_confirmation(_snapshot(), cash_flows=[flow])
+    assert result["can_confirm"] is False
+    assert any(item["code"] == "EVENT_ON_OPENING_DATE" for item in result["warnings"])
+
+
+def test_future_opening_date_blocks_confirmation():
+    future = {**_snapshot(), "opening_date": "2999-01-01"}
+    result = check_opening_snapshot_confirmation(future)
+    assert result["can_confirm"] is False
+    assert any(item["code"] == "FUTURE_OPENING_DATE" for item in result["blockers"])
