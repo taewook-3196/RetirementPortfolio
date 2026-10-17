@@ -19,7 +19,7 @@ def test_mobile_viewport_safe_area_and_primary_summary(monkeypatch):
     assert '"총자산"' in html
     assert '"주식평가액"' in html
     assert '"예수금"' in html
-    assert '"총손익"' in html
+    assert '"거래 기반 손익(참고)"' in html
     assert 'id="portfolio-section"' in html
 
 
