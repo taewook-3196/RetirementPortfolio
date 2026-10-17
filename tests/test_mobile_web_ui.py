@@ -655,3 +655,9 @@ def test_home_dashboard_shows_unrealized_pnl_and_cash_without_mixing_currencies(
     assert 'summaries.get(String(a.id)).total_unrealized_pnl' in html
     assert 'summaries.get(String(a.id)).cash_balance' in html
     assert 'if (currencies.size > 1)' in html
+
+
+def test_roi_is_labelled_reference_not_time_weighted_account_return(monkeypatch):
+    html = _html(monkeypatch)
+    assert '"거래 기반 손익(참고)"' in html
+    assert '납입·출금 시점을 반영한 계좌 수익률이 아닙니다.' in html
