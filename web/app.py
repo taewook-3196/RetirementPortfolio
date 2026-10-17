@@ -8543,7 +8543,7 @@ function renderAccountSummary(
         );
 
     appendKpi(
-        "총손익",
+        "거래 기반 손익(참고)",
         (
             totalPnl > 0
             ? "+"
@@ -8564,6 +8564,12 @@ function renderAccountSummary(
         totalPnl > 0
             ? "sell"
             : (totalPnl < 0 ? "buy" : "")
+    );
+
+    container.appendChild(
+        createDetail(
+            "표시된 비율은 총손익 ÷ 현재 보유분 매수원가로 계산한 참고치입니다. 납입·출금 시점을 반영한 계좌 수익률이 아닙니다."
+        )
     );
 
     container.appendChild(

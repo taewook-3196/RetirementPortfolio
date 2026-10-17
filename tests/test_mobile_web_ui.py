@@ -19,7 +19,7 @@ def test_mobile_viewport_safe_area_and_primary_summary(monkeypatch):
     assert '"총자산"' in html
     assert '"주식평가액"' in html
     assert '"예수금"' in html
-    assert '"총손익"' in html
+    assert '"거래 기반 손익(참고)"' in html
     assert 'id="portfolio-section"' in html
 
 
@@ -655,3 +655,9 @@ def test_home_dashboard_shows_unrealized_pnl_and_cash_without_mixing_currencies(
     assert 'summaries.get(String(a.id)).total_unrealized_pnl' in html
     assert 'summaries.get(String(a.id)).cash_balance' in html
     assert 'if (currencies.size > 1)' in html
+
+
+def test_roi_is_labelled_reference_not_time_weighted_account_return(monkeypatch):
+    html = _html(monkeypatch)
+    assert '"거래 기반 손익(참고)"' in html
+    assert '납입·출금 시점을 반영한 계좌 수익률이 아닙니다.' in html
