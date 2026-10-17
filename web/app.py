@@ -14496,6 +14496,7 @@ async function renderAccounts(
         const openingDate = document.createElement("input");
         openingDate.type = "date";
         openingDate.required = true;
+        openingDate.max = new Date().toLocaleDateString("en-CA");
         openingDate.setAttribute("aria-label", "계좌 시작일");
         const openingCash = document.createElement("input");
         openingCash.type = "number";
@@ -14503,11 +14504,15 @@ async function renderAccounts(
         openingCash.step = "any";
         openingCash.required = true;
         openingCash.placeholder = "시작 현금잔고";
+        openingCash.inputMode = "decimal";
         openingCash.setAttribute("aria-label", "시작 현금잔고");
         const openingHoldings = document.createElement("textarea");
         openingHoldings.rows = 3;
+        openingHoldings.spellcheck = false;
         openingHoldings.placeholder = "보유종목: 종목코드,수량,평가금액 (한 줄에 한 종목)";
         openingHoldings.setAttribute("aria-label", "시작 보유종목 목록");
+        const openingHelp = document.createElement("p");
+        openingHelp.textContent = "예시: AAPL,2,500000 (평가금액은 계좌 기준통화). 종목마다 줄을 바꿔 입력하세요.";
         const openingLoad = document.createElement("button");
         openingLoad.type = "button";
         openingLoad.textContent = "기존 초안 불러오기";
@@ -14521,6 +14526,7 @@ async function renderAccounts(
             try {
                 const data = await apiRequest(openingUrl, accessToken);
                 if (!data.configured || !data.snapshot) {
+                    openingSave.disabled = false;
                     openingStatus.textContent = "저장된 시작 자산이 없습니다.";
                     return;
                 }
@@ -14544,13 +14550,34 @@ async function renderAccounts(
             event.preventDefault();
             const lines = openingHoldings.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
             const holdings = [];
+            const seenTickers = new Set();
+            if (!openingDate.value || openingDate.value > new Date().toLocaleDateString("en-CA")) {
+                openingStatus.textContent = "계좌 시작일은 오늘 또는 이전 날짜여야 합니다.";
+                return;
+            }
+            if (!Number.isFinite(Number(openingCash.value)) || Number(openingCash.value) < 0 || openingCash.value.trim() === "") {
+                openingStatus.textContent = "시작 현금잔고는 0 이상의 숫자로 입력해주세요.";
+                return;
+            }
             for (const line of lines) {
                 const parts = line.split(",").map(value => value.trim());
                 if (parts.length !== 3 || !parts.every(Boolean)) {
                     openingStatus.textContent = "보유종목은 종목코드,수량,평가금액 형식으로 입력해주세요.";
                     return;
                 }
-                holdings.push({ticker: parts[0], quantity: parts[1], market_value: parts[2]});
+                const ticker = parts[0].toUpperCase();
+                const quantity = Number(parts[1]);
+                const marketValue = Number(parts[2]);
+                if (seenTickers.has(ticker)) {
+                    openingStatus.textContent = "중복된 종목코드가 있습니다: " + ticker;
+                    return;
+                }
+                if (!Number.isFinite(quantity) || !Number.isFinite(marketValue) || quantity < 0 || marketValue < 0 || (quantity === 0 && marketValue !== 0)) {
+                    openingStatus.textContent = "수량과 평가금액은 0 이상의 숫자여야 하며 수량이 0이면 평가금액도 0이어야 합니다.";
+                    return;
+                }
+                seenTickers.add(ticker);
+                holdings.push({ticker: ticker, quantity: parts[1], market_value: parts[2]});
             }
             openingSave.disabled = true;
             openingStatus.textContent = "저장 중...";
@@ -14572,7 +14599,7 @@ async function renderAccounts(
                 openingSave.disabled = false;
             }
         });
-        openingForm.append(openingStatus, openingDate, openingCash, openingHoldings, openingLoad, openingSave);
+        openingForm.append(openingStatus, openingDate, openingCash, openingHelp, openingHoldings, openingLoad, openingSave);
         openingPanel.appendChild(openingForm);
         detailsPanel.appendChild(openingPanel);
 
