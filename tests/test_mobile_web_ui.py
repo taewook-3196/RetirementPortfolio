@@ -219,7 +219,7 @@ def test_app_navigation_remains_available_above_phone_width(monkeypatch):
     nav_css = html[html.index(".app-bottom-nav {"):html.index(".app-bottom-nav button {")]
     assert "display: grid;" in nav_css
     assert "display: none;" not in nav_css
-    assert 'portfolio: ["portfolio-section", "market-index-section", "sector-momentum-section", "sector-value-section", "watchlist-section", "asset-search-section"]' in html
+    assert 'market: ["market-index-section", "sector-momentum-section", "sector-value-section", "watchlist-section", "asset-search-section"]' in html
     assert 'transactions: ["transactions-section"]' in html
     assert 'settings: ["settings-navigation-section", "account-management-section", "morning-report-settings-section"' in html
 
@@ -541,3 +541,13 @@ def test_transaction_search_includes_account_targets(monkeypatch):
     assert 'String(target.name || "").toUpperCase().includes(cleanKeyword)' in html
     assert 'const matchedAssets = assets.slice();' in html
     assert 'if (matchedAssets.length > 0)' in html
+
+
+def test_market_analysis_is_separate_from_account_portfolio(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'data-app-tab="market">시장분석</button>' in html
+    assert 'data-app-tab="portfolio">내 자산</button>' in html
+    assert 'portfolio: ["portfolio-section"],' in html
+    assert 'market: ["market-index-section", "sector-momentum-section", "sector-value-section", "watchlist-section", "asset-search-section"],' in html
+    for refresh in ("refreshWatchlist", "refreshMarketIndex", "refreshSectorMomentum"):
+        assert f'if (nextTab === "market" && typeof {refresh}' in html
