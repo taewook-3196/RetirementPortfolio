@@ -512,7 +512,7 @@ def test_home_response_has_browser_security_headers(monkeypatch):
 
 def test_sector_cards_display_evidence_separately_from_score(monkeypatch):
     html = _html(monkeypatch)
-    assert '" · 참고 점수 " + sectorValueMetric(item.score)' in html
+    assert '"참고 점수 " + sectorValueMetric(item.score)' in html
     assert '" · 근거 확보율 " + sectorValueMetric(item.coverage_pct, "%")' in html
     assert '(item.evidence_level || "확인 불가")' in html
     assert 'label.textContent = item.valuation_label || "평가 보류";' in html
@@ -521,6 +521,14 @@ def test_sector_cards_display_evidence_separately_from_score(monkeypatch):
 
 def test_sector_mobile_cards_show_evidence_adjusted_score(monkeypatch):
     html = _html(monkeypatch)
-    assert '" · 참고 점수 " + sectorValueMetric(item.score)' in html
+    assert '"참고 점수 " + sectorValueMetric(item.score)' in html
     assert '" · 근거 반영 점수 " + sectorValueMetric(item.evidence_adjusted_score)' in html
     assert '" · 근거 확보율 " + sectorValueMetric(item.coverage_pct, "%")' in html
+
+
+def test_sector_mobile_metrics_and_evidence_have_separate_rows(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'const evidence = document.createElement("p");' in html
+    assert 'card.appendChild(details);' in html
+    assert 'card.appendChild(evidence);' in html
+    assert 'border-top:1px solid #e5e7eb' in html
