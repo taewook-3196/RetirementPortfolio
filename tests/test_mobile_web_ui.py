@@ -532,3 +532,12 @@ def test_sector_mobile_metrics_and_evidence_have_separate_rows(monkeypatch):
     assert 'card.appendChild(details);' in html
     assert 'card.appendChild(evidence);' in html
     assert 'border-top:1px solid #e5e7eb' in html
+
+
+def test_transaction_search_includes_account_targets(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'const matchingTargets = targets.filter(' in html
+    assert 'String(target.ticker || "").toUpperCase().includes(cleanKeyword)' in html
+    assert 'String(target.name || "").toUpperCase().includes(cleanKeyword)' in html
+    assert 'const matchedAssets = assets.slice();' in html
+    assert 'if (matchedAssets.length > 0)' in html
