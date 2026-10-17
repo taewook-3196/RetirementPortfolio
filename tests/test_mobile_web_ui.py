@@ -559,6 +559,6 @@ def test_account_details_are_collapsible_but_summary_stays_visible(monkeypatch):
     assert 'detailsToggle = document.createElement("summary")' in html
     assert 'detailsPanel.open = accounts.length === 1 || accountIndex === 0;' in html
     assert 'card.appendChild(summaryBox);' in html
-    assert 'detailsPanel.appendChild(targetsTitle);' in html
-    assert 'detailsPanel.appendChild(positionsTitle);' in html
+    assert 'detailsPanel.appendChild(\n            targetsTitle\n        );' in html
+    assert 'detailsPanel.appendChild(\n                positionsTitle\n            );' in html
     assert '.account-details-toggle:focus-visible' in html
