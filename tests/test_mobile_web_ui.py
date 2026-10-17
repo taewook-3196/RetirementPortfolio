@@ -603,3 +603,18 @@ def test_account_target_update_rejects_invalid_allocations():
             except HTTPException as exc:
                 assert exc.status_code == 400
         repository.return_value.save_account_targets.assert_not_called()
+
+
+def test_account_target_editor_search_save_and_cancel(monkeypatch):
+    html = _html(monkeypatch)
+    for marker in [
+        'editButton.textContent = "목표 편집"',
+        '"/api/assets?q=" + encodeURIComponent(query)',
+        'weight.setAttribute("aria-label", item.ticker + " 목표 비중 (%)")',
+        'Math.abs(total - 1) > 0.000001',
+        'method: "PUT"',
+        'cancel.textContent = "취소"',
+        'renderTargets(targetsList, targets);',
+        '.target-editor-panel[hidden] { display: none; }',
+    ]:
+        assert marker in html
