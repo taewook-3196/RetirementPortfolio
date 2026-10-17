@@ -4759,8 +4759,9 @@ Yahoo Finance에서 종목 정보를 확인합니다.
 
 <nav id="app-bottom-nav" class="app-bottom-nav" aria-label="주요 메뉴">
 <button type="button" data-app-tab="home" class="active" aria-current="page">홈</button>
-<button type="button" data-app-tab="portfolio">포트폴리오</button>
+<button type="button" data-app-tab="portfolio">내 자산</button>
 <button type="button" data-app-tab="transactions">거래</button>
+<button type="button" data-app-tab="market">시장분석</button>
 <button type="button" data-app-tab="settings">설정</button>
 <button id="member-management-tab-button" type="button" data-app-tab="members" hidden>회원관리</button>
 </nav>
@@ -4829,7 +4830,8 @@ const appArea =
 const appBottomNav = document.getElementById("app-bottom-nav");
 const appTabSections = {
     home: ["app-header", "report-section"],
-    portfolio: ["portfolio-section", "market-index-section", "sector-momentum-section", "sector-value-section", "watchlist-section", "asset-search-section"],
+    portfolio: ["portfolio-section"],
+    market: ["market-index-section", "sector-momentum-section", "sector-value-section", "watchlist-section", "asset-search-section"],
     transactions: ["transactions-section"],
     settings: ["settings-navigation-section", "account-management-section", "morning-report-settings-section", "kakao-settings-section", "investment-settings-section"],
     members: ["admin-section"],
@@ -4878,9 +4880,9 @@ function setAppTab(tabName, options = {}) {
         section.hidden = !appTabSections[nextTab].includes(id);
     }
     if (nextTab === "settings") applySettingsPanel();
-    if (nextTab === "portfolio" && typeof refreshWatchlist === "function") refreshWatchlist();
-    if (nextTab === "portfolio" && typeof refreshMarketIndex === "function") refreshMarketIndex();
-    if (nextTab === "portfolio" && typeof refreshSectorMomentum === "function") refreshSectorMomentum();
+    if (nextTab === "market" && typeof refreshWatchlist === "function") refreshWatchlist();
+    if (nextTab === "market" && typeof refreshMarketIndex === "function") refreshMarketIndex();
+    if (nextTab === "market" && typeof refreshSectorMomentum === "function") refreshSectorMomentum();
     for (const button of appBottomNav.querySelectorAll("[data-app-tab]")) {
         const active = button.dataset.appTab === nextTab;
         button.classList.toggle("active", active);
