@@ -645,3 +645,13 @@ def test_home_dashboard_reuses_account_summaries_and_avoids_mixed_currency_total
     assert 'currencies.size > 1' in html
     assert 'dashboardSummaries.set(String(account.id), summary)' in html
     assert 'renderHomeAccountDashboard(accounts, dashboardSummaries);' in html
+
+
+def test_home_dashboard_shows_unrealized_pnl_and_cash_without_mixing_currencies(monkeypatch):
+    html = _html(monkeypatch)
+    assert '전체 평가손익 · ' in html
+    assert '전체 예수금 · ' in html
+    assert '평가손익 ' in html
+    assert 'summaries.get(String(a.id)).total_unrealized_pnl' in html
+    assert 'summaries.get(String(a.id)).cash_balance' in html
+    assert 'if (currencies.size > 1)' in html
