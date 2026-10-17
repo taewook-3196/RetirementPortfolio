@@ -661,3 +661,12 @@ def test_roi_is_labelled_reference_not_time_weighted_account_return(monkeypatch)
     html = _html(monkeypatch)
     assert '"거래 기반 손익(참고)"' in html
     assert '납입·출금 시점을 반영한 계좌 수익률이 아닙니다.' in html
+
+
+def test_return_readiness_is_on_demand_and_renders_safe_text(monkeypatch):
+    html = _html(monkeypatch)
+    assert '수익률 계산 준비 상태 확인' in html
+    assert '"/return-readiness"' in html
+    assert 'readinessButton.addEventListener("click", async () =>' in html
+    assert 'item.textContent = "• " + String(warning.message' in html
+    assert 'readinessResult.replaceChildren();' in html

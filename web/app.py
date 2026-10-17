@@ -14388,6 +14388,41 @@ async function renderAccounts(
         detailsPanel.appendChild(detailsToggle);
         card.appendChild(detailsPanel);
 
+        const readinessPanel = document.createElement("div");
+        readinessPanel.className = "status-box";
+        const readinessButton = document.createElement("button");
+        readinessButton.type = "button";
+        readinessButton.textContent = "수익률 계산 준비 상태 확인";
+        const readinessResult = document.createElement("div");
+        readinessResult.setAttribute("aria-live", "polite");
+        readinessButton.addEventListener("click", async () => {
+            readinessButton.disabled = true;
+            readinessResult.textContent = "진단 중...";
+            try {
+                const data = await apiRequest(
+                    "/api/accounts/" + encodeURIComponent(account.id) + "/return-readiness",
+                    accessToken
+                );
+                readinessResult.replaceChildren();
+                const status = document.createElement("p");
+                status.textContent = data.ready_for_xirr && data.ready_for_twr
+                    ? "수익률 계산에 필요한 데이터가 확인되었습니다."
+                    : "정확한 수익률 계산을 위해 추가 확인이 필요합니다.";
+                readinessResult.appendChild(status);
+                for (const warning of data.warnings || []) {
+                    const item = document.createElement("p");
+                    item.textContent = "• " + String(warning.message || "추가 확인 필요");
+                    readinessResult.appendChild(item);
+                }
+            } catch (error) {
+                readinessResult.textContent = "진단 실패: " + (error.message || "다시 시도해주세요.");
+            } finally {
+                readinessButton.disabled = false;
+            }
+        });
+        readinessPanel.append(readinessButton, readinessResult);
+        detailsPanel.appendChild(readinessPanel);
+
 
         detailsPanel.appendChild(
             createDetail(
