@@ -562,3 +562,44 @@ def test_account_details_are_collapsible_but_summary_stays_visible(monkeypatch):
     assert 'detailsPanel.appendChild(\n            targetsTitle\n        );' in html
     assert 'detailsPanel.appendChild(\n                positionsTitle\n            );' in html
     assert '.account-details-toggle:focus-visible' in html
+
+
+def test_account_target_update_api_is_present_and_owner_scoped():
+    from web.app import update_account_targets_api, AccountTargetsUpdateRequest, TargetAllocationInput
+    from fastapi import HTTPException
+    from unittest.mock import patch
+
+    payload = AccountTargetsUpdateRequest(targets=[
+        TargetAllocationInput(ticker="488500", target_weight=0.6),
+        TargetAllocationInput(ticker="381170", target_weight=0.4),
+    ])
+    with patch("web.app.get_verified_user_id", return_value="user-a"), patch("web.app.Repository") as repository:
+        repository.return_value.get_account.return_value = None
+        try:
+            update_account_targets_api(12, payload, "Bearer test")
+            assert False, "another user's account must not be editable"
+        except HTTPException as exc:
+            assert exc.status_code == 404
+
+
+def test_account_target_update_rejects_invalid_allocations():
+    from web.app import update_account_targets_api, AccountTargetsUpdateRequest, TargetAllocationInput
+    from fastapi import HTTPException
+    from unittest.mock import patch
+
+    with patch("web.app.get_verified_user_id", return_value="user-a"), patch("web.app.Repository") as repository:
+        repository.return_value.get_account.return_value = object()
+        for rows in [
+            [("488500", 0.7), ("381170", 0.2)],
+            [("488500", 0.5), ("488500", 0.5)],
+        ]:
+            payload = AccountTargetsUpdateRequest(targets=[
+                TargetAllocationInput(ticker=ticker, target_weight=weight)
+                for ticker, weight in rows
+            ])
+            try:
+                update_account_targets_api(12, payload, "Bearer test")
+                assert False, "invalid target allocation should fail"
+            except HTTPException as exc:
+                assert exc.status_code == 400
+        repository.return_value.save_account_targets.assert_not_called()
