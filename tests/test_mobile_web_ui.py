@@ -626,3 +626,12 @@ def test_opening_cash_is_not_mislabelled_as_investment_principal(monkeypatch):
     assert '보유 주식 평가금액이나 이후 입금액을 포함하면 총자산이 중복 계산될 수 있습니다.' in html
     assert '기존 값은 자동 변경되지 않습니다.' in html
     assert 'initial_capital:' in html
+
+
+def test_allocation_comparison_includes_unheld_targets_and_stale_price_notice(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'function renderTargetAllocationComparison(container, targets, positions)' in html
+    assert 'new Set([...positionMap.keys(), ...targetMap.keys()])' in html
+    assert '일부 종목의 시세가 없거나 오래되었습니다.' in html
+    assert 'renderTargetAllocationComparison(comparison, targets, positions);' in html
+    assert 'renderTargetAllocationComparison(comparison, targets, refreshed.positions || []);' in html
