@@ -8337,6 +8337,40 @@ function renderTargets(
     }
 }
 
+function renderTargetAllocationComparison(container, targets, positions) {
+    container.replaceChildren();
+    const heading = document.createElement("div");
+    heading.className = "section-title";
+    heading.textContent = "목표 대비 보유 비중 (주식 평가금액 기준)";
+    container.appendChild(heading);
+    const positionMap = new Map((positions || []).map(item => [String(item.ticker).toUpperCase(), item]));
+    const targetMap = new Map((targets || []).map(item => [String(item.ticker).toUpperCase(), item]));
+    const tickers = new Set([...positionMap.keys(), ...targetMap.keys()]);
+    if (!tickers.size) {
+        container.appendChild(createDetail("비교할 목표 종목이나 보유 종목이 없습니다."));
+        return;
+    }
+    const missingPrices = (positions || []).some(item => !item.market_price_available || item.price_is_stale);
+    if (missingPrices) {
+        container.appendChild(createDetail("일부 종목의 시세가 없거나 오래되었습니다. 비중 차이는 참고용입니다."));
+    }
+    for (const ticker of tickers) {
+        const position = positionMap.get(ticker);
+        const target = targetMap.get(ticker);
+        const actual = Number(position?.current_weight || 0);
+        const desired = Number(target?.target_weight || 0);
+        const gap = (actual - desired) * 100;
+        const row = document.createElement("div");
+        row.className = "target-row";
+        const label = document.createElement("span");
+        label.textContent = (target?.name || position?.name || ticker) + " (" + ticker + ")";
+        const detail = document.createElement("span");
+        detail.textContent = "현재 " + (actual * 100).toFixed(1) + "% / 목표 " + (desired * 100).toFixed(1) + "% / 차이 " + (gap > 0 ? "+" : "") + gap.toFixed(1) + "%p";
+        row.append(label, detail);
+        container.appendChild(row);
+    }
+}
+
 function renderAccountSummary(
     container,
     summary,
@@ -14662,6 +14696,10 @@ async function renderAccounts(
                     account,
                     accessToken
                 );
+                const comparison = document.createElement("div");
+                comparison.className = "target-allocation-comparison";
+                positionsList.before(comparison);
+                renderTargetAllocationComparison(comparison, targets, positions);
 
             } catch (error) {
 
