@@ -4272,6 +4272,13 @@ button:disabled {
     display: none;
 }
 
+.target-editor-panel { padding: 12px; border: 1px solid #d1d5db; border-radius: 12px; margin: 10px 0; }
+.target-editor-panel[hidden] { display: none; }
+.target-editor-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.target-editor-row span { flex: 1 1 140px; }
+.target-editor-row input { width: 90px; }
+.target-editor-panel button { min-height: 44px; margin: 3px; }
+.target-editor-panel input[type="search"] { width: 100%; min-height: 44px; }
 .app-bottom-nav {
     position: fixed;
     left: 50%;
@@ -14469,6 +14476,113 @@ async function renderAccounts(
                 targetsList,
                 targets
             );
+            const editButton = document.createElement("button");
+            editButton.type = "button";
+            editButton.textContent = "목표 편집";
+            editButton.className = "small-button";
+            targetsTitle.appendChild(editButton);
+            const editPanel = document.createElement("div");
+            editPanel.className = "target-editor-panel";
+            editPanel.hidden = true;
+            targetsList.after(editPanel);
+            editButton.addEventListener("click", () => {
+                editPanel.hidden = !editPanel.hidden;
+                if (editPanel.hidden) return;
+                let draft = targets.map(item => ({...item}));
+                editPanel.replaceChildren();
+                const rows = document.createElement("div");
+                const status = document.createElement("div");
+                status.setAttribute("role", "status");
+                const search = document.createElement("input");
+                search.type = "search";
+                search.placeholder = "종목명 또는 종목코드 검색";
+                search.setAttribute("aria-label", "목표 종목 검색");
+                const results = document.createElement("div");
+                const redraw = () => {
+                    rows.replaceChildren();
+                    for (const item of draft) {
+                        const row = document.createElement("div");
+                        row.className = "target-editor-row";
+                        const label = document.createElement("span");
+                        label.textContent = (item.name || item.ticker) + " (" + item.ticker + ")";
+                        const weight = document.createElement("input");
+                        weight.type = "number";
+                        weight.min = "0";
+                        weight.max = "100";
+                        weight.step = "0.01";
+                        weight.value = String(Number(item.target_weight) * 100);
+                        weight.setAttribute("aria-label", item.ticker + " 목표 비중 (%)");
+                        weight.addEventListener("input", () => { item.target_weight = weight.value === "" ? NaN : Number(weight.value) / 100; });
+                        const remove = document.createElement("button");
+                        remove.type = "button";
+                        remove.textContent = "삭제";
+                        remove.addEventListener("click", () => { draft = draft.filter(x => x !== item); redraw(); });
+                        row.append(label, weight, remove);
+                        rows.appendChild(row);
+                    }
+                };
+                let requestId = 0;
+                search.addEventListener("input", async () => {
+                    const query = search.value.trim();
+                    const id = ++requestId;
+                    results.replaceChildren();
+                    if (query.length < 2) return;
+                    try {
+                        const data = await apiRequest("/api/assets?q=" + encodeURIComponent(query) + "&limit=15", accessToken);
+                        if (id !== requestId) return;
+                        if (!(data.assets || []).length) results.textContent = "검색 결과가 없습니다.";
+                        for (const asset of data.assets || []) {
+                            const option = document.createElement("button");
+                            option.type = "button";
+                            option.textContent = (asset.name || asset.ticker) + " (" + asset.ticker + ")";
+                            option.addEventListener("click", () => {
+                                if (!draft.some(x => x.ticker.toUpperCase() === asset.ticker.toUpperCase())) {
+                                    draft.push({ticker: asset.ticker, name: asset.name, target_weight: 0});
+                                    redraw();
+                                }
+                                results.replaceChildren();
+                                search.value = "";
+                            });
+                            results.appendChild(option);
+                        }
+                    } catch (error) {
+                        if (id === requestId) results.textContent = error.message || "종목 검색 실패";
+                    }
+                });
+                const save = document.createElement("button");
+                save.type = "button";
+                save.textContent = "저장";
+                save.addEventListener("click", async () => {
+                    const total = draft.reduce((sum, item) => sum + Number(item.target_weight), 0);
+                    if (!draft.length || draft.some(x => !Number.isFinite(x.target_weight) || x.target_weight < 0 || x.target_weight > 1) || Math.abs(total - 1) > 0.000001) {
+                        status.textContent = "목표 비중 합계는 100%여야 합니다.";
+                        return;
+                    }
+                    save.disabled = true;
+                    status.textContent = "저장 중...";
+                    try {
+                        const data = await apiRequest("/api/accounts/" + encodeURIComponent(account.id) + "/targets", accessToken, {
+                            method: "PUT",
+                            headers: {"Content-Type": "application/json"},
+                            body: JSON.stringify({targets: draft.map(x => ({ticker: x.ticker, target_weight: x.target_weight}))}),
+                        });
+                        targets.splice(0, targets.length, ...(data.targets || []));
+                        renderTargets(targetsList, targets);
+                        editPanel.hidden = true;
+                    } catch (error) {
+                        status.textContent = error.message || "저장 실패";
+                    } finally {
+                        save.disabled = false;
+                    }
+                });
+                const cancel = document.createElement("button");
+                cancel.type = "button";
+                cancel.textContent = "취소";
+                cancel.addEventListener("click", () => { editPanel.hidden = true; });
+                editPanel.append(rows, search, results, status, save, cancel);
+                redraw();
+            });
+
 
 
             /*
