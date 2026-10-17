@@ -3027,6 +3027,27 @@ def delete_cash_flow_api(
         
 
 
+@app.get("/api/accounts/{account_id}/return-readiness")
+def get_account_return_readiness_api(
+    account_id: int,
+    authorization: str | None = Header(default=None),
+):
+    """현재 사용자의 계좌 수익률 계산 준비 상태만 조회합니다."""
+    from services.return_readiness import diagnose_return_readiness
+
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    account = repo.get_account(account_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="계좌를 찾을 수 없습니다.")
+    return diagnose_return_readiness(
+        account,
+        repo.get_cash_flows(account_id),
+        repo.get_transactions(account_id=account_id),
+        repo.get_dividends(account_id=account_id),
+    )
+
+
 # =========================================================
 # 보유현황 API
 # =========================================================
