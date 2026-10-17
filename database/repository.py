@@ -24,6 +24,8 @@ from database.connection import get_db_session, init_db
 from database.models import (
     Account,
     AccountTarget,
+    AccountOpeningSnapshot,
+    AccountOpeningHolding,
     AssetMaster,
     CashFlow,
     Dividend,
@@ -738,6 +740,84 @@ class Repository:
                 )
                 .first()
             )
+
+    def get_opening_snapshot(self, account_id: int):
+        """Return opening snapshot details for a user-owned account, or None."""
+        if not self.user_id:
+            return None
+        with get_db_session() as session:
+            account = session.query(Account.id).filter(
+                Account.id == account_id, Account.user_id == self.user_id
+            ).first()
+            if account is None:
+                return None
+            snapshot = session.query(AccountOpeningSnapshot).filter(
+                AccountOpeningSnapshot.account_id == account_id
+            ).first()
+            if snapshot is None:
+                return None
+            holdings = session.query(AccountOpeningHolding).filter(
+                AccountOpeningHolding.opening_snapshot_id == snapshot.id
+            ).order_by(AccountOpeningHolding.ticker.asc()).all()
+            return {
+                "opening_date": snapshot.opening_date.isoformat(),
+                "currency": snapshot.currency,
+                "cash_amount": str(snapshot.cash_amount),
+                "status": snapshot.status,
+                "holdings": [
+                    {
+                        "ticker": item.ticker,
+                        "quantity": str(item.quantity),
+                        "market_value": str(item.market_value),
+                    }
+                    for item in holdings
+                ],
+            }
+
+    def save_opening_snapshot_draft(
+        self, account_id: int, opening_date, cash_amount, currency, holdings=None
+    ):
+        """Atomically replace only a draft opening snapshot for a user-owned account."""
+        from services.opening_snapshot_validation import validate_opening_snapshot
+
+        result = validate_opening_snapshot(opening_date, cash_amount, currency, holdings)
+        if not result["valid"]:
+            raise ValueError("; ".join(result["errors"]))
+        if not self.user_id:
+            raise ValueError("계좌 접근 권한이 없습니다.")
+        with get_db_session() as session:
+            account = session.query(Account).filter(
+                Account.id == account_id, Account.user_id == self.user_id
+            ).with_for_update().first()
+            if account is None:
+                raise ValueError("계좌를 찾을 수 없습니다.")
+            if result["currency"] != str(account.currency or "").upper():
+                raise ValueError("시작 자산 통화는 계좌 기준 통화와 같아야 합니다.")
+            snapshot = session.query(AccountOpeningSnapshot).filter(
+                AccountOpeningSnapshot.account_id == account_id
+            ).with_for_update().first()
+            if snapshot is not None and snapshot.status == "confirmed":
+                raise ValueError("확정된 시작 자산은 초안으로 덮어쓸 수 없습니다.")
+            if snapshot is None:
+                snapshot = AccountOpeningSnapshot(account_id=account_id)
+                session.add(snapshot)
+                session.flush()
+            snapshot.opening_date = result["opening_date"]
+            snapshot.currency = result["currency"]
+            snapshot.cash_amount = result["cash_amount"]
+            snapshot.status = "draft"
+            session.query(AccountOpeningHolding).filter(
+                AccountOpeningHolding.opening_snapshot_id == snapshot.id
+            ).delete(synchronize_session=False)
+            for item in result["holdings"]:
+                session.add(AccountOpeningHolding(
+                    opening_snapshot_id=snapshot.id,
+                    ticker=item["ticker"],
+                    quantity=item["quantity"],
+                    market_value=item["market_value"],
+                ))
+            session.flush()
+            return {"saved": True, "status": "draft"}
 
     def get_default_account(
         self,
