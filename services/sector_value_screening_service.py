@@ -162,7 +162,7 @@ def screen_sector(market, sector):
                          and roe_value is not None and roe_value > 0 else None)
         if policy["primary"] == "pbr_roe":
             valuation = "PBR/ROE 상대가치 참고" if bank_discount is not None else "평가 보류"
-        elif not policy["automatic_valuation"] or discount is None or not healthy:
+        elif not policy["automatic_valuation"] or discount is None or not healthy or assessment["coverage"] < 5:
             valuation = "평가 보류"
         elif discount >= 20:
             valuation = "상대 저평가 후보"
