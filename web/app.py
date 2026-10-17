@@ -4524,6 +4524,7 @@ body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
 
 </section>
 
+<section id="home-dashboard-section" class="card" aria-label="내 투자 현황"><h2>내 투자 현황</h2><div id="home-dashboard-content" aria-live="polite">계좌 현황을 불러오는 중...</div></section>
 <section id="report-section" class="card" style="display:none;padding:0;overflow:hidden;">
 <div id="report-message" class="status-box">모닝 리포트를 불러오는 중...</div>
 <iframe id="report-frame" title="내 모닝 리포트" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" style="display:none;width:100%;height:85vh;border:0;"></iframe>
@@ -4910,7 +4911,7 @@ const appArea =
 
 const appBottomNav = document.getElementById("app-bottom-nav");
 const appTabSections = {
-    home: ["app-header", "report-section"],
+    home: ["app-header", "home-dashboard-section", "report-section"],
     portfolio: ["portfolio-section"],
     market: ["market-index-section", "sector-momentum-section", "sector-value-section", "watchlist-section", "asset-search-section"],
     transactions: ["transactions-section"],
@@ -14234,11 +14235,49 @@ async function renderAccountCreator(accounts, accessToken) {
 
 }
 
+function renderHomeAccountDashboard(accounts, summaries) {
+    const container = document.getElementById("home-dashboard-content");
+    if (!container) return;
+    container.replaceChildren();
+    if (!accounts.length) {
+        container.textContent = "등록된 계좌가 없습니다. 설정에서 계좌를 추가하세요.";
+        return;
+    }
+    const count = document.createElement("p");
+    count.textContent = "등록 계좌 " + accounts.length + "개";
+    container.appendChild(count);
+    const currencies = new Set(accounts.map(a => String(a.currency || "KRW").toUpperCase()));
+    if (currencies.size > 1) {
+        const notice = document.createElement("p");
+        notice.textContent = "계좌 통화가 달라 총자산 합계는 표시하지 않습니다.";
+        container.appendChild(notice);
+    } else if (accounts.every(a => summaries.has(String(a.id)))) {
+        const total = accounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_assets || 0), 0);
+        const totalRow = document.createElement("div");
+        totalRow.className = "summary-kpi";
+        totalRow.textContent = "전체 총자산 · " + formatMoney(total, [...currencies][0]);
+        container.appendChild(totalRow);
+    }
+    for (const account of accounts) {
+        const row = document.createElement("div");
+        row.className = "target-row";
+        const label = document.createElement("span");
+        label.textContent = account.account_name || "계좌";
+        const value = document.createElement("span");
+        const summary = summaries.get(String(account.id));
+        value.textContent = summary ? formatMoney(summary.total_assets, String(account.currency || "KRW").toUpperCase()) : "조회 중 또는 데이터 없음";
+        row.append(label, value);
+        container.appendChild(row);
+    }
+}
+
 async function renderAccounts(
     accounts,
     accessToken
 ) {
     accountsList.innerHTML = "";
+    const dashboardSummaries = new Map();
+    renderHomeAccountDashboard(accounts, dashboardSummaries);
 
     /*
     기존 계좌 표시
@@ -14693,6 +14732,10 @@ async function renderAccounts(
                     summary,
                     account
                 );
+                if (summary) {
+                    dashboardSummaries.set(String(account.id), summary);
+                    renderHomeAccountDashboard(accounts, dashboardSummaries);
+                }
 
 
                 renderPositions(
