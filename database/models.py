@@ -242,6 +242,48 @@ class AccountTarget(Base):
         UniqueConstraint("account_id", "ticker"),
     )
 
+class AccountOpeningSnapshot(Base):
+    """Optional confirmed/draft opening state; never included in cash calculations automatically."""
+
+    __tablename__ = "account_opening_snapshots"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    account_id = Column(
+        BigInteger,
+        ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    opening_date = Column(Date, nullable=False)
+    currency = Column(Text, nullable=False)
+    cash_amount = Column(Numeric, nullable=False)
+    status = Column(Text, nullable=False, default="draft")
+    created_at = Column(DateTime(timezone=True), default=datetime.now)
+    updated_at = Column(DateTime(timezone=True), default=datetime.now)
+
+
+class AccountOpeningHolding(Base):
+    """Opening holding valuation in the opening snapshot's account currency."""
+
+    __tablename__ = "account_opening_holdings"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    opening_snapshot_id = Column(
+        BigInteger,
+        ForeignKey("account_opening_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    ticker = Column(Text, nullable=False)
+    quantity = Column(Numeric, nullable=False)
+    market_value = Column(Numeric, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("opening_snapshot_id", "ticker"),
+    )
+
+
 class CashFlow(Base):
     __tablename__ = "cash_flows"
 
