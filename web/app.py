@@ -1386,6 +1386,61 @@ def get_account_targets_api(
         )
 
 
+class TargetAllocationInput(BaseModel):
+    ticker: str = Field(min_length=1, max_length=32)
+    target_weight: float = Field(ge=0, le=1)
+
+
+class AccountTargetsUpdateRequest(BaseModel):
+    targets: list[TargetAllocationInput] = Field(min_length=1, max_length=100)
+
+
+@app.put("/api/accounts/{account_id}/targets")
+def update_account_targets_api(
+    account_id: int,
+    payload: AccountTargetsUpdateRequest,
+    authorization: str | None = Header(default=None),
+):
+    """Only the owning user may replace an account's target allocations."""
+    from core.config import ETFConfig
+
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    account = repo.get_account(account_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="계좌를 찾을 수 없습니다.")
+
+    tickers = [item.ticker.strip().upper() for item in payload.targets]
+    if any(not ticker for ticker in tickers) or len(set(tickers)) != len(tickers):
+        raise HTTPException(status_code=400, detail="종목코드가 비었거나 중복되었습니다.")
+    if abs(sum(item.target_weight for item in payload.targets) - 1.0) > 0.000001:
+        raise HTTPException(status_code=400, detail="목표 비중 합계는 100%여야 합니다.")
+
+    # Only allow previously registered assets: never invent KR metadata for US stocks.
+    from database.models import AssetMaster
+    with get_db_session() as db:
+        assets = db.query(AssetMaster).filter(AssetMaster.ticker.in_(tickers), AssetMaster.is_active.is_(True)).all()
+        asset_map = {asset.ticker.upper(): asset for asset in assets}
+    if len(asset_map) != len(tickers):
+        raise HTTPException(status_code=400, detail="등록된 종목만 목표에 추가할 수 있습니다. 먼저 종목을 검색해 주세요.")
+
+    previous = {item.ticker.upper(): item for item in repo.get_account_targets(account_id=account_id)}
+    targets = [
+        ETFConfig(
+            ticker=ticker,
+            name=asset_map[ticker].name,
+            target_weight=payload.targets[index].target_weight,
+            dividend_yield=previous[ticker].dividend_yield if ticker in previous else 0.0,
+        )
+        for index, ticker in enumerate(tickers)
+    ]
+    try:
+        repo.save_account_targets(account_id=account_id, targets=targets)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return get_account_targets_api(account_id, authorization)
+
+
 # =========================================================
 # 투자성향 API
 # =========================================================
