@@ -14257,6 +14257,16 @@ function renderHomeAccountDashboard(accounts, summaries) {
         totalRow.className = "summary-kpi";
         totalRow.textContent = "전체 총자산 · " + formatMoney(total, [...currencies][0]);
         container.appendChild(totalRow);
+        const pnl = accounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_unrealized_pnl || 0), 0);
+        const pnlRow = document.createElement("div");
+        pnlRow.className = "summary-kpi";
+        pnlRow.textContent = "전체 평가손익 · " + (pnl > 0 ? "+" : "") + formatMoney(pnl, [...currencies][0]);
+        container.appendChild(pnlRow);
+        const cash = accounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).cash_balance || 0), 0);
+        const cashRow = document.createElement("div");
+        cashRow.className = "summary-kpi";
+        cashRow.textContent = "전체 예수금 · " + formatMoney(cash, [...currencies][0]);
+        container.appendChild(cashRow);
     }
     for (const account of accounts) {
         const row = document.createElement("div");
@@ -14265,7 +14275,14 @@ function renderHomeAccountDashboard(accounts, summaries) {
         label.textContent = account.account_name || "계좌";
         const value = document.createElement("span");
         const summary = summaries.get(String(account.id));
-        value.textContent = summary ? formatMoney(summary.total_assets, String(account.currency || "KRW").toUpperCase()) : "조회 중 또는 데이터 없음";
+        if (summary) {
+            const currency = String(account.currency || "KRW").toUpperCase();
+            const pnl = Number(summary.total_unrealized_pnl || 0);
+            value.textContent = formatMoney(summary.total_assets, currency)
+                + " · 평가손익 " + (pnl > 0 ? "+" : "") + formatMoney(pnl, currency);
+        } else {
+            value.textContent = "조회 중 또는 데이터 없음";
+        }
         row.append(label, value);
         container.appendChild(row);
     }
