@@ -4198,6 +4198,25 @@ button:disabled {
 }
 
 
+.account-details-panel {
+    margin-top: 12px;
+    border-top: 1px solid #e5e7eb;
+}
+.account-details-toggle {
+    cursor: pointer;
+    padding: 14px 2px;
+    font-size: 14px;
+    font-weight: 600;
+    min-height: 44px;
+}
+.account-details-toggle:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+.account-details-panel:not([open]) > :not(summary) {
+    display: none;
+}
+
 .app-bottom-nav {
     position: fixed;
     left: 50%;
@@ -14121,7 +14140,7 @@ async function renderAccounts(
     기존 계좌 표시
     */
 
-    for (const account of accounts) {
+    for (const [accountIndex, account] of accounts.entries()) {
 
         const card =
             document.createElement(
@@ -14172,8 +14191,18 @@ async function renderAccounts(
         card.appendChild(summaryTitle);
         card.appendChild(summaryBox);
 
+        // 계좌별 세부정보는 기본적으로 접어 화면 길이를 줄입니다.
+        const detailsPanel = document.createElement("details");
+        detailsPanel.className = "account-details-panel";
+        detailsPanel.open = accounts.length === 1 || accountIndex === 0;
+        const detailsToggle = document.createElement("summary");
+        detailsToggle.className = "account-details-toggle";
+        detailsToggle.textContent = "계좌 상세정보 · 목표 비중 · 보유 종목";
+        detailsPanel.appendChild(detailsToggle);
+        card.appendChild(detailsPanel);
 
-        card.appendChild(
+
+        detailsPanel.appendChild(
             createDetail(
                 "증권사: "
                 + (
@@ -14184,7 +14213,7 @@ async function renderAccounts(
         );
 
 
-        card.appendChild(
+        detailsPanel.appendChild(
             createDetail(
                 "계좌 유형: "
                 + accountTypeText(
@@ -14194,7 +14223,7 @@ async function renderAccounts(
         );
 
 
-        card.appendChild(
+        detailsPanel.appendChild(
             createDetail(
                 "기준 통화: "
                 + getAccountCurrency(
@@ -14204,7 +14233,7 @@ async function renderAccounts(
         );
 
 
-        card.appendChild(
+        detailsPanel.appendChild(
             createDetail(
                 "투자 시장: "
                 + marketScopeText(
@@ -14214,7 +14243,7 @@ async function renderAccounts(
         );
 
 
-        card.appendChild(
+        detailsPanel.appendChild(
             createDetail(
                 "운용 방식: "
                 + strategyTypeText(
@@ -14224,7 +14253,7 @@ async function renderAccounts(
         );
 
 
-        card.appendChild(
+        detailsPanel.appendChild(
             createDetail(
                 "초기 투자재원: "
                 + formatMoney(
@@ -14237,7 +14266,7 @@ async function renderAccounts(
         );
 
 
-        card.appendChild(
+        detailsPanel.appendChild(
             createDetail(
                 "월 기본 매수 한도: "
                 + formatMoney(
@@ -14250,7 +14279,7 @@ async function renderAccounts(
         );
 
 
-        card.appendChild(
+        detailsPanel.appendChild(
             createDetail(
                 "월 추가 매수 한도: "
                 + formatMoney(
@@ -14302,7 +14331,7 @@ async function renderAccounts(
         }
 
 
-        card.appendChild(
+        detailsPanel.appendChild(
             createDetail(
                 contributionText
             )
@@ -14325,7 +14354,7 @@ async function renderAccounts(
             );
 
 
-        card.appendChild(
+        detailsPanel.appendChild(
             createDetail(
                 cycleText
             )
@@ -14347,7 +14376,7 @@ async function renderAccounts(
         targetsTitle.textContent =
             "목표 포트폴리오";
 
-        card.appendChild(
+        detailsPanel.appendChild(
             targetsTitle
         );
 
@@ -14363,7 +14392,7 @@ async function renderAccounts(
         targetsList.textContent =
             "목표 비중을 불러오는 중...";
 
-        card.appendChild(
+        detailsPanel.appendChild(
             targetsList
         );
 
@@ -14402,7 +14431,7 @@ async function renderAccounts(
             positionsTitle.textContent =
                 "현재 보유현황";
 
-            card.appendChild(
+            detailsPanel.appendChild(
                 positionsTitle
             );
 
@@ -14418,7 +14447,7 @@ async function renderAccounts(
             positionsList.textContent =
                 "보유현황을 계산하는 중...";
 
-            card.appendChild(
+            detailsPanel.appendChild(
                 positionsList
             );
 

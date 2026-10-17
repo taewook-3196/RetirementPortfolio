@@ -551,3 +551,14 @@ def test_market_analysis_is_separate_from_account_portfolio(monkeypatch):
     assert 'market: ["market-index-section", "sector-momentum-section", "sector-value-section", "watchlist-section", "asset-search-section"],' in html
     for refresh in ("refreshWatchlist", "refreshMarketIndex", "refreshSectorMomentum"):
         assert f'if (nextTab === "market" && typeof {refresh}' in html
+
+
+def test_account_details_are_collapsible_but_summary_stays_visible(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'detailsPanel = document.createElement("details")' in html
+    assert 'detailsToggle = document.createElement("summary")' in html
+    assert 'detailsPanel.open = accounts.length === 1 || accountIndex === 0;' in html
+    assert 'card.appendChild(summaryBox);' in html
+    assert 'detailsPanel.appendChild(\n            targetsTitle\n        );' in html
+    assert 'detailsPanel.appendChild(\n                positionsTitle\n            );' in html
+    assert '.account-details-toggle:focus-visible' in html
