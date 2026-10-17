@@ -113,3 +113,23 @@ def test_evidence_adjusted_score_matches_six_check_ranking_basis():
     assert partial["score"] == 100
     assert partial["evidence_adjusted_score"] == 66.7
     assert _score({})["evidence_adjusted_score"] == 0
+
+
+def test_automatic_valuation_requires_five_available_checks():
+    CACHE.clear()
+    def fake_info(ticker):
+        info = {"forwardPE": 10, "returnOnEquity": .2,
+                "revenueGrowth": .1, "profitMargins": .2}
+        if ticker != "MSFT":
+            info["priceToBook"] = 2
+        return info
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "technology")
+    msft = next(row for row in result["results"] if row["ticker"] == "MSFT")
+    assert msft["coverage"] == 4
+    assert msft["eligible"] is True
+    assert msft["valuation_label"] == "평가 보류"
+    other = next(row for row in result["results"] if row["ticker"] == "AAPL")
+    assert other["coverage"] == 5
+    assert other["valuation_label"] == "상대 적정"
+    CACHE.clear()
