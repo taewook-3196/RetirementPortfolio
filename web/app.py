@@ -7935,12 +7935,15 @@ async function refreshSectorValue() {
             details.textContent = "PER " + sectorValueMetric(metrics.pe)
                 + " · PBR " + sectorValueMetric(metrics.pb)
                 + " · ROE " + sectorValueMetric(metrics.roe == null ? null : metrics.roe * 100, "%")
-                + " · PER 할인율 " + sectorValueMetric(metrics.pe_discount_pct, "%")
-                + " · 참고 점수 " + sectorValueMetric(item.score)
+                + " · PER 할인율 " + sectorValueMetric(metrics.pe_discount_pct, "%");
+            card.appendChild(details);
+            const evidence = document.createElement("p");
+            evidence.style.cssText = "margin:8px 0 0;padding-top:8px;border-top:1px solid #e5e7eb;line-height:1.7";
+            evidence.textContent = "참고 점수 " + sectorValueMetric(item.score)
                 + " · 근거 반영 점수 " + sectorValueMetric(item.evidence_adjusted_score)
                 + " · 근거 확보율 " + sectorValueMetric(item.coverage_pct, "%")
                 + " (" + (item.evidence_level || "확인 불가") + ")";
-            card.appendChild(details);
+            card.appendChild(evidence);
             container.appendChild(card);
         }
         const benchmark = data.pe_benchmark || {};
