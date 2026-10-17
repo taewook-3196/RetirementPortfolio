@@ -3027,6 +3027,65 @@ def delete_cash_flow_api(
         
 
 
+class OpeningHoldingDraftRequest(BaseModel):
+    ticker: str = Field(min_length=1, max_length=40)
+    quantity: str = Field(min_length=1, max_length=100)
+    market_value: str = Field(min_length=1, max_length=100)
+
+
+class OpeningSnapshotDraftRequest(BaseModel):
+    opening_date: date
+    cash_amount: str = Field(min_length=1, max_length=100)
+    currency: str = Field(min_length=3, max_length=3)
+    holdings: list[OpeningHoldingDraftRequest] = Field(default_factory=list, max_length=500)
+
+
+@app.get("/api/accounts/{account_id}/opening-snapshot")
+def get_opening_snapshot_api(
+    account_id: int,
+    authorization: str | None = Header(default=None),
+):
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    if repo.get_account(account_id) is None:
+        raise HTTPException(status_code=404, detail="계좌를 찾을 수 없습니다.")
+    try:
+        snapshot = repo.get_opening_snapshot(account_id)
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="시작 자산 저장소를 사용할 수 없습니다. DB 마이그레이션 적용 상태를 확인해주세요.",
+        )
+    return {"configured": snapshot is not None, "snapshot": snapshot}
+
+
+@app.put("/api/accounts/{account_id}/opening-snapshot")
+def save_opening_snapshot_draft_api(
+    account_id: int,
+    request: OpeningSnapshotDraftRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    if repo.get_account(account_id) is None:
+        raise HTTPException(status_code=404, detail="계좌를 찾을 수 없습니다.")
+    try:
+        return repo.save_opening_snapshot_draft(
+            account_id=account_id,
+            opening_date=request.opening_date,
+            cash_amount=request.cash_amount,
+            currency=request.currency,
+            holdings=[item.model_dump() for item in request.holdings],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="시작 자산을 저장할 수 없습니다. DB 마이그레이션 적용 상태를 확인해주세요.",
+        )
+
+
 @app.get("/api/accounts/{account_id}/return-readiness")
 def get_account_return_readiness_api(
     account_id: int,
