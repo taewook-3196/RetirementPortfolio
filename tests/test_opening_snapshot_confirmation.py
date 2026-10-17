@@ -1,0 +1,42 @@
+"""Tests for conservative opening snapshot confirmation checks."""
+from datetime import date
+from types import SimpleNamespace
+
+from services.opening_snapshot_confirmation import check_opening_snapshot_confirmation
+
+
+def _snapshot():
+    return {"status": "draft", "opening_date": "2026-01-01", "holdings": [{"ticker": "AAPL", "quantity": "2", "market_value": "300"}]}
+
+
+def test_empty_draft_can_proceed_to_future_confirmation_step():
+    result = check_opening_snapshot_confirmation(_snapshot())
+    assert result["can_confirm"] is True
+    assert result["blockers"] == []
+    assert result["warnings"] == []
+
+
+def test_preopening_transaction_blocks_confirmation():
+    trade = SimpleNamespace(transaction_date=date(2025, 12, 31), ticker="AAPL")
+    result = check_opening_snapshot_confirmation(_snapshot(), transactions=[trade])
+    assert result["can_confirm"] is False
+    assert any(item["code"] == "EVENT_BEFORE_OPENING" for item in result["blockers"])
+
+
+def test_overlap_warns_and_requires_reconciliation():
+    trade = SimpleNamespace(transaction_date=date(2026, 2, 1), ticker="AAPL")
+    result = check_opening_snapshot_confirmation(_snapshot(), transactions=[trade])
+    assert result["can_confirm"] is False
+    assert any(item["code"] == "OPENING_TRADE_OVERLAP" for item in result["warnings"])
+
+
+def test_invalid_event_date_blocks_confirmation():
+    result = check_opening_snapshot_confirmation(_snapshot(), cash_flows=[SimpleNamespace(flow_date=None)])
+    assert result["can_confirm"] is False
+    assert any(item["code"] == "INVALID_EVENT_DATE" for item in result["blockers"])
+
+
+def test_missing_and_confirmed_snapshot_cannot_confirm():
+    assert not check_opening_snapshot_confirmation(None)["can_confirm"]
+    confirmed = {**_snapshot(), "status": "confirmed"}
+    assert not check_opening_snapshot_confirmation(confirmed)["can_confirm"]
