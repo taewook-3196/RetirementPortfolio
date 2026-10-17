@@ -14626,7 +14626,36 @@ async function renderAccounts(
                 openingSave.disabled = false;
             }
         });
-        openingForm.append(openingStatus, openingDate, openingCash, openingHelp, openingHoldings, openingLoad, openingSave);
+        const openingCheck = document.createElement("button");
+        openingCheck.type = "button";
+        openingCheck.textContent = "시작 자산 확정 전 검증";
+        const openingCheckResult = document.createElement("div");
+        openingCheckResult.setAttribute("aria-live", "polite");
+        openingCheck.addEventListener("click", async () => {
+            openingCheck.disabled = true;
+            openingCheckResult.textContent = "저장된 초안을 검증 중입니다...";
+            try {
+                const result = await apiRequest(openingUrl + "/preflight", accessToken);
+                openingCheckResult.replaceChildren();
+                const heading = document.createElement("p");
+                heading.textContent = result.can_confirm
+                    ? "자동 검증에서 차단 항목은 발견되지 않았습니다. 최종 확정은 아직 지원하지 않습니다."
+                    : "확정 전 확인이 필요한 항목이 있습니다.";
+                openingCheckResult.appendChild(heading);
+                for (const item of [...(result.blockers || []), ...(result.warnings || [])]) {
+                    const message = document.createElement("p");
+                    message.textContent = "• " + String(item.message || "기록 확인 필요")
+                        + (Array.isArray(item.tickers) && item.tickers.length
+                            ? " (" + item.tickers.join(", ") + ")" : "");
+                    openingCheckResult.appendChild(message);
+                }
+            } catch (error) {
+                openingCheckResult.textContent = "검증 실패: " + (error.message || "다시 시도해주세요.");
+            } finally {
+                openingCheck.disabled = false;
+            }
+        });
+        openingForm.append(openingStatus, openingDate, openingCash, openingHelp, openingHoldings, openingLoad, openingSave, openingCheck, openingCheckResult);
         openingPanel.appendChild(openingForm);
         detailsPanel.appendChild(openingPanel);
 
