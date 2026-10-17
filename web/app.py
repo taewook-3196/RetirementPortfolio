@@ -3086,6 +3086,33 @@ def save_opening_snapshot_draft_api(
         )
 
 
+@app.get("/api/accounts/{account_id}/opening-snapshot/preflight")
+def get_opening_snapshot_preflight_api(
+    account_id: int,
+    authorization: str | None = Header(default=None),
+):
+    """Read-only opening snapshot reconciliation warnings; never confirms."""
+    from services.opening_snapshot_confirmation import check_opening_snapshot_confirmation
+
+    user_id = get_verified_user_id(authorization)
+    repo = Repository(user_id=user_id)
+    if repo.get_account(account_id) is None:
+        raise HTTPException(status_code=404, detail="계좌를 찾을 수 없습니다.")
+    try:
+        snapshot = repo.get_opening_snapshot(account_id)
+        return check_opening_snapshot_confirmation(
+            snapshot,
+            transactions=repo.get_transactions(account_id=account_id),
+            cash_flows=repo.get_cash_flows(account_id),
+            dividends=repo.get_dividends(account_id=account_id),
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="시작 자산 검증을 수행할 수 없습니다. 저장소 및 마이그레이션 상태를 확인해주세요.",
+        )
+
+
 @app.get("/api/accounts/{account_id}/return-readiness")
 def get_account_return_readiness_api(
     account_id: int,
