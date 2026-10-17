@@ -12913,9 +12913,13 @@ function createAccountEditor(
     );
 
     addField(
-        "초기 투자재원",
+        "계좌 시작 현금잔고",
         initialCapital
     );
+    const initialCashHelp = document.createElement("p");
+    initialCashHelp.className = "field-help";
+    initialCashHelp.textContent = "계좌 시작 시점의 현금만 입력하세요. 보유 주식 평가금액이나 이후 입금액을 포함하면 총자산이 중복 계산될 수 있습니다. 기존 값은 자동 변경되지 않습니다.";
+    initialCapital.after(initialCashHelp);
 
     addField(
         "월 기본 매수 한도",
@@ -13605,9 +13609,13 @@ async function renderAccountCreator(accounts, accessToken) {
         "0";
 
     appendCreateField(
-        "초기 투자재원",
+        "계좌 시작 현금잔고",
         initialCapitalInput
     );
+    const createCashHelp = document.createElement("p");
+    createCashHelp.className = "field-help";
+    createCashHelp.textContent = "계좌 등록 시점의 현금만 입력하세요. 보유 종목 평가금액이나 별도로 등록할 입금액을 포함하지 마세요.";
+    initialCapitalInput.after(createCashHelp);
 
 
     /*
