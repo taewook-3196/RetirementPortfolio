@@ -14610,6 +14610,11 @@ async function renderAccounts(
                         });
                         targets.splice(0, targets.length, ...(data.targets || []));
                         renderTargets(targetsList, targets);
+                        const comparison = card.querySelector(".target-allocation-comparison");
+                        if (comparison) {
+                            const refreshed = await loadPositions(accessToken, account.id);
+                            renderTargetAllocationComparison(comparison, targets, refreshed.positions || []);
+                        }
                         editPanel.hidden = true;
                     } catch (error) {
                         status.textContent = error.message || "저장 실패";
