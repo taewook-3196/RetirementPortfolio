@@ -14482,6 +14482,100 @@ async function renderAccounts(
         readinessPanel.append(readinessButton, readinessResult);
         detailsPanel.appendChild(readinessPanel);
 
+        // 시작 자산은 명시적으로 펼쳤을 때만 읽고, 사용자가 저장할 때만 기록합니다.
+        const openingPanel = document.createElement("details");
+        openingPanel.className = "account-details-panel";
+        const openingToggle = document.createElement("summary");
+        openingToggle.textContent = "계좌 시작 자산 입력 (초안)";
+        openingPanel.appendChild(openingToggle);
+        const openingForm = document.createElement("form");
+        openingForm.className = "status-box";
+        const openingStatus = document.createElement("p");
+        openingStatus.setAttribute("aria-live", "polite");
+        openingStatus.textContent = "시작일과 시작 시점의 자산만 입력합니다. 기존 거래·잔고에 자동 반영되지 않습니다.";
+        const openingDate = document.createElement("input");
+        openingDate.type = "date";
+        openingDate.required = true;
+        openingDate.setAttribute("aria-label", "계좌 시작일");
+        const openingCash = document.createElement("input");
+        openingCash.type = "number";
+        openingCash.min = "0";
+        openingCash.step = "any";
+        openingCash.required = true;
+        openingCash.placeholder = "시작 현금잔고";
+        openingCash.setAttribute("aria-label", "시작 현금잔고");
+        const openingHoldings = document.createElement("textarea");
+        openingHoldings.rows = 3;
+        openingHoldings.placeholder = "보유종목: 종목코드,수량,평가금액 (한 줄에 한 종목)";
+        openingHoldings.setAttribute("aria-label", "시작 보유종목 목록");
+        const openingLoad = document.createElement("button");
+        openingLoad.type = "button";
+        openingLoad.textContent = "기존 초안 불러오기";
+        const openingSave = document.createElement("button");
+        openingSave.type = "submit";
+        openingSave.textContent = "시작 자산 초안 저장";
+        const openingUrl = "/api/accounts/" + encodeURIComponent(account.id) + "/opening-snapshot";
+        openingLoad.addEventListener("click", async () => {
+            openingLoad.disabled = true;
+            openingStatus.textContent = "불러오는 중...";
+            try {
+                const data = await apiRequest(openingUrl, accessToken);
+                if (!data.configured || !data.snapshot) {
+                    openingStatus.textContent = "저장된 시작 자산이 없습니다.";
+                    return;
+                }
+                const snapshot = data.snapshot;
+                openingDate.value = snapshot.opening_date || "";
+                openingCash.value = snapshot.cash_amount || "0";
+                openingHoldings.value = (snapshot.holdings || []).map(item =>
+                    [item.ticker, item.quantity, item.market_value].join(",")
+                ).join("\n");
+                openingStatus.textContent = snapshot.status === "confirmed"
+                    ? "확정된 시작 자산입니다. 초안으로 덮어쓸 수 없습니다."
+                    : "저장된 초안을 불러왔습니다. 통화: " + snapshot.currency;
+                openingSave.disabled = snapshot.status === "confirmed";
+            } catch (error) {
+                openingStatus.textContent = "조회 실패: " + (error.message || "다시 시도해주세요.");
+            } finally {
+                openingLoad.disabled = false;
+            }
+        });
+        openingForm.addEventListener("submit", async event => {
+            event.preventDefault();
+            const lines = openingHoldings.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+            const holdings = [];
+            for (const line of lines) {
+                const parts = line.split(",").map(value => value.trim());
+                if (parts.length !== 3 || !parts.every(Boolean)) {
+                    openingStatus.textContent = "보유종목은 종목코드,수량,평가금액 형식으로 입력해주세요.";
+                    return;
+                }
+                holdings.push({ticker: parts[0], quantity: parts[1], market_value: parts[2]});
+            }
+            openingSave.disabled = true;
+            openingStatus.textContent = "저장 중...";
+            try {
+                await apiRequest(openingUrl, accessToken, {
+                    method: "PUT",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        opening_date: openingDate.value,
+                        cash_amount: openingCash.value,
+                        currency: getAccountCurrency(account),
+                        holdings: holdings
+                    })
+                });
+                openingStatus.textContent = "시작 자산 초안이 저장되었습니다. 기존 잔고에는 반영되지 않습니다.";
+            } catch (error) {
+                openingStatus.textContent = "저장 실패: " + (error.message || "다시 시도해주세요.");
+            } finally {
+                openingSave.disabled = false;
+            }
+        });
+        openingForm.append(openingStatus, openingDate, openingCash, openingHoldings, openingLoad, openingSave);
+        openingPanel.appendChild(openingForm);
+        detailsPanel.appendChild(openingPanel);
+
 
         detailsPanel.appendChild(
             createDetail(
