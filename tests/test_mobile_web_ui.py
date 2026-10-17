@@ -618,3 +618,11 @@ def test_account_target_editor_search_save_and_cancel(monkeypatch):
         '.target-editor-panel[hidden] { display: none; }',
     ]:
         assert marker in html
+
+
+def test_opening_cash_is_not_mislabelled_as_investment_principal(monkeypatch):
+    html = _html(monkeypatch)
+    assert html.count('"계좌 시작 현금잔고"') >= 2
+    assert '보유 주식 평가금액이나 이후 입금액을 포함하면 총자산이 중복 계산될 수 있습니다.' in html
+    assert '기존 값은 자동 변경되지 않습니다.' in html
+    assert 'initial_capital:' in html
