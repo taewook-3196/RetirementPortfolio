@@ -635,3 +635,13 @@ def test_allocation_comparison_includes_unheld_targets_and_stale_price_notice(mo
     assert '일부 종목의 시세가 없거나 오래되었습니다.' in html
     assert 'renderTargetAllocationComparison(comparison, targets, positions);' in html
     assert 'renderTargetAllocationComparison(comparison, targets, refreshed.positions || []);' in html
+
+
+def test_home_dashboard_reuses_account_summaries_and_avoids_mixed_currency_total(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'id="home-dashboard-section"' in html
+    assert 'home: ["app-header", "home-dashboard-section", "report-section"]' in html
+    assert 'function renderHomeAccountDashboard(accounts, summaries)' in html
+    assert 'currencies.size > 1' in html
+    assert 'dashboardSummaries.set(String(account.id), summary)' in html
+    assert 'renderHomeAccountDashboard(accounts, dashboardSummaries);' in html
