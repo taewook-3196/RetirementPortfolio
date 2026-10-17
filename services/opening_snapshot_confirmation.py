@@ -18,6 +18,8 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
     except (TypeError, ValueError, KeyError):
         opening = None
         blockers.append({"code": "INVALID_OPENING_DATE", "message": "시작 기준일이 올바르지 않습니다."})
+    if opening and opening > date.today():
+        blockers.append({"code": "FUTURE_OPENING_DATE", "message": "시작 기준일이 미래입니다."})
     trades = list(transactions or [])
     flows = list(cash_flows or [])
     payouts = list(dividends or [])
@@ -28,6 +30,7 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
     ):
         invalid = False
         before = False
+        on_opening = False
         for event in events:
             event_date = getattr(event, attribute, None)
             if isinstance(event_date, datetime):
@@ -36,10 +39,14 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
                 invalid = True
             elif opening and event_date < opening:
                 before = True
+            elif opening and event_date == opening:
+                on_opening = True
         if invalid:
             blockers.append({"code": "INVALID_EVENT_DATE", "message": kind + " 내역에 날짜가 누락되거나 올바르지 않습니다."})
         if before:
             blockers.append({"code": "EVENT_BEFORE_OPENING", "message": "시작일 이전 " + kind + " 내역이 있습니다. 시작일 또는 기록을 확인해주세요."})
+        if on_opening:
+            warnings.append({"code": "EVENT_ON_OPENING_DATE", "message": "시작일 당일 " + kind + " 내역이 있습니다. 시작 자산에 이미 포함된 기록인지 확인해주세요."})
     opening_tickers = {str(item.get("ticker", "")).strip().upper() for item in snapshot.get("holdings", []) if isinstance(item, dict)}
     transaction_tickers = {str(getattr(trade, "ticker", "") or "").strip().upper() for trade in trades}
     overlap = sorted((opening_tickers & transaction_tickers) - {""})
