@@ -203,6 +203,20 @@ def screen_sector(market, sector):
             "currency": str(info.get("currency") or ""),
             **assessment,
         })
+    # Explicit curated reference, not an inferred market-cap leader.
+    # Missing fundamentals remain null rather than being interpreted as zero.
+    reference_ticker = UNIVERSE[market][sector][0]
+    reference = next((row for row in results if row["ticker"] == reference_ticker), None)
+    comparison_keys = ("pe", "pb", "roe", "revenue_growth", "earnings_growth",
+                       "profit_margin", "year_change", "debt_to_equity", "current_ratio")
+    for row in results:
+        row["reference_ticker"] = reference_ticker
+        row["reference_comparison"] = {
+            key: (round(row["metrics"][key] - reference["metrics"][key], 4)
+                  if reference is not None and row["metrics"].get(key) is not None
+                  and reference["metrics"].get(key) is not None else None)
+            for key in comparison_keys
+        }
     results.sort(key=lambda item: (
         not item["eligible"],
         -((item["score"] or 0) * item["coverage"] / item["total_metrics"]),
@@ -212,6 +226,9 @@ def screen_sector(market, sector):
     ))
     result = {
         "market": market, "sector": sector, "valuation_policy": policy, "as_of": datetime.now(timezone.utc).isoformat(),
+        "reference": {"ticker": reference_ticker, "name": reference["name"] if reference else reference_ticker,
+                      "metrics": reference["metrics"] if reference else None,
+                      "basis": "사전 지정된 표본 비교 기준 종목(시가총액 1위 보장 안 됨)"},
         "sample_size": len(UNIVERSE[market][sector]),
         "results": results, "failures": failures,
         "semiconductor_cycle": semiconductor_cycle,

@@ -196,3 +196,21 @@ def test_financial_and_real_estate_sectors_do_not_use_generic_balance_sheet_veto
         assert result["results"]
         assert all(row["balance_sheet_red_flag"] is False for row in result["results"])
     CACHE.clear()
+
+
+def test_sector_reference_comparison_preserves_missing_data():
+    CACHE.clear()
+    def fake_info(ticker):
+        return {"shortName": ticker, "forwardPE": 20 if ticker == "MSFT" else 30,
+                "returnOnEquity": .2 if ticker == "MSFT" else None,
+                "revenueGrowth": .1, "profitMargins": .2}
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "technology")
+    assert result["reference"]["ticker"] == "MSFT"
+    assert result["reference"]["metrics"]["pe"] == 20
+    msft = next(row for row in result["results"] if row["ticker"] == "MSFT")
+    aapl = next(row for row in result["results"] if row["ticker"] == "AAPL")
+    assert msft["reference_comparison"]["pe"] == 0
+    assert aapl["reference_comparison"]["pe"] == 10
+    assert aapl["reference_comparison"]["roe"] is None
+    CACHE.clear()
