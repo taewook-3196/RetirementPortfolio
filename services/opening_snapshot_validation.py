@@ -30,7 +30,12 @@ def validate_opening_snapshot(opening_date, cash_amount, currency, holdings=None
     cash = parse_nonnegative(cash_amount, "시작 현금잔고")
     clean_holdings = []
     seen = set()
-    for holding in holdings or []:
+    if holdings is None:
+        holdings = []
+    elif not isinstance(holdings, list):
+        errors.append("시작 보유종목 목록 형식이 올바르지 않습니다.")
+        holdings = []
+    for holding in holdings:
         if not isinstance(holding, dict):
             errors.append("시작 보유종목 정보가 올바르지 않습니다.")
             continue
