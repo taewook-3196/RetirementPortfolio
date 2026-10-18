@@ -1,6 +1,7 @@
 """Repository-level opening snapshot isolation against a temporary SQLite database."""
 from contextlib import contextmanager
 from datetime import date
+from decimal import Decimal
 from uuid import uuid4
 
 from sqlalchemy import create_engine
@@ -56,7 +57,7 @@ def test_opening_snapshot_repository_isolates_users(monkeypatch):
     else:
         raise AssertionError("Other user was able to overwrite owner's snapshot")
 
-    assert owner.get_opening_snapshot(101)["cash_amount"] == "100"
+    assert Decimal(owner.get_opening_snapshot(101)["cash_amount"]) == Decimal("100")
     assert owner.get_opening_snapshot(202) is None
     assert stranger.get_opening_snapshot(202) is None
     engine.dispose()
