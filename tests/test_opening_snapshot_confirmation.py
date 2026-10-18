@@ -75,3 +75,14 @@ def test_invalid_currency_blocks_confirmation():
     result = check_opening_snapshot_confirmation(bad)
     assert result["can_confirm"] is False
     assert any(item["code"] == "INVALID_SNAPSHOT_VALUES" for item in result["blockers"])
+
+
+def test_account_currency_mismatch_blocks_confirmation():
+    result = check_opening_snapshot_confirmation(_snapshot(), account_currency="KRW")
+    assert result["can_confirm"] is False
+    assert any(item["code"] == "ACCOUNT_CURRENCY_MISMATCH" for item in result["blockers"])
+
+
+def test_matching_account_currency_does_not_block_confirmation():
+    result = check_opening_snapshot_confirmation(_snapshot(), account_currency="USD")
+    assert result["can_confirm"] is True
