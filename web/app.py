@@ -14561,10 +14561,12 @@ async function renderAccounts(
         let openingEditVersion = 0;
         let openingRequestBusy = false;
         let openingDraftConfirmed = false;
+        let openingCheckInFlight = false;
         const setOpeningRequestBusy = busy => {
             openingRequestBusy = busy;
             openingLoad.disabled = busy;
             openingSave.disabled = busy || openingDraftConfirmed;
+            openingCheck.disabled = busy || openingCheckInFlight;
         };
         const clearOpeningCheck = () => {
             openingCheckVersion += 1;
@@ -14674,7 +14676,9 @@ async function renderAccounts(
         openingCheck.textContent = "시작 자산 확정 전 검증";
 
         openingCheck.addEventListener("click", async () => {
+            if (openingRequestBusy || openingCheckInFlight) return;
             const checkVersion = ++openingCheckVersion;
+            openingCheckInFlight = true;
             openingCheck.disabled = true;
             openingCheckResult.textContent = "저장된 초안을 검증 중입니다...";
             try {
@@ -14709,7 +14713,8 @@ async function renderAccounts(
                 if (checkVersion !== openingCheckVersion) return;
                 openingCheckResult.textContent = "검증 실패: " + (error.message || "다시 시도해주세요.");
             } finally {
-                openingCheck.disabled = false;
+                openingCheckInFlight = false;
+                openingCheck.disabled = openingRequestBusy;
             }
         });
         openingForm.append(openingStatus, openingDate, openingCash, openingHelp, openingHoldings, openingLoad, openingSave, openingCheck, openingCheckResult);
