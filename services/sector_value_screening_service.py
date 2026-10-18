@@ -207,7 +207,7 @@ def screen_sector(market, sector):
         if balance_sheet_red_flag:
             cautions.append("일반 기업 기준 재무건전성 위험")
         if discount is None:
-            cautions.append("PER 비교 표본 부족 또는 비교 불가")
+            cautions.append("Forward PER 비교 표본 부족 또는 비교 불가")
         if assessment["coverage"] < 5:
             cautions.append("평가 근거 부족")
         if not policy["automatic_valuation"]:
