@@ -14558,8 +14558,17 @@ async function renderAccounts(
         const openingCheckResult = document.createElement("div");
         openingCheckResult.setAttribute("aria-live", "polite");
         let openingCheckVersion = 0;
+        let openingEditVersion = 0;
+        let openingRequestBusy = false;
+        let openingDraftConfirmed = false;
+        const setOpeningRequestBusy = busy => {
+            openingRequestBusy = busy;
+            openingLoad.disabled = busy;
+            openingSave.disabled = busy || openingDraftConfirmed;
+        };
         const clearOpeningCheck = () => {
             openingCheckVersion += 1;
+            openingEditVersion += 1;
             openingCheckResult.textContent = "";
         };
         for (const field of [openingDate, openingCash, openingHoldings]) {
@@ -14568,13 +14577,19 @@ async function renderAccounts(
         }
         const openingUrl = "/api/accounts/" + encodeURIComponent(account.id) + "/opening-snapshot";
         openingLoad.addEventListener("click", async () => {
+            if (openingRequestBusy) return;
             clearOpeningCheck();
-            openingLoad.disabled = true;
+            const loadEditVersion = openingEditVersion;
+            setOpeningRequestBusy(true);
             openingStatus.textContent = "불러오는 중...";
             try {
                 const data = await apiRequest(openingUrl, accessToken);
+                if (loadEditVersion !== openingEditVersion) {
+                    openingStatus.textContent = "입력값이 변경되어 불러온 결과를 적용하지 않았습니다.";
+                    return;
+                }
                 if (!data.configured || !data.snapshot) {
-                    openingSave.disabled = false;
+                    openingDraftConfirmed = false;
                     openingStatus.textContent = "저장된 시작 자산이 없습니다.";
                     return;
                 }
@@ -14587,15 +14602,16 @@ async function renderAccounts(
                 openingStatus.textContent = snapshot.status === "confirmed"
                     ? "확정된 시작 자산입니다. 초안으로 덮어쓸 수 없습니다."
                     : "저장된 초안을 불러왔습니다. 통화: " + snapshot.currency;
-                openingSave.disabled = snapshot.status === "confirmed";
+                openingDraftConfirmed = snapshot.status === "confirmed";
             } catch (error) {
                 openingStatus.textContent = "조회 실패: " + (error.message || "다시 시도해주세요.");
             } finally {
-                openingLoad.disabled = false;
+                setOpeningRequestBusy(false);
             }
         });
         openingForm.addEventListener("submit", async event => {
             event.preventDefault();
+            if (openingRequestBusy || openingDraftConfirmed) return;
             clearOpeningCheck();
             const lines = openingHoldings.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
             const holdings = [];
@@ -14628,7 +14644,7 @@ async function renderAccounts(
                 seenTickers.add(ticker);
                 holdings.push({ticker: ticker, quantity: parts[1], market_value: parts[2]});
             }
-            openingSave.disabled = true;
+            setOpeningRequestBusy(true);
             openingStatus.textContent = "저장 중...";
             try {
                 await apiRequest(openingUrl, accessToken, {
@@ -14645,7 +14661,7 @@ async function renderAccounts(
             } catch (error) {
                 openingStatus.textContent = "저장 실패: " + (error.message || "다시 시도해주세요.");
             } finally {
-                openingSave.disabled = false;
+                setOpeningRequestBusy(false);
             }
         });
         const openingCheck = document.createElement("button");
