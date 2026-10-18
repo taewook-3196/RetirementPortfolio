@@ -193,7 +193,30 @@ def screen_sector(market, sector):
             valuation = "다소 고평가 가능성"
         else:
             valuation = "상대 고평가 가능성"
+        reasons = []
+        cautions = []
+        if discount is not None:
+            reasons.append(f"표본 Forward PER 중앙값 대비 {discount:.1f}% 할인" if discount >= 0
+                           else f"표본 Forward PER 중앙값 대비 {-discount:.1f}% 할증")
+        if growth is not None and growth > 0:
+            reasons.append("매출 성장률 양수")
+        if roe is not None and roe > 0 and margin is not None and margin > 0:
+            reasons.append("ROE와 순이익률 양수")
+        if earnings_growth is not None and earnings_growth < 0:
+            cautions.append("이익 성장률 감소")
+        if balance_sheet_red_flag:
+            cautions.append("일반 기업 기준 재무건전성 위험")
+        if discount is None:
+            cautions.append("PER 비교 표본 부족 또는 비교 불가")
+        if assessment["coverage"] < 5:
+            cautions.append("평가 근거 부족")
+        if not policy["automatic_valuation"]:
+            cautions.append("업종 전용 평가 기준 미검증: 자동 저평가 판정 제외")
+        if valuation == "평가 보류" and not cautions:
+            cautions.append("성장성·수익성 요건 미충족 또는 자료 부족")
         results.append({
+            "reasons": reasons,
+            "cautions": cautions,
             "valuation_label": valuation,
             "balance_sheet_red_flag": balance_sheet_red_flag,
             "bank_pbr_roe_discount_pct": round(bank_discount, 2) if bank_discount is not None else None,

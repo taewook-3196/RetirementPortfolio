@@ -214,3 +214,19 @@ def test_sector_reference_comparison_preserves_missing_data():
     assert aapl["reference_comparison"]["pe"] == 10
     assert aapl["reference_comparison"]["roe"] is None
     CACHE.clear()
+
+
+def test_sector_valuation_exposes_reasons_and_cautions():
+    CACHE.clear()
+    def fake_info(ticker):
+        return {"shortName": ticker, "forwardPE": 12 if ticker == "MSFT" else 20,
+                "returnOnEquity": .18, "revenueGrowth": .08,
+                "profitMargins": .2, "earningsGrowth": -.12 if ticker == "MSFT" else .1,
+                "fiftyTwoWeekChange": .1}
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "technology")
+    msft = next(row for row in result["results"] if row["ticker"] == "MSFT")
+    assert msft["valuation_label"] == "평가 보류"
+    assert "이익 성장률 감소" in msft["cautions"]
+    assert any("할인" in reason for reason in msft["reasons"])
+    CACHE.clear()
