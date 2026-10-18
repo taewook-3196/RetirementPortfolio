@@ -14548,8 +14548,20 @@ async function renderAccounts(
         const openingSave = document.createElement("button");
         openingSave.type = "submit";
         openingSave.textContent = "시작 자산 초안 저장";
+        const openingCheckResult = document.createElement("div");
+        openingCheckResult.setAttribute("aria-live", "polite");
+        let openingCheckVersion = 0;
+        const clearOpeningCheck = () => {
+            openingCheckVersion += 1;
+            openingCheckResult.textContent = "";
+        };
+        for (const field of [openingDate, openingCash, openingHoldings]) {
+            field.addEventListener("input", clearOpeningCheck);
+            field.addEventListener("change", clearOpeningCheck);
+        }
         const openingUrl = "/api/accounts/" + encodeURIComponent(account.id) + "/opening-snapshot";
         openingLoad.addEventListener("click", async () => {
+            clearOpeningCheck();
             openingLoad.disabled = true;
             openingStatus.textContent = "불러오는 중...";
             try {
@@ -14577,6 +14589,7 @@ async function renderAccounts(
         });
         openingForm.addEventListener("submit", async event => {
             event.preventDefault();
+            clearOpeningCheck();
             const lines = openingHoldings.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
             const holdings = [];
             const seenTickers = new Set();
@@ -14631,13 +14644,14 @@ async function renderAccounts(
         const openingCheck = document.createElement("button");
         openingCheck.type = "button";
         openingCheck.textContent = "시작 자산 확정 전 검증";
-        const openingCheckResult = document.createElement("div");
-        openingCheckResult.setAttribute("aria-live", "polite");
+
         openingCheck.addEventListener("click", async () => {
+            const checkVersion = ++openingCheckVersion;
             openingCheck.disabled = true;
             openingCheckResult.textContent = "저장된 초안을 검증 중입니다...";
             try {
                 const result = await apiRequest(openingUrl + "/preflight", accessToken);
+                if (checkVersion !== openingCheckVersion) return;
                 openingCheckResult.replaceChildren();
                 const heading = document.createElement("p");
                 heading.textContent = result.can_confirm
@@ -14664,6 +14678,7 @@ async function renderAccounts(
                 renderPreflightItems("확정 차단 사유", result.blockers);
                 renderPreflightItems("추가 확인 경고", result.warnings);
             } catch (error) {
+                if (checkVersion !== openingCheckVersion) return;
                 openingCheckResult.textContent = "검증 실패: " + (error.message || "다시 시도해주세요.");
             } finally {
                 openingCheck.disabled = false;
