@@ -5,6 +5,8 @@ module deliberately does not infer historical positions or returns.
 """
 from datetime import date, datetime
 
+from services.opening_snapshot_validation import validate_opening_snapshot
+
 
 def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=None, dividends=None):
     blockers = []
@@ -20,6 +22,18 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
         blockers.append({"code": "INVALID_OPENING_DATE", "message": "시작 기준일이 올바르지 않습니다."})
     if opening and opening > date.today():
         blockers.append({"code": "FUTURE_OPENING_DATE", "message": "시작 기준일이 미래입니다."})
+    if opening is not None:
+        validated = validate_opening_snapshot(
+            opening,
+            snapshot.get("cash_amount"),
+            snapshot.get("currency"),
+            snapshot.get("holdings"),
+        )
+        if not validated["valid"]:
+            blockers.append({
+                "code": "INVALID_SNAPSHOT_VALUES",
+                "message": "저장된 시작 자산 데이터가 유효하지 않습니다: " + "; ".join(validated["errors"]),
+            })
     trades = list(transactions or [])
     flows = list(cash_flows or [])
     payouts = list(dividends or [])
