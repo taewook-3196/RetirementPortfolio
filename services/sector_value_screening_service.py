@@ -164,8 +164,12 @@ def screen_sector(market, sector):
         current_ratio = assessment["metrics"]["current_ratio"]
         # Balance-sheet red flags are a veto, not a universal cross-sector score.
         # Yahoo debtToEquity is reported as a percentage (e.g. 250 means 2.5x).
-        balance_sheet_red_flag = ((debt_to_equity is not None and debt_to_equity > 300)
-                                  or (current_ratio is not None and current_ratio < 0.8))
+        # Bank leverage and real-estate liquidity require industry-specific
+        # measures; generic corporate thresholds must not label them risky.
+        generic_balance_sheet_policy = sector not in {"financials", "banks", "real_estate"}
+        balance_sheet_red_flag = generic_balance_sheet_policy and (
+            (debt_to_equity is not None and debt_to_equity > 300)
+            or (current_ratio is not None and current_ratio < 0.8))
         healthy = (all(value is not None for value in (growth, roe, margin))
                    and growth >= 0 and roe > 0 and margin > 0
                    and (earnings_growth is None or earnings_growth >= 0)
