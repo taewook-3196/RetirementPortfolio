@@ -42,7 +42,8 @@ DEFAULT_POLICY = {"primary": "forward_pe", "automatic_valuation": True}
 CACHE = {}
 TTL_SECONDS = 1800
 FIELDS = ("trailingPE", "forwardPE", "priceToBook", "returnOnEquity",
-          "revenueGrowth", "earningsGrowth", "profitMargins", "fiftyTwoWeekChange")
+          "revenueGrowth", "earningsGrowth", "profitMargins", "fiftyTwoWeekChange",
+          "debtToEquity", "currentRatio")
 
 
 def _finite(value):
@@ -71,9 +72,12 @@ def _score(info, sector_pe_median=None):
     growth = _finite(info.get("revenueGrowth"))
     margin = _finite(info.get("profitMargins"))
     earnings_growth = _finite(info.get("earningsGrowth"))
+    debt_to_equity = _finite(info.get("debtToEquity"))
+    current_ratio = _finite(info.get("currentRatio"))
     momentum = _finite(info.get("fiftyTwoWeekChange"))
     metrics = {"pe": pe, "pb": pb, "roe": roe, "revenue_growth": growth,
-               "profit_margin": margin, "earnings_growth": earnings_growth, "year_change": momentum}
+               "profit_margin": margin, "earnings_growth": earnings_growth, "year_change": momentum,
+               "debt_to_equity": debt_to_equity, "current_ratio": current_ratio}
     checks = {
         "reasonable_pe": None if comparable_forward_pe is None or sector_pe_median is None else comparable_forward_pe <= sector_pe_median,
         "reasonable_pb": None if pb is None else 0 < pb <= 3,
@@ -156,9 +160,14 @@ def screen_sector(market, sector):
         roe = assessment["metrics"]["roe"]
         margin = assessment["metrics"]["profit_margin"]
         earnings_growth = assessment["metrics"]["earnings_growth"]
+        # Balance-sheet red flags are a veto, not a universal cross-sector score.
+        # Yahoo debtToEquity is reported as a percentage (e.g. 250 means 2.5x).
+        balance_sheet_red_flag = ((debt_to_equity is not None and debt_to_equity > 300)
+                                  or (current_ratio is not None and current_ratio < 0.8))
         healthy = (all(value is not None for value in (growth, roe, margin))
                    and growth >= 0 and roe > 0 and margin > 0
-                   and (earnings_growth is None or earnings_growth >= 0))
+                   and (earnings_growth is None or earnings_growth >= 0)
+                   and not balance_sheet_red_flag)
         pb = _finite(info.get("priceToBook"))
         roe_value = _finite(info.get("returnOnEquity"))
         bank_discount = (100 * (1 - (pb / roe_value) / bank_median)
@@ -180,6 +189,7 @@ def screen_sector(market, sector):
             valuation = "상대 고평가 가능성"
         results.append({
             "valuation_label": valuation,
+            "balance_sheet_red_flag": balance_sheet_red_flag,
             "bank_pbr_roe_discount_pct": round(bank_discount, 2) if bank_discount is not None else None,
             "valuation_basis": ("표본 Forward PER 및 최소 성장·수익성 검증" if policy["automatic_valuation"] else "표본 PBR/ROE 상대비교(투자판단 불가)" if policy["primary"] == "pbr_roe" and bank_discount is not None else "업종 전용 재무지표 미검증"),
             "ticker": ticker,
