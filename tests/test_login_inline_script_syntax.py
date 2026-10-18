@@ -12,8 +12,11 @@ def test_inline_login_script_is_valid_javascript():
     node = shutil.which("node")
     if not node:
         pytest.skip("Node.js is unavailable")
-    source = (Path(__file__).resolve().parents[1] / "web" / "app.py").read_text(encoding="utf-8")
-    script = re.search(r"<script>(.*?)</script>", source, re.DOTALL)
+    from web.app import home
+    from unittest.mock import patch
+    with patch.dict("os.environ", {"SUPABASE_URL": "https://example.supabase.co", "SUPABASE_ANON_KEY": "test-public-key"}):
+        response = home()
+    script = re.search(r"<script>(.*?)</script>", response.body.decode("utf-8"), re.DOTALL)
     assert script, "Missing inline application script"
     code = script.group(1).replace("__SUPABASE_URL_JSON__", '""').replace("__SUPABASE_KEY_JSON__", '""')
     with tempfile.TemporaryDirectory() as directory:

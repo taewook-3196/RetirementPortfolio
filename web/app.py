@@ -3584,7 +3584,7 @@ def home():
             status_code=500,
         )
 
-    html = """
+    html = r"""
 <!DOCTYPE html>
 
 <html lang="ko">
@@ -5515,7 +5515,7 @@ adminMembers.addEventListener("click", async (event) => {
     const deleting = button.classList.contains("admin-delete-member");
     if (deleting) {
         const email = button.dataset.email || "이 회원";
-        if (!window.confirm(email + " 회원 계정을 삭제하시겠습니까?\\n\\n앱 로그인과 서비스 이용은 즉시 차단되며, 투자 데이터와 기존 리포트도 함께 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")) return;
+        if (!window.confirm(email + " 회원 계정을 삭제하시겠습니까?\n\n앱 로그인과 서비스 이용은 즉시 차단되며, 투자 데이터와 기존 리포트도 함께 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")) return;
     }
     const currentlyActive = button.dataset.active === "true";
     button.disabled = true;
@@ -13454,8 +13454,8 @@ async function renderAccountManagement(accounts, accessToken) {
         message.className = "transaction-message";
         deleteButton.addEventListener("click", async () => {
             const confirmed = window.confirm(
-                "'" + account.account_name + "' 계좌를 정말 삭제하시겠습니까?\\n\\n"
-                + "이 계좌의 거래내역, 입출금내역, 배당내역, 목표 포트폴리오도 함께 삭제됩니다.\\n\\n"
+                "'" + account.account_name + "' 계좌를 정말 삭제하시겠습니까?\n\n"
+                + "이 계좌의 거래내역, 입출금내역, 배당내역, 목표 포트폴리오도 함께 삭제됩니다.\n\n"
                 + "삭제 후에는 되돌릴 수 없습니다."
             );
             if (!confirmed) return;
@@ -16279,6 +16279,8 @@ loginForm.addEventListener(
             ).value;
 
 
+        let authenticated = false;
+
         try {
 
             const response =
@@ -16334,6 +16336,8 @@ loginForm.addEventListener(
             );
 
 
+            authenticated = true;
+
             loginButton.textContent =
                 "계좌 확인 중...";
 
@@ -16345,12 +16349,16 @@ loginForm.addEventListener(
 
         } catch (error) {
 
-            clearAuthTokens();
+            if (!authenticated) {
+                clearAuthTokens();
+            }
+
+            console.error(authenticated ? "로그인 후 앱 로딩 오류:" : "로그인 오류:", error);
 
 
-            message.textContent =
-                error.message
-                || "로그인에 실패했습니다.";
+            message.textContent = authenticated
+                ? "로그인은 성공했지만 포트폴리오를 불러오지 못했습니다. 잠시 후 다시 시도해주세요."
+                : (error.message || "로그인에 실패했습니다.");
 
 
             message.className =
