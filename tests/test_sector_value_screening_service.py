@@ -255,3 +255,23 @@ def test_sector_reference_pe_does_not_mix_forward_and_trailing():
     assert by_ticker["AAPL"]["reference_comparison"]["pe"] is None
     assert by_ticker["CSCO"]["reference_comparison"]["pe"] == 6
     CACHE.clear()
+
+
+def test_sector_reference_fetch_failure_remains_visible_without_comparison():
+    CACHE.clear()
+    def fake_info(ticker):
+        if ticker == "MSFT":
+            raise RuntimeError("temporary provider failure")
+        return {"shortName": ticker, "forwardPE": 18,
+                "returnOnEquity": .15, "revenueGrowth": .08,
+                "profitMargins": .12}
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "technology")
+    assert result["reference"]["ticker"] == "MSFT"
+    assert result["reference"]["selection_method"] == "curated_first_ticker"
+    assert result["reference"]["selection_verified"] is False
+    assert result["reference"]["data_available"] is False
+    assert result["reference"]["metrics"] is None
+    assert "MSFT" in result["failures"]
+    assert all(row["reference_comparison"]["pe"] is None for row in result["results"])
+    CACHE.clear()
