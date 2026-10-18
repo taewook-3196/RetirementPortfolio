@@ -8134,6 +8134,19 @@ async function refreshSectorValue() {
                 + " · ROE " + sectorValueMetric(metrics.roe == null ? null : metrics.roe * 100, "%")
                 + " · PER 할인율 " + sectorValueMetric(metrics.pe_discount_pct, "%");
             card.appendChild(details);
+            const quality = document.createElement("p");
+            quality.style.cssText = "margin:6px 0;line-height:1.7";
+            quality.textContent = "매출 성장률 " + sectorValueMetric(metrics.revenue_growth == null ? null : metrics.revenue_growth * 100, "%")
+                + " · 이익 성장률 " + sectorValueMetric(metrics.earnings_growth == null ? null : metrics.earnings_growth * 100, "%")
+                + " · 순이익률 " + sectorValueMetric(metrics.profit_margin == null ? null : metrics.profit_margin * 100, "%")
+                + " · 1년 가격변동 " + sectorValueMetric(metrics.year_change == null ? null : metrics.year_change * 100, "%");
+            card.appendChild(quality);
+            const balance = document.createElement("p");
+            balance.style.cssText = "margin:6px 0;line-height:1.7";
+            balance.textContent = "부채/자기자본 " + sectorValueMetric(metrics.debt_to_equity, "%")
+                + " · 유동비율 " + sectorValueMetric(metrics.current_ratio)
+                + (item.balance_sheet_red_flag ? " · 재무건전성 위험 신호" : "");
+            card.appendChild(balance);
             const evidence = document.createElement("p");
             evidence.style.cssText = "margin:8px 0 0;padding-top:8px;border-top:1px solid #e5e7eb;line-height:1.7";
             evidence.textContent = "참고 점수 " + sectorValueMetric(item.score)
