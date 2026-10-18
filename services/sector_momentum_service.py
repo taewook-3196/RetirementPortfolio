@@ -78,10 +78,16 @@ def load_sector_momentum(market="us"):
         except Exception:
             failures[key] = "가격 조회 실패"
     benchmark = histories.get("benchmark")
+    if benchmark and (today - benchmark[-1][0]).days > 7:
+        failures["benchmark"] = "최근 가격 데이터 없음"
+        benchmark = None
     items = []
     for key, (ticker, label) in SECTORS[market].items():
         values = histories.get(key)
         if not values:
+            continue
+        if (today - values[-1][0]).days > 7:
+            failures[key] = "최근 가격 데이터 없음"
             continue
         returns = {
             period: _return_for_period(values, today - timedelta(days=days))
