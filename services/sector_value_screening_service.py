@@ -70,9 +70,10 @@ def _score(info, sector_pe_median=None):
     roe = _finite(info.get("returnOnEquity"))
     growth = _finite(info.get("revenueGrowth"))
     margin = _finite(info.get("profitMargins"))
+    earnings_growth = _finite(info.get("earningsGrowth"))
     momentum = _finite(info.get("fiftyTwoWeekChange"))
     metrics = {"pe": pe, "pb": pb, "roe": roe, "revenue_growth": growth,
-               "profit_margin": margin, "year_change": momentum}
+               "profit_margin": margin, "earnings_growth": earnings_growth, "year_change": momentum}
     checks = {
         "reasonable_pe": None if comparable_forward_pe is None or sector_pe_median is None else comparable_forward_pe <= sector_pe_median,
         "reasonable_pb": None if pb is None else 0 < pb <= 3,
@@ -154,7 +155,10 @@ def screen_sector(market, sector):
         growth = assessment["metrics"]["revenue_growth"]
         roe = assessment["metrics"]["roe"]
         margin = assessment["metrics"]["profit_margin"]
-        healthy = all(value is not None for value in (growth, roe, margin)) and growth >= 0 and roe > 0 and margin > 0
+        earnings_growth = assessment["metrics"]["earnings_growth"]
+        healthy = (all(value is not None for value in (growth, roe, margin))
+                   and growth >= 0 and roe > 0 and margin > 0
+                   and (earnings_growth is None or earnings_growth >= 0))
         pb = _finite(info.get("priceToBook"))
         roe_value = _finite(info.get("returnOnEquity"))
         bank_discount = (100 * (1 - (pb / roe_value) / bank_median)
