@@ -230,3 +230,25 @@ def test_sector_valuation_exposes_reasons_and_cautions():
     assert "이익 성장률 감소" in msft["cautions"]
     assert any("할인" in reason for reason in msft["reasons"])
     CACHE.clear()
+
+
+def test_sector_reference_pe_does_not_mix_forward_and_trailing():
+    CACHE.clear()
+    def fake_info(ticker):
+        data = {"shortName": ticker, "returnOnEquity": .16,
+                "revenueGrowth": .12, "profitMargins": .20,
+                "earningsGrowth": .09, "fiftyTwoWeekChange": .08}
+        if ticker == "MSFT":
+            data["forwardPE"] = 24
+        elif ticker == "AAPL":
+            data["trailingPE"] = 18
+        else:
+            data["forwardPE"] = 30
+        return data
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "technology")
+    by_ticker = {row["ticker"]: row for row in result["results"]}
+    assert by_ticker["AAPL"]["metrics"]["pe_basis"] == "trailing"
+    assert by_ticker["AAPL"]["reference_comparison"]["pe"] is None
+    assert by_ticker["CSCO"]["reference_comparison"]["pe"] == 6
+    CACHE.clear()
