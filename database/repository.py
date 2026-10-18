@@ -801,11 +801,12 @@ class Repository:
             if snapshot is None:
                 snapshot = AccountOpeningSnapshot(account_id=account_id)
                 session.add(snapshot)
-                session.flush()
             snapshot.opening_date = result["opening_date"]
             snapshot.currency = result["currency"]
             snapshot.cash_amount = result["cash_amount"]
             snapshot.status = "draft"
+            # Populate NOT NULL columns before the first INSERT/flush.
+            session.flush()
             session.query(AccountOpeningHolding).filter(
                 AccountOpeningHolding.opening_snapshot_id == snapshot.id
             ).delete(synchronize_session=False)
