@@ -87,6 +87,27 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
         # cannot establish execution order for trades recorded on one date.
         return event_date
 
+    # A date-only ledger cannot prove intraday execution order. When a ticker
+    # has both BUY and SELL on one date, flag the ambiguity for manual review.
+    same_day_sides = {}
+    for trade in trades:
+        trade_date = getattr(trade, "transaction_date", None)
+        if isinstance(trade_date, datetime):
+            trade_date = trade_date.date()
+        if not opening or not isinstance(trade_date, date) or trade_date <= opening:
+            continue
+        ticker = str(getattr(trade, "ticker", "") or "").strip().upper()
+        side = str(getattr(trade, "transaction_type", "") or "").strip().upper()
+        if ticker and side in {"BUY", "SELL"}:
+            same_day_sides.setdefault((trade_date, ticker), set()).add(side)
+    ambiguous = sorted(ticker for (_, ticker), sides in same_day_sides.items() if sides == {"BUY", "SELL"})
+    if ambiguous:
+        warnings.append({
+            "code": "SAME_DAY_TRADE_ORDER_UNKNOWN",
+            "message": "같은 날짜에 매수와 매도가 함께 기록된 종목이 있습니다. 거래 시각을 알 수 없어 순서와 수량을 확인해야 합니다.",
+            "tickers": sorted(set(ambiguous)),
+        })
+
     for trade in sorted(trades, key=trade_sort_key):
         trade_date = getattr(trade, "transaction_date", None)
         if isinstance(trade_date, datetime):

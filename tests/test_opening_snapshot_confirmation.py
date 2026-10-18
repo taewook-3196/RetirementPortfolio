@@ -127,3 +127,22 @@ def test_mixed_datetime_and_date_trade_records_do_not_crash_preflight():
     snapshot = {**_snapshot(), "holdings": [{"ticker": "AAPL", "quantity": "0", "market_value": "0"}]}
     result = check_opening_snapshot_confirmation(snapshot, transactions=trades)
     assert not any(item["code"] == "NEGATIVE_RECONCILED_POSITION" for item in result["blockers"])
+
+
+def test_same_day_buy_sell_flags_unknown_execution_order():
+    trades = [
+        SimpleNamespace(id=1, transaction_date=date(2026, 1, 2), ticker="AAPL", transaction_type="BUY", quantity="3"),
+        SimpleNamespace(id=2, transaction_date=date(2026, 1, 2), ticker="AAPL", transaction_type="SELL", quantity="2"),
+    ]
+    result = check_opening_snapshot_confirmation(_snapshot(), transactions=trades)
+    assert result["can_confirm"] is False
+    assert any(item["code"] == "SAME_DAY_TRADE_ORDER_UNKNOWN" for item in result["warnings"])
+
+
+def test_different_day_buy_sell_has_no_order_warning():
+    trades = [
+        SimpleNamespace(id=1, transaction_date=date(2026, 1, 2), ticker="AAPL", transaction_type="BUY", quantity="3"),
+        SimpleNamespace(id=2, transaction_date=date(2026, 1, 3), ticker="AAPL", transaction_type="SELL", quantity="2"),
+    ]
+    result = check_opening_snapshot_confirmation(_snapshot(), transactions=trades)
+    assert not any(item["code"] == "SAME_DAY_TRADE_ORDER_UNKNOWN" for item in result["warnings"])
