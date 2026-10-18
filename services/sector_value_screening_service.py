@@ -237,7 +237,9 @@ def screen_sector(market, sector):
         row["reference_comparison"] = {
             key: (round(row["metrics"][key] - reference["metrics"][key], 4)
                   if reference is not None and row["metrics"].get(key) is not None
-                  and reference["metrics"].get(key) is not None else None)
+                  and reference["metrics"].get(key) is not None
+                  and (key != "pe" or row["metrics"]["pe_basis"] == reference["metrics"]["pe_basis"])
+                  else None)
             for key in comparison_keys
         }
     results.sort(key=lambda item: (
