@@ -3096,7 +3096,8 @@ def get_opening_snapshot_preflight_api(
 
     user_id = get_verified_user_id(authorization)
     repo = Repository(user_id=user_id)
-    if repo.get_account(account_id) is None:
+    account = repo.get_account(account_id)
+    if account is None:
         raise HTTPException(status_code=404, detail="계좌를 찾을 수 없습니다.")
     try:
         snapshot = repo.get_opening_snapshot(account_id)
@@ -3105,6 +3106,7 @@ def get_opening_snapshot_preflight_api(
             transactions=repo.get_transactions(account_id=account_id),
             cash_flows=repo.get_cash_flows(account_id),
             dividends=repo.get_dividends(account_id=account_id),
+            account_currency=account.currency,
         )
     except Exception:
         raise HTTPException(
