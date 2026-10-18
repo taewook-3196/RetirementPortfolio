@@ -8115,6 +8115,14 @@ async function refreshSectorValue() {
         const data = await apiRequest("/api/sector-value/" + encodeURIComponent(market)
             + "/" + encodeURIComponent(sector), token);
         if (version !== sectorValueVersion) return;
+        const reference = data.reference || {};
+        if (reference.metrics) {
+            const comparisonHeading = document.createElement("p");
+            comparisonHeading.style.cssText = "margin:10px 0;font-weight:600";
+            comparisonHeading.textContent = "비교 기준: " + (reference.name || reference.ticker)
+                + " (" + reference.ticker + ") · 표본 기준 종목이며 시가총액 1위 보장은 아닙니다.";
+            container.appendChild(comparisonHeading);
+        }
         // Compact cards avoid seven squeezed table columns on narrow phones.
         for (const item of data.results || []) {
             const metrics = item.metrics || {};
@@ -8147,6 +8155,16 @@ async function refreshSectorValue() {
                 + " · 유동비율 " + sectorValueMetric(metrics.current_ratio)
                 + (item.balance_sheet_red_flag ? " · 재무건전성 위험 신호" : "");
             card.appendChild(balance);
+            const delta = item.reference_comparison || {};
+            if (reference.metrics && item.ticker !== reference.ticker) {
+                const comparison = document.createElement("p");
+                comparison.style.cssText = "margin:6px 0;line-height:1.7";
+                comparison.textContent = "기준 종목 대비: PER " + sectorValueMetric(delta.pe)
+                    + " · ROE " + sectorValueMetric(delta.roe == null ? null : delta.roe * 100, "%p")
+                    + " · 매출 성장률 " + sectorValueMetric(delta.revenue_growth == null ? null : delta.revenue_growth * 100, "%p")
+                    + " · 순이익률 " + sectorValueMetric(delta.profit_margin == null ? null : delta.profit_margin * 100, "%p");
+                card.appendChild(comparison);
+            }
             const evidence = document.createElement("p");
             evidence.style.cssText = "margin:8px 0 0;padding-top:8px;border-top:1px solid #e5e7eb;line-height:1.7";
             evidence.textContent = "참고 점수 " + sectorValueMetric(item.score)
