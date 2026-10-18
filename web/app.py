@@ -8116,11 +8116,12 @@ async function refreshSectorValue() {
             + "/" + encodeURIComponent(sector), token);
         if (version !== sectorValueVersion) return;
         const reference = data.reference || {};
-        if (reference.metrics) {
+        if (reference.ticker) {
             const comparisonHeading = document.createElement("p");
             comparisonHeading.style.cssText = "margin:10px 0;font-weight:600";
             comparisonHeading.textContent = "비교 기준: " + (reference.name || reference.ticker)
-                + " (" + reference.ticker + ") · 표본 기준 종목이며 시가총액 1위 보장은 아닙니다.";
+                + " (" + reference.ticker + ") · 사전 선정 표본 첫 종목(시가총액·유동성 대표성 미검증)"
+                + (reference.data_available === false ? " · 재무자료 조회 실패로 기준 종목 비교 불가" : "");
             container.appendChild(comparisonHeading);
         }
         // Compact cards avoid seven squeezed table columns on narrow phones.

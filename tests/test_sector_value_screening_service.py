@@ -30,6 +30,9 @@ def test_screen_handles_partial_provider_failures():
     with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
         result = screen_sector("us", "technology")
     assert "AAPL" in result["failures"]
+    assert result["reference"]["selection_method"] == "curated_first_ticker"
+    assert result["reference"]["selection_verified"] is False
+    assert result["reference"]["data_available"] is True
     assert result["results"][0]["eligible"]
     assert result["pe_benchmark"]["median"] == 15
     assert result["pe_benchmark"]["valid_count"] == 11
