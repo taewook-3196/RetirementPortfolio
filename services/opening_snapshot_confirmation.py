@@ -77,38 +77,13 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
             continue
         if ticker and quantity.is_finite() and quantity >= 0:
             quantities[ticker] = quantity
-    def trade_sort_key(event):
-        event_date = getattr(event, "transaction_date", None)
-        if isinstance(event_date, datetime):
-            event_date = event_date.date()
-        if not isinstance(event_date, date):
-            event_date = date.min
-        # Preserve original input order for same-day trades: a database ID
-        # cannot establish execution order for trades recorded on one date.
-        return event_date
-
-    # A date-only ledger cannot prove intraday execution order. When a ticker
-    # has both BUY and SELL on one date, flag the ambiguity for manual review.
+    # The ledger stores calendar dates, not execution times. Aggregate each
+    # ticker's trades per day before checking whether the end-of-day position
+    # could be negative; an arbitrary same-day SELL/BUY order is not proof.
+    daily_changes = {}
     same_day_sides = {}
+    invalid_trade = False
     for trade in trades:
-        trade_date = getattr(trade, "transaction_date", None)
-        if isinstance(trade_date, datetime):
-            trade_date = trade_date.date()
-        if not opening or not isinstance(trade_date, date) or trade_date <= opening:
-            continue
-        ticker = str(getattr(trade, "ticker", "") or "").strip().upper()
-        side = str(getattr(trade, "transaction_type", "") or "").strip().upper()
-        if ticker and side in {"BUY", "SELL"}:
-            same_day_sides.setdefault((trade_date, ticker), set()).add(side)
-    ambiguous = sorted(ticker for (_, ticker), sides in same_day_sides.items() if sides == {"BUY", "SELL"})
-    if ambiguous:
-        warnings.append({
-            "code": "SAME_DAY_TRADE_ORDER_UNKNOWN",
-            "message": "같은 날짜에 매수와 매도가 함께 기록된 종목이 있습니다. 거래 시각을 알 수 없어 순서와 수량을 확인해야 합니다.",
-            "tickers": sorted(set(ambiguous)),
-        })
-
-    for trade in sorted(trades, key=trade_sort_key):
         trade_date = getattr(trade, "transaction_date", None)
         if isinstance(trade_date, datetime):
             trade_date = trade_date.date()
@@ -121,12 +96,31 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
         except (InvalidOperation, TypeError, ValueError):
             amount = Decimal("-1")
         if not ticker or side not in {"BUY", "SELL"} or not amount.is_finite() or amount <= 0:
-            blockers.append({"code": "INVALID_TRADE_QUANTITY", "message": "거래내역에 종목, 매수/매도 구분 또는 수량 오류가 있습니다."})
+            invalid_trade = True
             continue
-        current = quantities.get(ticker, Decimal("0"))
-        if side == "SELL" and current < amount:
-            blockers.append({"code": "NEGATIVE_RECONCILED_POSITION", "message": ticker + " 종목의 매도 수량이 시작 보유수량과 이후 매수 수량을 초과합니다.", "tickers": [ticker]})
-        quantities[ticker] = current + (amount if side == "BUY" else -amount)
+        key = (trade_date, ticker)
+        daily_changes[key] = daily_changes.get(key, Decimal("0")) + (amount if side == "BUY" else -amount)
+        same_day_sides.setdefault(key, set()).add(side)
+    if invalid_trade:
+        blockers.append({"code": "INVALID_TRADE_QUANTITY", "message": "거래내역에 종목, 매수/매도 구분 또는 수량 오류가 있습니다."})
+    ambiguous = sorted({ticker for (_, ticker), sides in same_day_sides.items() if sides == {"BUY", "SELL"}})
+    if ambiguous:
+        warnings.append({
+            "code": "SAME_DAY_TRADE_ORDER_UNKNOWN",
+            "message": "같은 날짜에 매수와 매도가 함께 기록된 종목이 있습니다. 거래 시각을 알 수 없어 순서와 수량을 확인해야 합니다.",
+            "tickers": ambiguous,
+        })
+    negative_tickers = set()
+    for (_, ticker), change in sorted(daily_changes.items()):
+        quantities[ticker] = quantities.get(ticker, Decimal("0")) + change
+        if quantities[ticker] < 0:
+            negative_tickers.add(ticker)
+    for ticker in sorted(negative_tickers):
+        blockers.append({
+            "code": "NEGATIVE_RECONCILED_POSITION",
+            "message": ticker + " 종목의 일별 순매도 수량이 시작 보유수량과 이후 매수 수량을 초과합니다.",
+            "tickers": [ticker],
+        })
     opening_tickers = {str(item.get("ticker", "")).strip().upper() for item in snapshot.get("holdings", []) if isinstance(item, dict)}
     transaction_tickers = {str(getattr(trade, "ticker", "") or "").strip().upper() for trade in trades}
     overlap = sorted((opening_tickers & transaction_tickers) - {""})
