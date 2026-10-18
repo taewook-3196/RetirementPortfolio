@@ -14644,6 +14644,7 @@ async function renderAccounts(
                 seenTickers.add(ticker);
                 holdings.push({ticker: ticker, quantity: parts[1], market_value: parts[2]});
             }
+            const saveEditVersion = openingEditVersion;
             setOpeningRequestBusy(true);
             openingStatus.textContent = "저장 중...";
             try {
@@ -14657,9 +14658,13 @@ async function renderAccounts(
                         holdings: holdings
                     })
                 });
-                openingStatus.textContent = "시작 자산 초안이 저장되었습니다. 기존 잔고에는 반영되지 않습니다.";
+                openingStatus.textContent = saveEditVersion === openingEditVersion
+                    ? "시작 자산 초안이 저장되었습니다. 기존 잔고에는 반영되지 않습니다."
+                    : "이전 입력값은 저장되었지만 이후 수정한 내용은 저장되지 않았습니다. 다시 저장해주세요.";
             } catch (error) {
-                openingStatus.textContent = "저장 실패: " + (error.message || "다시 시도해주세요.");
+                openingStatus.textContent = saveEditVersion === openingEditVersion
+                    ? "저장 실패: " + (error.message || "다시 시도해주세요.")
+                    : "이전 입력값 저장에 실패했습니다. 현재 수정한 내용은 유지됩니다. 다시 저장해주세요.";
             } finally {
                 setOpeningRequestBusy(false);
             }
