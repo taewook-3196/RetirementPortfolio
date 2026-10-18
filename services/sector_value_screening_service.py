@@ -160,6 +160,8 @@ def screen_sector(market, sector):
         roe = assessment["metrics"]["roe"]
         margin = assessment["metrics"]["profit_margin"]
         earnings_growth = assessment["metrics"]["earnings_growth"]
+        debt_to_equity = assessment["metrics"]["debt_to_equity"]
+        current_ratio = assessment["metrics"]["current_ratio"]
         # Balance-sheet red flags are a veto, not a universal cross-sector score.
         # Yahoo debtToEquity is reported as a percentage (e.g. 250 means 2.5x).
         balance_sheet_red_flag = ((debt_to_equity is not None and debt_to_equity > 300)
