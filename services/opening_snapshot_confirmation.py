@@ -8,11 +8,13 @@ from datetime import date, datetime
 from services.opening_snapshot_validation import validate_opening_snapshot
 
 
-def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=None, dividends=None):
+def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=None, dividends=None, account_currency=None):
     blockers = []
     warnings = []
     if not snapshot:
         return {"can_confirm": False, "blockers": [{"code": "SNAPSHOT_MISSING", "message": "저장된 시작 자산 초안이 없습니다."}], "warnings": []}
+    if account_currency is not None and str(snapshot.get("currency") or "").strip().upper() != str(account_currency or "").strip().upper():
+        blockers.append({"code": "ACCOUNT_CURRENCY_MISMATCH", "message": "시작 자산 통화가 계좌 기준 통화와 일치하지 않습니다."})
     if snapshot.get("status") != "draft":
         blockers.append({"code": "NOT_DRAFT", "message": "확정 가능한 초안 상태가 아닙니다."})
     try:
