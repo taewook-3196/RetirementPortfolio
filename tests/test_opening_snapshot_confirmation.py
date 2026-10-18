@@ -86,3 +86,34 @@ def test_account_currency_mismatch_blocks_confirmation():
 def test_matching_account_currency_does_not_block_confirmation():
     result = check_opening_snapshot_confirmation(_snapshot(), account_currency="USD")
     assert result["can_confirm"] is True
+
+
+def test_sell_exceeding_opening_quantity_blocks_confirmation():
+    trade = SimpleNamespace(
+        id=1, transaction_date=date(2026, 1, 2),
+        ticker="AAPL", transaction_type="SELL", quantity="5",
+    )
+    snapshot = {**_snapshot(), "holdings": [
+        {"ticker": "AAPL", "quantity": "2", "market_value": "200"}
+    ]}
+    result = check_opening_snapshot_confirmation(snapshot, transactions=[trade])
+    assert result["can_confirm"] is False
+    assert any(item["code"] == "NEGATIVE_RECONCILED_POSITION" for item in result["blockers"])
+
+
+def test_buy_before_sell_avoids_negative_position_blocker():
+    trades = [
+        SimpleNamespace(id=1, transaction_date=date(2026, 1, 2), ticker="AAPL", transaction_type="BUY", quantity="4"),
+        SimpleNamespace(id=2, transaction_date=date(2026, 1, 3), ticker="AAPL", transaction_type="SELL", quantity="5"),
+    ]
+    snapshot = {**_snapshot(), "holdings": [
+        {"ticker": "AAPL", "quantity": "2", "market_value": "200"}
+    ]}
+    result = check_opening_snapshot_confirmation(snapshot, transactions=trades)
+    assert not any(item["code"] == "NEGATIVE_RECONCILED_POSITION" for item in result["blockers"])
+
+
+def test_invalid_trade_quantity_blocks_confirmation():
+    trade = SimpleNamespace(id=1, transaction_date=date(2026, 1, 2), ticker="AAPL", transaction_type="SELL", quantity="NaN")
+    result = check_opening_snapshot_confirmation(_snapshot(), transactions=[trade])
+    assert any(item["code"] == "INVALID_TRADE_QUANTITY" for item in result["blockers"])
