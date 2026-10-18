@@ -193,6 +193,22 @@ class YFinanceClient:
             .strip()
         )
 
+        # Yahoo quote.info may omit currency even for active US ETFs.
+        # Use independently reported metadata before rejecting the asset.
+        if not currency:
+            try:
+                fast_info = yf_ticker.fast_info
+                currency = str(fast_info.get("currency") or "").strip().upper()
+            except Exception:
+                logger.debug("fast_info currency unavailable: %s", clean_ticker)
+
+        if not currency:
+            try:
+                metadata = yf_ticker.get_history_metadata() or {}
+                currency = str(metadata.get("currency") or "").strip().upper()
+            except Exception:
+                logger.debug("history metadata currency unavailable: %s", clean_ticker)
+
         # 현재 단계에서는 미국 USD 거래 자산만
         # 등록 대상으로 허용합니다.
         if currency != "USD":
