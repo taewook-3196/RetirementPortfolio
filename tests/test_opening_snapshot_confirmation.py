@@ -6,7 +6,7 @@ from services.opening_snapshot_confirmation import check_opening_snapshot_confir
 
 
 def _snapshot():
-    return {"status": "draft", "opening_date": "2026-01-01", "holdings": [{"ticker": "AAPL", "quantity": "2", "market_value": "300"}]}
+    return {"status": "draft", "opening_date": "2026-01-01", "currency": "USD", "cash_amount": "0", "holdings": [{"ticker": "AAPL", "quantity": "2", "market_value": "300"}]}
 
 
 def test_empty_draft_can_proceed_to_future_confirmation_step():
@@ -54,3 +54,24 @@ def test_future_opening_date_blocks_confirmation():
     result = check_opening_snapshot_confirmation(future)
     assert result["can_confirm"] is False
     assert any(item["code"] == "FUTURE_OPENING_DATE" for item in result["blockers"])
+
+
+def test_invalid_persisted_cash_blocks_confirmation():
+    bad = {**_snapshot(), "cash_amount": "-10"}
+    result = check_opening_snapshot_confirmation(bad)
+    assert result["can_confirm"] is False
+    assert any(item["code"] == "INVALID_SNAPSHOT_VALUES" for item in result["blockers"])
+
+
+def test_invalid_persisted_holdings_block_confirmation():
+    bad = {**_snapshot(), "holdings": [{"ticker": "AAPL", "quantity": "-1", "market_value": "100"}]}
+    result = check_opening_snapshot_confirmation(bad)
+    assert result["can_confirm"] is False
+    assert any(item["code"] == "INVALID_SNAPSHOT_VALUES" for item in result["blockers"])
+
+
+def test_invalid_currency_blocks_confirmation():
+    bad = {**_snapshot(), "currency": "EUR"}
+    result = check_opening_snapshot_confirmation(bad)
+    assert result["can_confirm"] is False
+    assert any(item["code"] == "INVALID_SNAPSHOT_VALUES" for item in result["blockers"])
