@@ -149,3 +149,35 @@ def test_contracting_earnings_block_automatic_undervaluation_label():
     assert msft["metrics"]["pe_discount_pct"] == 50
     assert msft["valuation_label"] == "평가 보류"
     CACHE.clear()
+
+
+def test_balance_sheet_red_flags_block_automatic_value_labels():
+    CACHE.clear()
+    def fake_info(ticker):
+        return {"shortName": ticker, "forwardPE": 10 if ticker == "MSFT" else 20,
+                "priceToBook": 2, "returnOnEquity": .2, "revenueGrowth": .1,
+                "earningsGrowth": .1, "profitMargins": .2, "fiftyTwoWeekChange": .05,
+                "debtToEquity": 350 if ticker == "MSFT" else 50,
+                "currentRatio": 1.5}
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "technology")
+    msft = next(row for row in result["results"] if row["ticker"] == "MSFT")
+    assert msft["balance_sheet_red_flag"] is True
+    assert msft["valuation_label"] == "평가 보류"
+    assert msft["metrics"]["debt_to_equity"] == 350
+    CACHE.clear()
+
+
+def test_low_liquidity_blocks_automatic_value_label():
+    CACHE.clear()
+    def fake_info(ticker):
+        return {"shortName": ticker, "forwardPE": 10 if ticker == "MSFT" else 20,
+                "priceToBook": 2, "returnOnEquity": .2, "revenueGrowth": .1,
+                "profitMargins": .2, "fiftyTwoWeekChange": .05,
+                "currentRatio": .6 if ticker == "MSFT" else 1.5}
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "technology")
+    msft = next(row for row in result["results"] if row["ticker"] == "MSFT")
+    assert msft["balance_sheet_red_flag"] is True
+    assert msft["valuation_label"] == "평가 보류"
+    CACHE.clear()
