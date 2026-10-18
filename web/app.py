@@ -14525,7 +14525,14 @@ async function renderAccounts(
         const openingDate = document.createElement("input");
         openingDate.type = "date";
         openingDate.required = true;
-        openingDate.max = new Date().toLocaleDateString("en-CA");
+        const openingTodayLocalISO = () => {
+            const now = new Date();
+            const year = String(now.getFullYear());
+            const month = String(now.getMonth() + 1).padStart(2, "0");
+            const day = String(now.getDate()).padStart(2, "0");
+            return year + "-" + month + "-" + day;
+        };
+        openingDate.max = openingTodayLocalISO();
         openingDate.setAttribute("aria-label", "계좌 시작일");
         const openingCash = document.createElement("input");
         openingCash.type = "number";
@@ -14593,7 +14600,7 @@ async function renderAccounts(
             const lines = openingHoldings.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
             const holdings = [];
             const seenTickers = new Set();
-            if (!openingDate.value || openingDate.value > new Date().toLocaleDateString("en-CA")) {
+            if (!openingDate.value || openingDate.value > openingTodayLocalISO()) {
                 openingStatus.textContent = "계좌 시작일은 오늘 또는 이전 날짜여야 합니다.";
                 return;
             }
