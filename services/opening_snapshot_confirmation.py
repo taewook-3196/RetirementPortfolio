@@ -18,9 +18,15 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
         blockers.append({"code": "ACCOUNT_CURRENCY_MISMATCH", "message": "시작 자산 통화가 계좌 기준 통화와 일치하지 않습니다."})
     if snapshot.get("status") != "draft":
         blockers.append({"code": "NOT_DRAFT", "message": "확정 가능한 초안 상태가 아닙니다."})
+    raw_opening = snapshot.get("opening_date")
     try:
-        opening = date.fromisoformat(snapshot["opening_date"])
-    except (TypeError, ValueError, KeyError):
+        if isinstance(raw_opening, datetime):
+            opening = raw_opening.date()
+        elif isinstance(raw_opening, date):
+            opening = raw_opening
+        else:
+            opening = date.fromisoformat(raw_opening)
+    except (TypeError, ValueError):
         opening = None
         blockers.append({"code": "INVALID_OPENING_DATE", "message": "시작 기준일이 올바르지 않습니다."})
     if opening and opening > date.today():
