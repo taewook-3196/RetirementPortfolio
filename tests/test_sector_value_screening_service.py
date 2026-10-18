@@ -181,3 +181,18 @@ def test_low_liquidity_blocks_automatic_value_label():
     assert msft["balance_sheet_red_flag"] is True
     assert msft["valuation_label"] == "평가 보류"
     CACHE.clear()
+
+
+def test_financial_and_real_estate_sectors_do_not_use_generic_balance_sheet_veto():
+    for sector in ("financials", "real_estate"):
+        CACHE.clear()
+        def fake_info(ticker):
+            return {"shortName": ticker, "forwardPE": 12, "priceToBook": 1.5,
+                    "returnOnEquity": .15, "revenueGrowth": .08,
+                    "profitMargins": .2, "fiftyTwoWeekChange": .03,
+                    "debtToEquity": 700, "currentRatio": .4}
+        with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+            result = screen_sector("us", sector)
+        assert result["results"]
+        assert all(row["balance_sheet_red_flag"] is False for row in result["results"])
+    CACHE.clear()
