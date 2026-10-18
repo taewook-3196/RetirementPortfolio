@@ -65,3 +65,29 @@ def test_momentum_requires_distinct_close_after_baseline():
     today = date.today()
     values = [(today, 120)]
     assert _return_for_period(values, today - timedelta(days=2)) is None
+
+
+def test_stale_sector_prices_are_not_ranked():
+    today = date.today()
+    dates = [today - timedelta(days=100), today - timedelta(days=10)]
+    fresh = [(today - timedelta(days=100), 100), (today, 120)]
+    stale = [(day, 100 + i * 10) for i, day in enumerate(dates)]
+    _CACHE.clear()
+    with patch("services.sector_momentum_service._close_history",
+               side_effect=lambda symbol, start, end: stale if symbol == "XLK" else fresh):
+        result = load_sector_momentum("us")
+    assert all(item["ticker"] != "XLK" for item in result["items"])
+    assert "technology" in result["failures"]
+
+
+def test_stale_benchmark_does_not_produce_relative_returns():
+    today = date.today()
+    fresh = [(today - timedelta(days=100), 100), (today, 120)]
+    stale = [(today - timedelta(days=100), 100), (today - timedelta(days=10), 110)]
+    _CACHE.clear()
+    with patch("services.sector_momentum_service._close_history",
+               side_effect=lambda symbol, start, end: stale if symbol == "SPY" else fresh):
+        result = load_sector_momentum("us")
+    assert result["items"]
+    assert all(item["relative_pct_points"]["3m"] is None for item in result["items"])
+    assert "benchmark" in result["failures"]
