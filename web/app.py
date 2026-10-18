@@ -8144,10 +8144,11 @@ async function refreshSectorValue() {
             card.appendChild(rationale);
             const details = document.createElement("p");
             details.style.cssText = "margin:6px 0;line-height:1.7";
-            details.textContent = "PER " + sectorValueMetric(metrics.pe)
+            const currentPeBasis = metrics.pe_basis === "forward" ? "예상 PER" : metrics.pe_basis === "trailing" ? "과거 PER" : "PER";
+            details.textContent = currentPeBasis + " " + sectorValueMetric(metrics.pe)
                 + " · PBR " + sectorValueMetric(metrics.pb)
                 + " · ROE " + sectorValueMetric(metrics.roe == null ? null : metrics.roe * 100, "%")
-                + " · PER 할인율 " + sectorValueMetric(metrics.pe_discount_pct, "%");
+                + " · 표본 예상 PER 대비 할인율 " + sectorValueMetric(metrics.pe_discount_pct, "%");
             card.appendChild(details);
             const quality = document.createElement("p");
             quality.style.cssText = "margin:6px 0;line-height:1.7";

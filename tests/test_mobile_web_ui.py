@@ -516,7 +516,8 @@ def test_sector_cards_display_evidence_separately_from_score(monkeypatch):
     assert '" · 근거 확보율 " + sectorValueMetric(item.coverage_pct, "%")' in html
     assert '(item.evidence_level || "확인 불가")' in html
     assert 'label.textContent = item.valuation_label || "평가 보류";' in html
-    assert 'details.textContent = "PER "' in html
+    assert 'details.textContent = currentPeBasis + " "' in html
+    assert '" · 표본 예상 PER 대비 할인율 " + sectorValueMetric(metrics.pe_discount_pct, "%")' in html
 
 
 def test_sector_mobile_cards_show_evidence_adjusted_score(monkeypatch):
