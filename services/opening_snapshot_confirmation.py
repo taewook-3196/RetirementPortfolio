@@ -67,7 +67,12 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
     # Reconstruct quantities from the opening state only when event dates and
     # transaction fields are usable; this is a consistency check, not a balance.
     quantities = {}
-    for holding in snapshot.get("holdings", []):
+    holdings = snapshot.get("holdings")
+    if not isinstance(holdings, list):
+        holdings = []
+        if not any(item["code"] == "INVALID_SNAPSHOT_VALUES" for item in blockers):
+            blockers.append({"code": "INVALID_SNAPSHOT_VALUES", "message": "시작 보유종목 목록 형식이 올바르지 않습니다."})
+    for holding in holdings:
         if not isinstance(holding, dict):
             continue
         ticker = str(holding.get("ticker") or "").strip().upper()
@@ -121,7 +126,7 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
             "message": ticker + " 종목의 일별 순매도 수량이 시작 보유수량과 이후 매수 수량을 초과합니다.",
             "tickers": [ticker],
         })
-    opening_tickers = {str(item.get("ticker", "")).strip().upper() for item in snapshot.get("holdings", []) if isinstance(item, dict)}
+    opening_tickers = {str(item.get("ticker", "")).strip().upper() for item in holdings if isinstance(item, dict)}
     transaction_tickers = {str(getattr(trade, "ticker", "") or "").strip().upper() for trade in trades}
     overlap = sorted((opening_tickers & transaction_tickers) - {""})
     if overlap:
