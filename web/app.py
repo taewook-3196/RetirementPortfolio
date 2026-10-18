@@ -14644,13 +14644,25 @@ async function renderAccounts(
                     ? "자동 검증에서 차단 항목은 발견되지 않았습니다. 최종 확정은 아직 지원하지 않습니다."
                     : "확정 전 확인이 필요한 항목이 있습니다.";
                 openingCheckResult.appendChild(heading);
-                for (const item of [...(result.blockers || []), ...(result.warnings || [])]) {
-                    const message = document.createElement("p");
-                    message.textContent = "• " + String(item.message || "기록 확인 필요")
-                        + (Array.isArray(item.tickers) && item.tickers.length
-                            ? " (" + item.tickers.join(", ") + ")" : "");
-                    openingCheckResult.appendChild(message);
-                }
+                const renderPreflightItems = (title, items) => {
+                    if (!Array.isArray(items) || items.length === 0) return;
+                    const section = document.createElement("section");
+                    const label = document.createElement("strong");
+                    label.textContent = title + " (" + items.length + "건)";
+                    section.appendChild(label);
+                    const list = document.createElement("ul");
+                    for (const item of items) {
+                        const message = document.createElement("li");
+                        message.textContent = String(item.message || "기록 확인 필요")
+                            + (Array.isArray(item.tickers) && item.tickers.length
+                                ? " (" + item.tickers.join(", ") + ")" : "");
+                        list.appendChild(message);
+                    }
+                    section.appendChild(list);
+                    openingCheckResult.appendChild(section);
+                };
+                renderPreflightItems("확정 차단 사유", result.blockers);
+                renderPreflightItems("추가 확인 경고", result.warnings);
             } catch (error) {
                 openingCheckResult.textContent = "검증 실패: " + (error.message || "다시 시도해주세요.");
             } finally {
