@@ -1,5 +1,5 @@
 """Tests for conservative opening snapshot confirmation checks."""
-from datetime import date
+from datetime import date, datetime
 from types import SimpleNamespace
 
 from services.opening_snapshot_confirmation import check_opening_snapshot_confirmation
@@ -117,3 +117,13 @@ def test_invalid_trade_quantity_blocks_confirmation():
     trade = SimpleNamespace(id=1, transaction_date=date(2026, 1, 2), ticker="AAPL", transaction_type="SELL", quantity="NaN")
     result = check_opening_snapshot_confirmation(_snapshot(), transactions=[trade])
     assert any(item["code"] == "INVALID_TRADE_QUANTITY" for item in result["blockers"])
+
+
+def test_mixed_datetime_and_date_trade_records_do_not_crash_preflight():
+    trades = [
+        SimpleNamespace(id=2, transaction_date=datetime(2026, 1, 3, 12), ticker="AAPL", transaction_type="SELL", quantity="1"),
+        SimpleNamespace(id=1, transaction_date=date(2026, 1, 2), ticker="AAPL", transaction_type="BUY", quantity="2"),
+    ]
+    snapshot = {**_snapshot(), "holdings": [{"ticker": "AAPL", "quantity": "0", "market_value": "0"}]}
+    result = check_opening_snapshot_confirmation(snapshot, transactions=trades)
+    assert not any(item["code"] == "NEGATIVE_RECONCILED_POSITION" for item in result["blockers"])

@@ -77,12 +77,17 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
             continue
         if ticker and quantity.is_finite() and quantity >= 0:
             quantities[ticker] = quantity
-    for trade in sorted(trades, key=lambda event: (
-        getattr(event, "transaction_date", date.min)
-        if isinstance(getattr(event, "transaction_date", None), date)
-        else date.min,
-        getattr(event, "id", 0) or 0,
-    )):
+    def trade_sort_key(event):
+        event_date = getattr(event, "transaction_date", None)
+        if isinstance(event_date, datetime):
+            event_date = event_date.date()
+        if not isinstance(event_date, date):
+            event_date = date.min
+        # Preserve original input order for same-day trades: a database ID
+        # cannot establish execution order for trades recorded on one date.
+        return event_date
+
+    for trade in sorted(trades, key=trade_sort_key):
         trade_date = getattr(trade, "transaction_date", None)
         if isinstance(trade_date, datetime):
             trade_date = trade_date.date()
