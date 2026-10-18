@@ -5605,7 +5605,9 @@ morningReportSettingsForm.addEventListener("submit", async (event) => {
 });
 
 const kakaoStatus = document.getElementById("kakao-status");
-const kakaoConnectButton = document.getElementById("kakao-connect-button");\nconst kakaoTestButton = document.getElementById("kakao-test-button");\nconst kakaoDisconnectButton = document.getElementById("kakao-disconnect-button");
+const kakaoConnectButton = document.getElementById("kakao-connect-button");
+const kakaoTestButton = document.getElementById("kakao-test-button");
+const kakaoDisconnectButton = document.getElementById("kakao-disconnect-button");
 
 async function loadKakaoStatus(accessToken) {
     const response = await fetch("/api/kakao/status", {
