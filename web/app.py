@@ -16279,6 +16279,8 @@ loginForm.addEventListener(
             ).value;
 
 
+        let authenticated = false;
+
         try {
 
             const response =
@@ -16334,6 +16336,8 @@ loginForm.addEventListener(
             );
 
 
+            authenticated = true;
+
             loginButton.textContent =
                 "계좌 확인 중...";
 
@@ -16345,12 +16349,16 @@ loginForm.addEventListener(
 
         } catch (error) {
 
-            clearAuthTokens();
+            if (!authenticated) {
+                clearAuthTokens();
+            }
+
+            console.error(authenticated ? "로그인 후 앱 로딩 오류:" : "로그인 오류:", error);
 
 
-            message.textContent =
-                error.message
-                || "로그인에 실패했습니다.";
+            message.textContent = authenticated
+                ? "로그인은 성공했지만 포트폴리오를 불러오지 못했습니다. 잠시 후 다시 시도해주세요."
+                : (error.message || "로그인에 실패했습니다.");
 
 
             message.className =
