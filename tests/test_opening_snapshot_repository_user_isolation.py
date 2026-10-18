@@ -4,6 +4,7 @@ from datetime import date
 from uuid import uuid4
 
 from sqlalchemy import create_engine
+from sqlalchemy.schema import CreateTable
 from sqlalchemy.orm import Session
 
 from database.models import Account, AccountOpeningHolding, AccountOpeningSnapshot
@@ -12,8 +13,13 @@ from database import repository as repository_module
 
 def test_opening_snapshot_repository_isolates_users(monkeypatch):
     engine = create_engine("sqlite:///:memory:")
-    for table in (Account.__table__, AccountOpeningSnapshot.__table__, AccountOpeningHolding.__table__):
-        table.create(engine)
+    # SQLite autoincrements only INTEGER PRIMARY KEY, unlike PostgreSQL BIGINT.
+    # Adapt only this test schema; leave production models untouched.
+    with engine.begin() as connection:
+        for table in (Account.__table__, AccountOpeningSnapshot.__table__, AccountOpeningHolding.__table__):
+            ddl = str(CreateTable(table).compile(dialect=engine.dialect))
+            ddl = ddl.replace("id BIGINT NOT NULL", "id INTEGER NOT NULL")
+            connection.exec_driver_sql(ddl)
 
     owner_id, stranger_id = uuid4(), uuid4()
     with Session(engine) as session:
