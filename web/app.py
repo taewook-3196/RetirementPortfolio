@@ -8135,6 +8135,13 @@ async function refreshSectorValue() {
             label.style.cssText = "margin:6px 0;font-weight:600";
             label.textContent = item.valuation_label || "평가 보류";
             card.appendChild(label);
+            const rationale = document.createElement("p");
+            rationale.style.cssText = "margin:6px 0;line-height:1.7";
+            const positive = (item.reasons || []).join(" · ");
+            const caution = (item.cautions || []).join(" · ");
+            rationale.textContent = (positive ? "판단 근거: " + positive : "확인된 긍정 근거 없음")
+                + (caution ? " / 주의: " + caution : "");
+            card.appendChild(rationale);
             const details = document.createElement("p");
             details.style.cssText = "margin:6px 0;line-height:1.7";
             details.textContent = "PER " + sectorValueMetric(metrics.pe)
