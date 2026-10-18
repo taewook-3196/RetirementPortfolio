@@ -4,6 +4,7 @@ Read-only, no DB writes. Warnings require explicit user reconciliation; this
 module deliberately does not infer historical positions or returns.
 """
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 from services.opening_snapshot_validation import validate_opening_snapshot
 
@@ -63,6 +64,43 @@ def check_opening_snapshot_confirmation(snapshot, transactions=None, cash_flows=
             blockers.append({"code": "EVENT_BEFORE_OPENING", "message": "시작일 이전 " + kind + " 내역이 있습니다. 시작일 또는 기록을 확인해주세요."})
         if on_opening:
             warnings.append({"code": "EVENT_ON_OPENING_DATE", "message": "시작일 당일 " + kind + " 내역이 있습니다. 시작 자산에 이미 포함된 기록인지 확인해주세요."})
+    # Reconstruct quantities from the opening state only when event dates and
+    # transaction fields are usable; this is a consistency check, not a balance.
+    quantities = {}
+    for holding in snapshot.get("holdings", []):
+        if not isinstance(holding, dict):
+            continue
+        ticker = str(holding.get("ticker") or "").strip().upper()
+        try:
+            quantity = Decimal(str(holding.get("quantity")))
+        except (InvalidOperation, TypeError, ValueError):
+            continue
+        if ticker and quantity.is_finite() and quantity >= 0:
+            quantities[ticker] = quantity
+    for trade in sorted(trades, key=lambda event: (
+        getattr(event, "transaction_date", date.min)
+        if isinstance(getattr(event, "transaction_date", None), date)
+        else date.min,
+        getattr(event, "id", 0) or 0,
+    )):
+        trade_date = getattr(trade, "transaction_date", None)
+        if isinstance(trade_date, datetime):
+            trade_date = trade_date.date()
+        if not opening or not isinstance(trade_date, date) or trade_date <= opening:
+            continue
+        ticker = str(getattr(trade, "ticker", "") or "").strip().upper()
+        side = str(getattr(trade, "transaction_type", "") or "").strip().upper()
+        try:
+            amount = Decimal(str(getattr(trade, "quantity", None)))
+        except (InvalidOperation, TypeError, ValueError):
+            amount = Decimal("-1")
+        if not ticker or side not in {"BUY", "SELL"} or not amount.is_finite() or amount <= 0:
+            blockers.append({"code": "INVALID_TRADE_QUANTITY", "message": "거래내역에 종목, 매수/매도 구분 또는 수량 오류가 있습니다."})
+            continue
+        current = quantities.get(ticker, Decimal("0"))
+        if side == "SELL" and current < amount:
+            blockers.append({"code": "NEGATIVE_RECONCILED_POSITION", "message": ticker + " 종목의 매도 수량이 시작 보유수량과 이후 매수 수량을 초과합니다.", "tickers": [ticker]})
+        quantities[ticker] = current + (amount if side == "BUY" else -amount)
     opening_tickers = {str(item.get("ticker", "")).strip().upper() for item in snapshot.get("holdings", []) if isinstance(item, dict)}
     transaction_tickers = {str(getattr(trade, "ticker", "") or "").strip().upper() for trade in trades}
     overlap = sorted((opening_tickers & transaction_tickers) - {""})
