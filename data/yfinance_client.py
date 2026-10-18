@@ -239,10 +239,19 @@ class YFinanceClient:
             exchange_raw or "US",
         )
 
+        # Yahoo occasionally omits quoteType. Prefer a second
+        # quote metadata source, never guess from the ticker alone.
+        if not quote_type:
+            try:
+                metadata = yf_ticker.get_history_metadata() or {}
+                quote_type = str(metadata.get("instrumentType") or "").strip().upper()
+            except Exception:
+                logger.debug("instrumentType unavailable: %s", clean_ticker)
+
         if quote_type == "ETF":
             asset_type = "ETF"
 
-        elif quote_type == "EQUITY":
+        elif quote_type in ("EQUITY", "STOCK"):
             asset_type = "STOCK"
 
         else:
