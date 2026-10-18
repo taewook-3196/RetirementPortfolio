@@ -8167,7 +8167,8 @@ async function refreshSectorValue() {
                 const comparison = document.createElement("p");
                 comparison.style.cssText = "margin:6px 0;line-height:1.7";
                 const comparablePe = delta.pe == null ? "비교 불가(Forward/Trailing 기준 불일치 또는 자료 없음)" : sectorValueMetric(delta.pe) + "배";
-                comparison.textContent = "기준 종목 대비: PER " + comparablePe
+                const peBasisLabel = metrics.pe_basis === "forward" ? "예상 PER" : metrics.pe_basis === "trailing" ? "과거 PER" : "PER";
+                comparison.textContent = "기준 종목 대비: " + peBasisLabel + " " + comparablePe
                     + " · ROE " + sectorValueMetric(delta.roe == null ? null : delta.roe * 100, "%p")
                     + " · 매출 성장률 " + sectorValueMetric(delta.revenue_growth == null ? null : delta.revenue_growth * 100, "%p")
                     + " · 순이익률 " + sectorValueMetric(delta.profit_margin == null ? null : delta.profit_margin * 100, "%p");
