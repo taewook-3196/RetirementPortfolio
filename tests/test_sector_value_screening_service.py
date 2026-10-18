@@ -133,3 +133,19 @@ def test_automatic_valuation_requires_five_available_checks():
     assert other["coverage"] == 5
     assert other["valuation_label"] == "상대 적정"
     CACHE.clear()
+
+
+def test_contracting_earnings_block_automatic_undervaluation_label():
+    CACHE.clear()
+    def fake_info(ticker):
+        return {"shortName": ticker, "forwardPE": 20 if ticker == "MSFT" else 40,
+                "priceToBook": 2, "returnOnEquity": .2, "revenueGrowth": .1,
+                "profitMargins": .2, "fiftyTwoWeekChange": .05,
+                "earningsGrowth": -.2 if ticker == "MSFT" else .1}
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "technology")
+    msft = next(row for row in result["results"] if row["ticker"] == "MSFT")
+    assert msft["metrics"]["earnings_growth"] == -.2
+    assert msft["metrics"]["pe_discount_pct"] == 50
+    assert msft["valuation_label"] == "평가 보류"
+    CACHE.clear()
