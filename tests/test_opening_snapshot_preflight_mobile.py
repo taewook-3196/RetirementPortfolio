@@ -8,8 +8,8 @@ def test_opening_snapshot_preflight_ui_is_read_only():
     end = source.index("openingPanel.appendChild(openingForm);", start)
     body = source[start:end]
     assert 'openingUrl + "/preflight"' in body
-    assert "result.blockers || []" in body
-    assert "result.warnings || []" in body
+    assert 'renderPreflightItems("확정 차단 사유", result.blockers)' in body
+    assert 'renderPreflightItems("추가 확인 경고", result.warnings)' in body
     assert "message.textContent" in body
     assert "최종 확정은 아직 지원하지 않습니다." in body
     assert 'method: "PUT"' not in body
