@@ -4696,7 +4696,9 @@ body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
 토큰을 직접 입력할 필요 없이 카카오 계정을 한 번 연결하면 됩니다.
 </p>
 <div id="kakao-status" class="status-box">연결 상태 확인 중...</div>
-<button id="kakao-connect-button" type="button">카카오톡 연결</button>\n<button id="kakao-test-button" type="button" style="display:none;">테스트 메시지 보내기</button>\n<button id="kakao-disconnect-button" type="button" style="display:none;">카카오톡 연결 해제</button>
+<button id="kakao-connect-button" type="button">카카오톡 연결</button>
+<button id="kakao-test-button" type="button" style="display:none;">테스트 메시지 보내기</button>
+<button id="kakao-disconnect-button" type="button" style="display:none;">카카오톡 연결 해제</button>
 
 </section>
 
