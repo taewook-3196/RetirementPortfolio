@@ -71,6 +71,9 @@ class ETFPosition:
     # 누적 수수료 및 제세금
     total_fees: float = 0.0
 
+    # 잘못된 매도 수량 기록으로 손익이 과소/과대 계산될 수 있음
+    oversell_detected: bool = False
+
 
 def _to_float(value) -> float:
     """
@@ -247,6 +250,9 @@ def calculate_etf_positions(
 
                 # 보유 수량보다 많은 매도 기록이 있어도
                 # 음수 보유량이 되지 않도록 제한
+                if quantity > current_quantity + 1e-9:
+                    position.oversell_detected = True
+
                 sell_quantity = min(
                     quantity,
                     current_quantity,
