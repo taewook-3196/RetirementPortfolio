@@ -14441,6 +14441,7 @@ function openHomeAccountAction(action) {
         accountFilter.dispatchEvent(new Event("change"));
     }
     if (action === "deposit") {
+        selectedCashFlowAccountId = selectedHomeAccountId;
         const openButton = document.getElementById("open-cash-flow-entry");
         if (openButton) openButton.click();
     } else {
