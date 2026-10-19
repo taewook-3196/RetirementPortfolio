@@ -705,3 +705,12 @@ def test_home_defaults_to_one_account_and_filters_detail_cards(monkeypatch):
     assert 'card.hidden = card.dataset.accountId !== selectedHomeAccountId;' in html
     assert 'id="home-quick-settings"' in html
     assert 'new Option("전체 계좌", "")' not in html
+
+
+def test_selected_home_account_scopes_settings_and_transaction_filter(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'function showSelectedAccountSettings()' in html
+    assert 'card.hidden = card.dataset.accountId !== selectedHomeAccountId;' in html
+    assert 'function syncSelectedAccountToTransactionFilter()' in html
+    assert 'showSelectedAccountSettings();' in html
+    assert 'syncSelectedAccountToTransactionFilter();' in html
