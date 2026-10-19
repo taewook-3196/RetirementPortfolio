@@ -14439,8 +14439,19 @@ function renderHomeAccountDashboard(accounts, summaries) {
         if (summary) {
             const currency = String(account.currency || "KRW").toUpperCase();
             const pnl = Number(summary.total_unrealized_pnl || 0);
+            const assets = Number(summary.total_assets);
+            const cash = Number(summary.cash_balance);
+            const invested = Number(summary.total_invested);
+            const hasCostBasis = Number.isFinite(invested) && invested > 0;
             value.textContent = formatMoney(summary.total_assets, currency)
-                + " · 평가손익 " + (pnl > 0 ? "+" : "") + formatMoney(pnl, currency);
+                + " · 평가손익 " + (hasCostBasis ? (pnl > 0 ? "+" : "") + formatMoney(pnl, currency) : "매입원가 확인 필요");
+            if (Number.isFinite(assets) && assets < 0) {
+                const warning = document.createElement("small");
+                warning.className = "status-box";
+                warning.textContent = "총자산 음수: 예수금·거래·시작잔고 입력을 확인하세요. 주식평가액 "
+                    + formatMoney(summary.total_current_value, currency) + " · 예수금 " + formatMoney(cash, currency);
+                row.appendChild(warning);
+            }
         } else {
             value.textContent = "조회 중 또는 데이터 없음";
         }
