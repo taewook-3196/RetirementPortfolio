@@ -4633,7 +4633,19 @@ body { padding-bottom: max(92px, calc(env(safe-area-inset-bottom) + 78px)); }
 
 </section>
 
-<section id="home-dashboard-section" class="card" aria-label="내 투자 현황"><h2>내 투자 현황</h2><div id="home-dashboard-content" aria-live="polite">계좌 현황을 불러오는 중...</div></section>
+<section id="home-dashboard-section" class="card" aria-label="내 투자 현황">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+<h2 style="margin:0">내 자산</h2>
+<label for="home-account-selector" style="font-size:.85rem">계좌 선택
+<select id="home-account-selector" aria-label="홈 계좌 선택"><option value="">전체 계좌</option></select></label>
+</div>
+<div id="home-dashboard-content" aria-live="polite">계좌 현황을 불러오는 중...</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px">
+<button type="button" id="home-quick-deposit" class="small-button">입출금</button>
+<button type="button" id="home-quick-trade" class="small-button secondary-button">매매</button>
+<button type="button" id="home-quick-holdings" class="small-button secondary-button">보유종목</button>
+</div>
+</section>
 <section id="report-section" class="card" style="display:none;padding:0;overflow:hidden;">
 <div id="report-message" class="status-box">모닝 리포트를 불러오는 중...</div>
 <iframe id="report-frame" title="내 모닝 리포트" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" style="display:none;width:100%;height:85vh;border:0;"></iframe>
@@ -14396,7 +14408,45 @@ async function renderAccountCreator(accounts, accessToken) {
 
 }
 
+let selectedHomeAccountId = "";
+function openHomeAccountAction(action) {
+    if (action === "holdings") {
+        setAppTab("portfolio");
+        return;
+    }
+    setAppTab("transactions");
+    const accountFilter = document.getElementById("transaction-account-filter");
+    if (accountFilter) {
+        accountFilter.value = selectedHomeAccountId;
+        accountFilter.dispatchEvent(new Event("change"));
+    }
+    if (action === "deposit") {
+        const openButton = document.getElementById("open-cash-flow-entry");
+        if (openButton) openButton.click();
+    } else {
+        const openButton = document.getElementById("open-transaction-entry");
+        if (openButton) openButton.click();
+    }
+}
+document.getElementById("home-quick-deposit").addEventListener("click", () => openHomeAccountAction("deposit"));
+document.getElementById("home-quick-trade").addEventListener("click", () => openHomeAccountAction("trade"));
+document.getElementById("home-quick-holdings").addEventListener("click", () => openHomeAccountAction("holdings"));
+
 function renderHomeAccountDashboard(accounts, summaries) {
+    const selector = document.getElementById("home-account-selector");
+    if (selector) {
+        selector.replaceChildren();
+        const allOption = new Option("전체 계좌", "");
+        selector.add(allOption);
+        for (const account of accounts) selector.add(new Option(account.account_name || "계좌 " + account.id, String(account.id)));
+        if (!accounts.some(account => String(account.id) === selectedHomeAccountId)) selectedHomeAccountId = "";
+        selector.value = selectedHomeAccountId;
+        selector.onchange = () => {
+            selectedHomeAccountId = selector.value;
+            renderHomeAccountDashboard(accounts, summaries);
+        };
+    }
+    const visibleAccounts = selectedHomeAccountId ? accounts.filter(a => String(a.id) === selectedHomeAccountId) : accounts;
     const container = document.getElementById("home-dashboard-content");
     if (!container) return;
     container.replaceChildren();
@@ -14407,29 +14457,29 @@ function renderHomeAccountDashboard(accounts, summaries) {
     const count = document.createElement("p");
     count.textContent = "등록 계좌 " + accounts.length + "개";
     container.appendChild(count);
-    const currencies = new Set(accounts.map(a => String(a.currency || "KRW").toUpperCase()));
+    const currencies = new Set(visibleAccounts.map(a => String(a.currency || "KRW").toUpperCase()));
     if (currencies.size > 1) {
         const notice = document.createElement("p");
         notice.textContent = "계좌 통화가 달라 총자산 합계는 표시하지 않습니다.";
         container.appendChild(notice);
-    } else if (accounts.every(a => summaries.has(String(a.id)))) {
-        const total = accounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_assets || 0), 0);
+    } else if (visibleAccounts.every(a => summaries.has(String(a.id)))) {
+        const total = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_assets || 0), 0);
         const totalRow = document.createElement("div");
         totalRow.className = "summary-kpi";
         totalRow.textContent = "전체 총자산 · " + formatMoney(total, [...currencies][0]);
         container.appendChild(totalRow);
-        const pnl = accounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_unrealized_pnl || 0), 0);
+        const pnl = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_unrealized_pnl || 0), 0);
         const pnlRow = document.createElement("div");
         pnlRow.className = "summary-kpi";
         pnlRow.textContent = "전체 평가손익 · " + (pnl > 0 ? "+" : "") + formatMoney(pnl, [...currencies][0]);
         container.appendChild(pnlRow);
-        const cash = accounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).cash_balance || 0), 0);
+        const cash = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).cash_balance || 0), 0);
         const cashRow = document.createElement("div");
         cashRow.className = "summary-kpi";
         cashRow.textContent = "전체 예수금 · " + formatMoney(cash, [...currencies][0]);
         container.appendChild(cashRow);
     }
-    for (const account of accounts) {
+    for (const account of visibleAccounts) {
         const row = document.createElement("div");
         row.className = "target-row";
         const label = document.createElement("span");
