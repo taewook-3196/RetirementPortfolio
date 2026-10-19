@@ -13516,6 +13516,8 @@ async function renderAccountManagement(accounts, accessToken) {
     for (const account of accounts) {
         const card = document.createElement("div");
         card.className = "account-card";
+        card.dataset.accountId = String(account.id);
+        card.hidden = String(account.id) !== selectedHomeAccountId;
         const name = document.createElement("div");
         name.className = "account-name";
         name.textContent = account.account_name + (account.is_default ? " · 기본 계좌" : "");
@@ -13555,6 +13557,7 @@ async function renderAccountManagement(accounts, accessToken) {
         card.append(deleteButton, message);
         accountManagementList.appendChild(card);
     }
+    showSelectedAccountSettings();
 }
 
 async function renderAccountCreator(accounts, accessToken) {
@@ -14470,6 +14473,8 @@ function renderHomeAccountDashboard(accounts, summaries) {
             selectedHomeAccountId = selector.value;
             renderHomeAccountDashboard(accounts, summaries);
             showSelectedAccountCard();
+            showSelectedAccountSettings();
+            syncSelectedAccountToTransactionFilter();
         };
     }
     const visibleAccounts = selectedHomeAccountId ? accounts.filter(a => String(a.id) === selectedHomeAccountId) : accounts;
@@ -14531,6 +14536,21 @@ function renderHomeAccountDashboard(accounts, summaries) {
         }
         row.append(label, value);
         container.appendChild(row);
+    }
+}
+
+function syncSelectedAccountToTransactionFilter() {
+    const filter = document.getElementById("transaction-account-filter");
+    if (!filter || !selectedHomeAccountId) return;
+    if ([...filter.options].some(option => option.value === selectedHomeAccountId)) {
+        filter.value = selectedHomeAccountId;
+        filter.dispatchEvent(new Event("change"));
+    }
+}
+
+function showSelectedAccountSettings() {
+    for (const card of accountManagementList.querySelectorAll("[data-account-id]")) {
+        card.hidden = card.dataset.accountId !== selectedHomeAccountId;
     }
 }
 
