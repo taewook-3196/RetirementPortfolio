@@ -11074,6 +11074,8 @@ async function showTransactionEditor(
         memoInput
     );
 
+    const settlementFields = createTradeSettlementFields(form, transaction);
+
 
     const saveButton =
         document.createElement(
@@ -11184,6 +11186,15 @@ async function showTransactionEditor(
                 "수정 중...";
 
 
+            let settlementMetadata;
+            try {
+                settlementMetadata = settlementFields.read();
+            } catch (error) {
+                result.textContent = error.message;
+                result.className = "transaction-message error";
+                return;
+            }
+
             const payload = {
 
                 transaction_date:
@@ -11217,6 +11228,7 @@ async function showTransactionEditor(
 
                 memo:
                     memoInput.value.trim(),
+                ...settlementMetadata,
             };
 
 
@@ -11284,6 +11296,75 @@ async function showTransactionEditor(
             }
         }
     );
+}
+
+
+function createTradeSettlementFields(form, transaction = {}) {
+    const details = document.createElement("details");
+    const heading = document.createElement("summary");
+    heading.textContent = "환율·실제 결제금액 (선택)";
+    details.appendChild(heading);
+
+    function field(label, value, type = "number") {
+        const wrapper = document.createElement("label");
+        wrapper.textContent = label;
+        const input = document.createElement("input");
+        input.type = type;
+        if (type === "number") {
+            input.min = "0.000001";
+            input.step = "any";
+        }
+        input.value = value == null ? "" : String(value);
+        wrapper.appendChild(input);
+        details.appendChild(wrapper);
+        return input;
+    }
+
+    const rate = field("체결 당시 환율 (1 USD당 KRW)", transaction.execution_fx_rate);
+    const amount = field("실제 결제금액 (수수료·세금 포함)", transaction.settlement_amount);
+    const currencyLabel = document.createElement("label");
+    currencyLabel.textContent = "실제 결제통화";
+    const currency = document.createElement("select");
+    for (const value of ["", "KRW", "USD"]) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value || "선택 안 함";
+        currency.appendChild(option);
+    }
+    currency.value = transaction.settlement_currency || "";
+    currencyLabel.appendChild(currency);
+    details.appendChild(currencyLabel);
+    const note = document.createElement("p");
+    note.textContent = "실제 체결내역에서 확인한 값만 입력하세요. 현재 손익 계산에는 아직 반영되지 않습니다.";
+    details.appendChild(note);
+    form.appendChild(details);
+
+    if (rate.value || amount.value || currency.value) details.open = true;
+
+    return {
+        read() {
+            if (Boolean(amount.value) !== Boolean(currency.value)) {
+                throw new Error("실제 결제금액과 결제통화는 함께 입력해주세요.");
+            }
+            const result = {
+                execution_fx_rate: rate.value ? Number(rate.value) : null,
+                settlement_amount: amount.value ? Number(amount.value) : null,
+                settlement_currency: currency.value || null,
+                fx_source: rate.value ? "manual" : null,
+            };
+            if ((result.execution_fx_rate != null && !(result.execution_fx_rate > 0))
+                || (result.settlement_amount != null && !(result.settlement_amount > 0))) {
+                throw new Error("환율과 결제금액은 0보다 커야 합니다.");
+            }
+            return result;
+        },
+        clear() {
+            rate.value = "";
+            amount.value = "";
+            currency.value = "";
+            details.open = false;
+        },
+    };
 }
 
 function createTransactionForm(
@@ -12151,6 +12232,8 @@ function createTransactionForm(
         memoInput
     );
 
+    const settlementFields = createTradeSettlementFields(form);
+
 
     const result =
         document.createElement(
@@ -12235,6 +12318,15 @@ function createTransactionForm(
                 "저장 중...";
 
 
+            let settlementMetadata;
+            try {
+                settlementMetadata = settlementFields.read();
+            } catch (error) {
+                result.textContent = error.message;
+                result.className = "transaction-message error";
+                return;
+            }
+
             const payload = {
 
                 transaction_date:
@@ -12268,6 +12360,7 @@ function createTransactionForm(
 
                 memo:
                     memoInput.value.trim(),
+                ...settlementMetadata,
             };
 
 
@@ -12316,6 +12409,7 @@ function createTransactionForm(
                 feeInput.value = "0";
                 taxInput.value = "0";
                 memoInput.value = "";
+                settlementFields.clear();
 
 
                 try {
