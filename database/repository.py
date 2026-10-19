@@ -2215,6 +2215,10 @@ class Repository:
         memo: str = "",
         request_id: Optional[str] = None,
         account_id: Optional[int] = None,
+        execution_fx_rate: Optional[float] = None,
+        settlement_amount: Optional[float] = None,
+        settlement_currency: Optional[str] = None,
+        fx_source: Optional[str] = None,
     ) -> Transaction:
         """현재 사용자의 거래 내역을 추가합니다."""
         if not self.user_id:
@@ -2243,6 +2247,19 @@ class Repository:
         clean_fee = self._non_negative_number(fee, "수수료")
         clean_tax = self._non_negative_number(tax, "세금")
         tx_date = self._parse_input_date(transaction_date, "거래 날짜")
+        if (settlement_amount is None) != (settlement_currency is None):
+            raise ValueError("결제금액과 결제통화를 함께 입력해야 합니다.")
+        if execution_fx_rate is not None:
+            execution_fx_rate = self._positive_number(execution_fx_rate, "체결환율")
+        if settlement_amount is not None:
+            settlement_amount = self._positive_number(settlement_amount, "결제금액")
+        if settlement_currency is not None:
+            settlement_currency = str(settlement_currency).strip().upper()
+            if settlement_currency not in ("KRW", "USD"):
+                raise ValueError("결제통화는 KRW 또는 USD여야 합니다.")
+        if fx_source is not None and fx_source not in ("broker", "manual", "reference"):
+            raise ValueError("환율 출처가 올바르지 않습니다.")
+
 
         try:
             with get_db_session() as session:
@@ -2347,6 +2364,10 @@ class Repository:
                     price=clean_price,
                     fee=clean_fee,
                     tax=clean_tax,
+                    execution_fx_rate=execution_fx_rate,
+                    settlement_amount=settlement_amount,
+                    settlement_currency=settlement_currency,
+                    fx_source=fx_source,
                     memo=str(
                         memo or ""
                     ).strip(),
@@ -2784,6 +2805,10 @@ class Repository:
         tax: float = 0.0,
         memo: str = "",
         account_id: Optional[int] = None,
+        execution_fx_rate: Optional[float] = None,
+        settlement_amount: Optional[float] = None,
+        settlement_currency: Optional[str] = None,
+        fx_source: Optional[str] = None,
     ) -> bool:
         """현재 사용자의 거래 내역을 수정합니다."""
         if not self.user_id:
@@ -2810,6 +2835,19 @@ class Repository:
         clean_fee = self._non_negative_number(fee, "수수료")
         clean_tax = self._non_negative_number(tax, "세금")
         tx_date = self._parse_input_date(transaction_date, "거래 날짜")
+        if (settlement_amount is None) != (settlement_currency is None):
+            raise ValueError("결제금액과 결제통화를 함께 입력해야 합니다.")
+        if execution_fx_rate is not None:
+            execution_fx_rate = self._positive_number(execution_fx_rate, "체결환율")
+        if settlement_amount is not None:
+            settlement_amount = self._positive_number(settlement_amount, "결제금액")
+        if settlement_currency is not None:
+            settlement_currency = str(settlement_currency).strip().upper()
+            if settlement_currency not in ("KRW", "USD"):
+                raise ValueError("결제통화는 KRW 또는 USD여야 합니다.")
+        if fx_source is not None and fx_source not in ("broker", "manual", "reference"):
+            raise ValueError("환율 출처가 올바르지 않습니다.")
+
 
         with get_db_session() as session:
             transaction = (
@@ -2905,6 +2943,14 @@ class Repository:
 
             transaction.fee = clean_fee
             transaction.tax = clean_tax
+            # Legacy clients omit all optional fields; preserve stored metadata.
+            if any(value is not None for value in (
+                execution_fx_rate, settlement_amount, settlement_currency, fx_source
+            )):
+                transaction.execution_fx_rate = execution_fx_rate
+                transaction.settlement_amount = settlement_amount
+                transaction.settlement_currency = settlement_currency
+                transaction.fx_source = fx_source
 
             transaction.memo = str(
                 memo or ""

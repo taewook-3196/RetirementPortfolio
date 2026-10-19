@@ -956,6 +956,10 @@ class TransactionCreateRequest(BaseModel):
     price: float = Field(gt=0)
     fee: float = Field(default=0, ge=0)
     tax: float = Field(default=0, ge=0)
+    execution_fx_rate: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    settlement_amount: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    settlement_currency: str | None = Field(default=None, pattern="^(KRW|USD)$")
+    fx_source: str | None = Field(default=None, pattern="^(broker|manual|reference)$")
 
     memo: str = Field(
         default="",
@@ -2366,6 +2370,16 @@ def get_transactions_api(
                             or 0
                         ),
 
+                    "execution_fx_rate": (
+                        float(transaction.execution_fx_rate)
+                        if transaction.execution_fx_rate is not None else None
+                    ),
+                    "settlement_amount": (
+                        float(transaction.settlement_amount)
+                        if transaction.settlement_amount is not None else None
+                    ),
+                    "settlement_currency": transaction.settlement_currency,
+                    "fx_source": transaction.fx_source,
                     "memo":
                         transaction.memo
                         or "",
@@ -2448,6 +2462,11 @@ def create_transaction_api(
             tax=
                 request.tax,
 
+            execution_fx_rate=request.execution_fx_rate,
+            settlement_amount=request.settlement_amount,
+            settlement_currency=request.settlement_currency,
+            fx_source=request.fx_source,
+
             memo=
                 request.memo,
 
@@ -2501,6 +2520,16 @@ def create_transaction_api(
                         or 0
                     ),
 
+                "execution_fx_rate": (
+                    float(transaction.execution_fx_rate)
+                    if transaction.execution_fx_rate is not None else None
+                ),
+                "settlement_amount": (
+                    float(transaction.settlement_amount)
+                    if transaction.settlement_amount is not None else None
+                ),
+                "settlement_currency": transaction.settlement_currency,
+                "fx_source": transaction.fx_source,
                 "memo":
                     transaction.memo
                     or "",
@@ -2589,6 +2618,11 @@ def update_transaction_api(
 
             tax=
                 request.tax,
+
+            execution_fx_rate=request.execution_fx_rate,
+            settlement_amount=request.settlement_amount,
+            settlement_currency=request.settlement_currency,
+            fx_source=request.fx_source,
 
             memo=
                 request.memo,
