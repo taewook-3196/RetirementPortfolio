@@ -714,3 +714,12 @@ def test_selected_home_account_scopes_settings_and_transaction_filter(monkeypatc
     assert 'function syncSelectedAccountToTransactionFilter()' in html
     assert 'showSelectedAccountSettings();' in html
     assert 'syncSelectedAccountToTransactionFilter();' in html
+
+
+def test_cash_flow_form_hides_optional_fields_by_default(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'advanced.className = "cash-flow-advanced";' in html
+    assert 'advancedTitle.textContent = "추가 입력 · 통화 / 메모";' in html
+    assert 'advancedFields.append(currencyLabel, currencySelect, memoLabel, memoInput);' in html
+    assert 'currency: currencySelect.value' in html
+    assert 'memoInput' in html
