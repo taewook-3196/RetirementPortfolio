@@ -671,3 +671,10 @@ def test_return_readiness_is_on_demand_and_renders_safe_text(monkeypatch):
     assert 'readinessButton.addEventListener("click", async () =>' in html
     assert 'item.textContent = "• " + String(warning.message' in html
     assert 'readinessResult.replaceChildren();' in html
+
+
+def test_home_dashboard_flags_negative_totals_and_missing_cost_basis(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'const hasCostBasis = Number.isFinite(invested) && invested > 0;' in html
+    assert '매입원가 확인 필요' in html
+    assert '총자산 음수: 예수금·거래·시작잔고 입력을 확인하세요.' in html
