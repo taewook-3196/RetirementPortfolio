@@ -678,3 +678,13 @@ def test_home_dashboard_flags_negative_totals_and_missing_cost_basis(monkeypatch
     assert 'const hasCostBasis = Number.isFinite(invested) && invested > 0;' in html
     assert '매입원가 확인 필요' in html
     assert '총자산 음수: 예수금·거래·시작잔고 입력을 확인하세요.' in html
+
+
+def test_compact_home_account_selector_and_quick_actions(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'id="home-account-selector"' in html
+    assert 'id="home-quick-deposit"' in html
+    assert 'id="home-quick-trade"' in html
+    assert 'id="home-quick-holdings"' in html
+    assert 'const visibleAccounts = selectedHomeAccountId ? accounts.filter' in html
+    assert 'const total = visibleAccounts.reduce(' in html
