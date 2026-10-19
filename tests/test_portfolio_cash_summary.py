@@ -524,3 +524,25 @@ def test_cash_balance_converts_foreign_currency_flows_and_dividends_once():
     assert service.get_cash_balance(
         account.id, include_initial_capital=False
     ) == 14_850.0
+
+
+def test_oversell_marks_position_as_unreliable_without_negative_holdings():
+    transactions = [
+        _transaction(1, "BUY", 3, 100),
+        _transaction(2, "SELL", 5, 120, transaction_date=date(2026, 1, 2)),
+    ]
+    position = calculate_etf_positions(transactions, [], {"TEST": _price(120)})["TEST"]
+    assert position.oversell_detected is True
+    assert position.quantity == 0
+    assert position.realized_pnl == 60
+
+
+def test_valid_partial_sell_has_no_oversell_warning():
+    transactions = [
+        _transaction(1, "BUY", 10, 100),
+        _transaction(2, "SELL", 4, 120, transaction_date=date(2026, 1, 2)),
+    ]
+    position = calculate_etf_positions(transactions, [], {"TEST": _price(120)})["TEST"]
+    assert position.oversell_detected is False
+    assert position.quantity == 6
+    assert position.realized_pnl == 80
