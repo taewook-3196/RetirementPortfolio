@@ -14457,23 +14457,23 @@ function renderHomeAccountDashboard(accounts, summaries) {
     const count = document.createElement("p");
     count.textContent = "등록 계좌 " + accounts.length + "개";
     container.appendChild(count);
-    const currencies = new Set(accounts.map(a => String(a.currency || "KRW").toUpperCase()));
+    const currencies = new Set(visibleAccounts.map(a => String(a.currency || "KRW").toUpperCase()));
     if (currencies.size > 1) {
         const notice = document.createElement("p");
         notice.textContent = "계좌 통화가 달라 총자산 합계는 표시하지 않습니다.";
         container.appendChild(notice);
-    } else if (accounts.every(a => summaries.has(String(a.id)))) {
-        const total = accounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_assets || 0), 0);
+    } else if (visibleAccounts.every(a => summaries.has(String(a.id)))) {
+        const total = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_assets || 0), 0);
         const totalRow = document.createElement("div");
         totalRow.className = "summary-kpi";
         totalRow.textContent = "전체 총자산 · " + formatMoney(total, [...currencies][0]);
         container.appendChild(totalRow);
-        const pnl = accounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_unrealized_pnl || 0), 0);
+        const pnl = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_unrealized_pnl || 0), 0);
         const pnlRow = document.createElement("div");
         pnlRow.className = "summary-kpi";
         pnlRow.textContent = "전체 평가손익 · " + (pnl > 0 ? "+" : "") + formatMoney(pnl, [...currencies][0]);
         container.appendChild(pnlRow);
-        const cash = accounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).cash_balance || 0), 0);
+        const cash = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).cash_balance || 0), 0);
         const cashRow = document.createElement("div");
         cashRow.className = "summary-kpi";
         cashRow.textContent = "전체 예수금 · " + formatMoney(cash, [...currencies][0]);
