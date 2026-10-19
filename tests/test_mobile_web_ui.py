@@ -649,7 +649,10 @@ def test_home_dashboard_reuses_account_summaries_and_avoids_mixed_currency_total
 
 def test_home_dashboard_shows_unrealized_pnl_and_cash_without_mixing_currencies(monkeypatch):
     html = _html(monkeypatch)
-    assert '계좌 총손익(배당 포함)' in html\n    assert '["실현손익", realized]' in html\n    assert '["미실현손익", unrealized]' in html\n    assert '["배당수익", dividends]' in html
+    assert '계좌 총손익(배당 포함)' in html
+    assert '["실현손익", realized]' in html
+    assert '["미실현손익", unrealized]' in html
+    assert '["배당수익", dividends]' in html
     assert '예수금 · ' in html
     assert '평가손익 ' in html
     assert 'summaries.get(String(a.id)).total_unrealized_pnl' in html
