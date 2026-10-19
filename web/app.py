@@ -11192,6 +11192,8 @@ async function showTransactionEditor(
             } catch (error) {
                 result.textContent = error.message;
                 result.className = "transaction-message error";
+                saveButton.disabled = false;
+                saveButton.textContent = "수정 저장";
                 return;
             }
 
