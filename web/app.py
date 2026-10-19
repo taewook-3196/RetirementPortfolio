@@ -14474,6 +14474,7 @@ function renderHomeAccountDashboard(accounts, summaries) {
             renderHomeAccountDashboard(accounts, summaries);
             showSelectedAccountCard();
             showSelectedAccountSettings();
+            syncSelectedAccountToTransactionFilter();
         };
     }
     const visibleAccounts = selectedHomeAccountId ? accounts.filter(a => String(a.id) === selectedHomeAccountId) : accounts;
@@ -14535,6 +14536,15 @@ function renderHomeAccountDashboard(accounts, summaries) {
         }
         row.append(label, value);
         container.appendChild(row);
+    }
+}
+
+function syncSelectedAccountToTransactionFilter() {
+    const filter = document.getElementById("transaction-account-filter");
+    if (!filter || !selectedHomeAccountId) return;
+    if ([...filter.options].some(option => option.value === selectedHomeAccountId)) {
+        filter.value = selectedHomeAccountId;
+        filter.dispatchEvent(new Event("change"));
     }
 }
 
