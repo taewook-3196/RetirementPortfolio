@@ -745,3 +745,11 @@ def test_mixed_currency_pnl_disclosure_in_home(monkeypatch):
     html = _html(monkeypatch)
     assert 'mixed_currency_pnl_estimated' in html
     assert '과거 매입원가·실현손익도 최신 환율로 환산합니다.' in html
+
+
+def test_transaction_forms_hide_fee_and_tax_inputs_but_preserve_values(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'appendField(\n        "수수료",\n        feeInput' not in html
+    assert 'appendField(\n        "세금",\n        taxInput' not in html
+    assert 'feeInput.value' in html
+    assert 'taxInput.value' in html
