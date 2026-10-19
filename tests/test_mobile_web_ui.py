@@ -753,3 +753,11 @@ def test_transaction_forms_hide_fee_and_tax_inputs_but_preserve_values(monkeypat
     assert 'appendField(\n        "세금",\n        taxInput' not in html
     assert 'feeInput.value' in html
     assert 'taxInput.value' in html
+
+
+def test_transaction_fx_metadata_response_fields_are_exposed():
+    import inspect
+    from web.app import get_transactions_api, create_transaction_api
+    source = inspect.getsource(get_transactions_api) + inspect.getsource(create_transaction_api)
+    for field in ("execution_fx_rate", "settlement_amount", "settlement_currency", "fx_source"):
+        assert source.count('"' + field + '"') >= 2
