@@ -3410,6 +3410,8 @@ def get_account_positions_api(
                             or 0
                         ),
 
+                    "oversell_detected": bool(position.oversell_detected),
+
                     "unrealized_roi":
                         float(
                             position.unrealized_roi
@@ -3488,6 +3490,8 @@ def get_account_positions_api(
                         summary.total_unrealized_pnl
                         or 0
                     ),
+
+                "oversell_detected": any(p.oversell_detected for p in positions.values()),
 
                 "total_realized_pnl":
                     float(
@@ -14507,6 +14511,12 @@ function renderHomeAccountDashboard(accounts, summaries) {
             pnlRow.className = "summary-kpi";
             pnlRow.textContent = label + " · " + (amount > 0 ? "+" : "") + formatMoney(amount, currency);
             container.appendChild(pnlRow);
+        }
+        if (visibleAccounts.some(a => summaries.get(String(a.id)).oversell_detected)) {
+            const warning = document.createElement("p");
+            warning.className = "status-box";
+            warning.textContent = "거래내역 확인 필요: 보유 수량보다 많은 매도 기록이 있어 손익 계산이 부정확할 수 있습니다.";
+            container.appendChild(warning);
         }
         const cash = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).cash_balance || 0), 0);
         const cashRow = document.createElement("div");
