@@ -671,3 +671,11 @@ def test_return_readiness_is_on_demand_and_renders_safe_text(monkeypatch):
     assert 'readinessButton.addEventListener("click", async () =>' in html
     assert 'item.textContent = "• " + String(warning.message' in html
     assert 'readinessResult.replaceChildren();' in html
+
+
+def test_cash_flows_have_independent_account_tabs(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'id="cash-flow-account-tabs"' in html
+    assert 'let selectedCashFlowAccountId = "";' in html
+    assert 'const selectedAccountId = selectedCashFlowAccountId;' in html
+    assert 'cashFlowEntryAccount.value = preferredAccountId;' in html
