@@ -343,7 +343,7 @@ def test_account_filter_applies_to_cash_flow_history(monkeypatch):
     html = _html(monkeypatch)
 
     cash_tab = html[html.index("async function loadCashFlowTab("):html.index("async function showCashFlowEntryForm(")]
-    assert "const selectedAccountId = transactionAccountFilter.value;" in cash_tab
+    assert "const selectedAccountId = selectedCashFlowAccountId;" in cash_tab
     assert "String(group.account.id) !== selectedAccountId" in cash_tab
     assert 'transactionAccountFilter.addEventListener("change", async () =>' in html
     assert "await loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken);" in html
@@ -688,3 +688,11 @@ def test_compact_home_account_selector_and_quick_actions(monkeypatch):
     assert 'id="home-quick-holdings"' in html
     assert 'const visibleAccounts = selectedHomeAccountId ? accounts.filter' in html
     assert 'const total = visibleAccounts.reduce(' in html
+
+
+def test_cashflow_tabs_follow_selected_home_account(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'id="cash-flow-account-tabs"' in html
+    assert 'let selectedCashFlowAccountId = "";' in html
+    assert 'selectedCashFlowAccountId = selectedHomeAccountId;' in html
+    assert 'const selectedAccountId = selectedCashFlowAccountId;' in html

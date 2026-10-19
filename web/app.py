@@ -4943,6 +4943,7 @@ Yahoo Finance에서 종목 정보를 확인합니다.
 <select id="cash-flow-entry-account"><option value="">계좌를 선택하세요</option></select>
 <div id="cash-flow-entry-form"></div>
 </div>
+<nav id="cash-flow-account-tabs" aria-label="입출금 계좌 선택" style="display:flex;gap:8px;overflow-x:auto;padding:8px 0"></nav>
 <div id="all-cash-flows-list" class="loading">입출금 내역을 불러오는 중...</div>
 </section>
 
@@ -5202,6 +5203,7 @@ const cashFlowEntryAccount = document.getElementById("cash-flow-entry-account");
 const cashFlowEntryForm = document.getElementById("cash-flow-entry-form");
 const allCashFlowsList = document.getElementById("all-cash-flows-list");
 const cashFlowVisibleCounts = new Map();
+let selectedCashFlowAccountId = "";
 
 async function loadCashFlowTab(accounts, accessToken) {
     cashFlowEntryAccount.innerHTML = '<option value="">계좌를 선택하세요</option>';
@@ -5210,8 +5212,26 @@ async function loadCashFlowTab(accounts, accessToken) {
         cashFlows: await loadCashFlows(accessToken, account.id),
     })));
     allCashFlowsList.innerHTML = "";
+    const tabs = document.getElementById("cash-flow-account-tabs");
+    tabs.replaceChildren();
+    if (selectedCashFlowAccountId && !accounts.some(a => String(a.id) === selectedCashFlowAccountId)) {
+        selectedCashFlowAccountId = "";
+    }
+    const choices = [{id: "", account_name: "전체"}].concat(accounts);
+    for (const choice of choices) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "small-button" + (String(choice.id) === selectedCashFlowAccountId ? "" : " secondary-button");
+        button.textContent = choice.account_name || "계좌 " + choice.id;
+        button.setAttribute("aria-pressed", String(String(choice.id) === selectedCashFlowAccountId));
+        button.addEventListener("click", () => {
+            selectedCashFlowAccountId = String(choice.id);
+            loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken).catch(console.error);
+        });
+        tabs.appendChild(button);
+    }
     let count = 0;
-    const selectedAccountId = transactionAccountFilter.value;
+    const selectedAccountId = selectedCashFlowAccountId;
     for (const group of groups) {
         const option = document.createElement("option");
         option.value = String(group.account.id);
@@ -5268,7 +5288,7 @@ openCashFlowEntry.addEventListener("click", async () => {
     transactionEntryForm.innerHTML = "";
     transactionEntryAccount.value = "";
     cashFlowEntryPanel.hidden = false;
-    const preferredAccountId = transactionAccountFilter.value
+    const preferredAccountId = selectedCashFlowAccountId || selectedHomeAccountId || transactionAccountFilter.value
         || (transactionTabAccounts.length === 1 ? String(transactionTabAccounts[0].id) : "");
     if (preferredAccountId) {
         cashFlowEntryAccount.value = preferredAccountId;
@@ -14421,6 +14441,7 @@ function openHomeAccountAction(action) {
         accountFilter.dispatchEvent(new Event("change"));
     }
     if (action === "deposit") {
+        selectedCashFlowAccountId = selectedHomeAccountId;
         const openButton = document.getElementById("open-cash-flow-entry");
         if (openButton) openButton.click();
     } else {
