@@ -12560,15 +12560,26 @@ function createCashFlowForm(
         amountInput
     );
 
-    appendField(
-        "통화",
-        currencySelect
-    );
-
-    appendField(
-        "메모",
-        memoInput
-    );
+    // Keep the common flow short: type, date and amount.
+    // Optional currency overrides and memo live behind one disclosure.
+    const advanced = document.createElement("details");
+    advanced.className = "cash-flow-advanced";
+    const advancedTitle = document.createElement("summary");
+    advancedTitle.textContent = "추가 입력 · 통화 / 메모";
+    advanced.appendChild(advancedTitle);
+    const advancedFields = document.createElement("div");
+    advancedFields.className = "transaction-form";
+    advanced.appendChild(advancedFields);
+    const currencyLabel = document.createElement("label");
+    currencyLabel.textContent = "통화";
+    const memoLabel = document.createElement("label");
+    memoLabel.textContent = "메모";
+    currencySelect.id = "cash-flow-currency-" + account.id;
+    memoInput.id = "cash-flow-memo-" + account.id;
+    currencyLabel.htmlFor = currencySelect.id;
+    memoLabel.htmlFor = memoInput.id;
+    advancedFields.append(currencyLabel, currencySelect, memoLabel, memoInput);
+    form.appendChild(advanced);
 
 
     /*
