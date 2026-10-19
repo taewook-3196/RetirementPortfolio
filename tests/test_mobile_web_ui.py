@@ -343,7 +343,7 @@ def test_account_filter_applies_to_cash_flow_history(monkeypatch):
     html = _html(monkeypatch)
 
     cash_tab = html[html.index("async function loadCashFlowTab("):html.index("async function showCashFlowEntryForm(")]
-    assert "const selectedAccountId = transactionAccountFilter.value;" in cash_tab
+    assert "const selectedAccountId = selectedCashFlowAccountId;" in cash_tab
     assert "String(group.account.id) !== selectedAccountId" in cash_tab
     assert 'transactionAccountFilter.addEventListener("change", async () =>' in html
     assert "await loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken);" in html
