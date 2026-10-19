@@ -2943,10 +2943,14 @@ class Repository:
 
             transaction.fee = clean_fee
             transaction.tax = clean_tax
-            transaction.execution_fx_rate = execution_fx_rate
-            transaction.settlement_amount = settlement_amount
-            transaction.settlement_currency = settlement_currency
-            transaction.fx_source = fx_source
+            # Legacy clients omit all optional fields; preserve stored metadata.
+            if any(value is not None for value in (
+                execution_fx_rate, settlement_amount, settlement_currency, fx_source
+            )):
+                transaction.execution_fx_rate = execution_fx_rate
+                transaction.settlement_amount = settlement_amount
+                transaction.settlement_currency = settlement_currency
+                transaction.fx_source = fx_source
 
             transaction.memo = str(
                 memo or ""
