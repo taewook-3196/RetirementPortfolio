@@ -753,3 +753,12 @@ def test_transaction_forms_hide_fee_and_tax_inputs_but_preserve_values(monkeypat
     assert 'appendField(\n        "세금",\n        taxInput' not in html
     assert 'feeInput.value' in html
     assert 'taxInput.value' in html
+
+
+def test_optional_settlement_fields_in_trade_forms(monkeypatch):
+    html = _html(monkeypatch)
+    assert "function createTradeSettlementFields(form, transaction = {})" in html
+    assert "환율·실제 결제금액 (선택)" in html
+    assert "실제 결제금액과 결제통화는 함께 입력해주세요." in html
+    assert html.count("...settlementMetadata,") == 2
+    assert "settlementFields.clear();" in html
