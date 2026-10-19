@@ -3493,6 +3493,12 @@ def get_account_positions_api(
 
                 "oversell_detected": any(p.oversell_detected for p in positions.values()),
 
+                "mixed_currency_pnl_estimated": any(
+                    str(p.currency or account_currency).strip().upper() != account_currency
+                    for p in positions.values()
+                    if p.quantity > 0 or p.realized_pnl or p.total_dividends
+                ),
+
                 "total_realized_pnl":
                     float(
                         summary.total_realized_pnl
@@ -14511,6 +14517,12 @@ function renderHomeAccountDashboard(accounts, summaries) {
             pnlRow.className = "summary-kpi";
             pnlRow.textContent = label + " · " + (amount > 0 ? "+" : "") + formatMoney(amount, currency);
             container.appendChild(pnlRow);
+        }
+        if (visibleAccounts.some(a => summaries.get(String(a.id)).mixed_currency_pnl_estimated)) {
+            const fxNotice = document.createElement("p");
+            fxNotice.className = "status-box";
+            fxNotice.textContent = "외화 손익 참고값: 과거 매입원가·실현손익도 최신 환율로 환산합니다. 거래 당시 환율과 실제 환전손익은 반영되지 않아 원화 기준 손익과 다를 수 있습니다.";
+            container.appendChild(fxNotice);
         }
         if (visibleAccounts.some(a => summaries.get(String(a.id)).oversell_detected)) {
             const warning = document.createElement("p");
