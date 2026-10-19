@@ -20,3 +20,10 @@ def test_opening_tables_have_isolated_names_and_columns():
 def test_opening_snapshot_is_not_a_column_of_existing_accounts():
     assert "opening_date" not in Base.metadata.tables["accounts"].columns
     assert "opening_snapshot_id" not in Base.metadata.tables["transactions"].columns
+
+
+def test_transaction_fx_columns_are_optional():
+    columns = Base.metadata.tables['transactions'].columns
+    for name in ('execution_fx_rate', 'settlement_amount', 'settlement_currency', 'fx_source'):
+        assert columns[name].nullable
+        assert columns[name].default is None
