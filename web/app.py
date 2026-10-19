@@ -14489,11 +14489,25 @@ function renderHomeAccountDashboard(accounts, summaries) {
         totalRow.className = "summary-kpi";
         totalRow.textContent = "총자산 · " + formatMoney(total, [...currencies][0]);
         container.appendChild(totalRow);
-        const pnl = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_unrealized_pnl || 0), 0);
-        const pnlRow = document.createElement("div");
-        pnlRow.className = "summary-kpi";
-        pnlRow.textContent = "평가손익 · " + (pnl > 0 ? "+" : "") + formatMoney(pnl, [...currencies][0]);
-        container.appendChild(pnlRow);
+        // Account P/L is independent of opening cash and external deposits.
+        // Display trade P/L separately from net dividends.
+        const currency = [...currencies][0];
+        const realized = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_realized_pnl || 0), 0);
+        const unrealized = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_unrealized_pnl || 0), 0);
+        const dividends = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).total_dividends || 0), 0);
+        const tradePnl = realized + unrealized;
+        const totalPnl = tradePnl + dividends;
+        for (const [label, amount] of [
+            ["계좌 총손익(배당 포함)", totalPnl],
+            ["실현손익", realized],
+            ["미실현손익", unrealized],
+            ["배당수익", dividends],
+        ]) {
+            const pnlRow = document.createElement("div");
+            pnlRow.className = "summary-kpi";
+            pnlRow.textContent = label + " · " + (amount > 0 ? "+" : "") + formatMoney(amount, currency);
+            container.appendChild(pnlRow);
+        }
         const cash = visibleAccounts.reduce((sum, a) => sum + Number(summaries.get(String(a.id)).cash_balance || 0), 0);
         const cashRow = document.createElement("div");
         cashRow.className = "summary-kpi";
