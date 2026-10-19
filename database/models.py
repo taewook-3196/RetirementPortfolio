@@ -371,6 +371,11 @@ class Transaction(Base):
     fee = Column(Numeric, nullable=False, default=0)
     tax = Column(Numeric, nullable=False, default=0)
     memo = Column(Text, nullable=True)
+    # Optional settlement metadata. Existing rows remain NULL; not used in cash/PnL yet.
+    execution_fx_rate = Column(Numeric, nullable=True)
+    settlement_amount = Column(Numeric, nullable=True)
+    settlement_currency = Column(Text, nullable=True)
+    fx_source = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.now)
     updated_at = Column(DateTime(timezone=True), default=datetime.now)
 
