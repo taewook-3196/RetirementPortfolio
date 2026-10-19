@@ -11036,16 +11036,6 @@ async function showTransactionEditor(
     );
 
     appendField(
-        "수수료",
-        feeInput
-    );
-
-    appendField(
-        "세금",
-        taxInput
-    );
-
-    appendField(
         "메모",
         memoInput
     );
@@ -12120,16 +12110,6 @@ function createTransactionForm(
     appendField(
         "체결가격",
         priceInput
-    );
-
-    appendField(
-        "수수료",
-        feeInput
-    );
-
-    appendField(
-        "세금",
-        taxInput
     );
 
     appendField(
