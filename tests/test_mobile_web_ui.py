@@ -343,7 +343,7 @@ def test_account_filter_applies_to_cash_flow_history(monkeypatch):
     html = _html(monkeypatch)
 
     cash_tab = html[html.index("async function loadCashFlowTab("):html.index("async function showCashFlowEntryForm(")]
-    assert "const selectedAccountId = transactionAccountFilter.value;" in cash_tab
+    assert "const selectedAccountId = selectedCashFlowAccountId;" in cash_tab
     assert "String(group.account.id) !== selectedAccountId" in cash_tab
     assert 'transactionAccountFilter.addEventListener("change", async () =>' in html
     assert "await loadCashFlowTab(transactionTabAccounts, transactionTabAccessToken);" in html
@@ -671,3 +671,11 @@ def test_return_readiness_is_on_demand_and_renders_safe_text(monkeypatch):
     assert 'readinessButton.addEventListener("click", async () =>' in html
     assert 'item.textContent = "• " + String(warning.message' in html
     assert 'readinessResult.replaceChildren();' in html
+
+
+def test_cash_flows_have_independent_account_tabs(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'id="cash-flow-account-tabs"' in html
+    assert 'let selectedCashFlowAccountId = "";' in html
+    assert 'const selectedAccountId = selectedCashFlowAccountId;' in html
+    assert 'cashFlowEntryAccount.value = preferredAccountId;' in html
