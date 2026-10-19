@@ -739,3 +739,9 @@ def test_initial_capital_not_exposed_in_account_forms(monkeypatch):
 def test_oversell_warning_is_exposed_in_dashboard(monkeypatch):
     html = _html(monkeypatch)
     assert '보유 수량보다 많은 매도 기록이 있어 손익 계산이 부정확할 수 있습니다.' in html
+
+
+def test_mixed_currency_pnl_disclosure_in_home(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'mixed_currency_pnl_estimated' in html
+    assert '과거 매입원가·실현손익도 최신 환율로 환산합니다.' in html
