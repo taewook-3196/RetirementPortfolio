@@ -2511,6 +2511,16 @@ def create_transaction_api(
                         or 0
                     ),
 
+                "execution_fx_rate": (
+                    float(transaction.execution_fx_rate)
+                    if transaction.execution_fx_rate is not None else None
+                ),
+                "settlement_amount": (
+                    float(transaction.settlement_amount)
+                    if transaction.settlement_amount is not None else None
+                ),
+                "settlement_currency": transaction.settlement_currency,
+                "fx_source": transaction.fx_source,
                 "memo":
                     transaction.memo
                     or "",
