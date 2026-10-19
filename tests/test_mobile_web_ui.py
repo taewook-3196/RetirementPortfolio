@@ -734,3 +734,10 @@ def test_initial_capital_not_exposed_in_account_forms(monkeypatch):
     assert '"초기 투자재원: "' not in html
     assert 'account.initial_capital' in html
     assert 'initial_capital:' in html
+
+
+def test_oversell_warning_is_exposed_in_dashboard(monkeypatch):
+    html = _html(monkeypatch)
+    assert '"oversell_detected": bool(position.oversell_detected)' in html
+    assert '"oversell_detected": any(p.oversell_detected for p in positions.values())' in html
+    assert '보유 수량보다 많은 매도 기록이 있어 손익 계산이 부정확할 수 있습니다.' in html
