@@ -623,9 +623,8 @@ def test_account_target_editor_search_save_and_cancel(monkeypatch):
 
 def test_opening_cash_is_not_mislabelled_as_investment_principal(monkeypatch):
     html = _html(monkeypatch)
-    assert html.count('"계좌 시작 현금잔고"') >= 2
-    assert '보유 주식 평가금액이나 이후 입금액을 포함하면 총자산이 중복 계산될 수 있습니다.' in html
-    assert '기존 값은 자동 변경되지 않습니다.' in html
+    assert html.count('"계좌 시작 현금잔고"') == 0
+    assert 'initialCapital.value' in html
     assert 'initial_capital:' in html
 
 
@@ -723,3 +722,12 @@ def test_cash_flow_form_hides_optional_fields_by_default(monkeypatch):
     assert 'advancedFields.append(currencyLabel, currencySelect, memoLabel, memoInput);' in html
     assert 'currencySelect.value' in html
     assert 'memoInput' in html
+
+
+def test_initial_capital_not_exposed_in_account_forms(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'addField(\n        "계좌 시작 현금잔고",' not in html
+    assert 'appendCreateField(\n        "계좌 시작 현금잔고",' not in html
+    assert '"초기 투자재원: "' not in html
+    assert 'account.initial_capital' in html
+    assert 'initial_capital:' in html
