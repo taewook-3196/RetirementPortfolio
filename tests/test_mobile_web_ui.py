@@ -650,8 +650,8 @@ def test_home_dashboard_reuses_account_summaries_and_avoids_mixed_currency_total
 
 def test_home_dashboard_shows_unrealized_pnl_and_cash_without_mixing_currencies(monkeypatch):
     html = _html(monkeypatch)
-    assert '전체 평가손익 · ' in html
-    assert '전체 예수금 · ' in html
+    assert '평가손익 · ' in html
+    assert '예수금 · ' in html
     assert '평가손익 ' in html
     assert 'summaries.get(String(a.id)).total_unrealized_pnl' in html
     assert 'summaries.get(String(a.id)).cash_balance' in html
@@ -696,3 +696,12 @@ def test_cashflow_tabs_follow_selected_home_account(monkeypatch):
     assert 'let selectedCashFlowAccountId = "";' in html
     assert 'selectedCashFlowAccountId = selectedHomeAccountId;' in html
     assert 'const selectedAccountId = selectedCashFlowAccountId;' in html
+
+
+def test_home_defaults_to_one_account_and_filters_detail_cards(monkeypatch):
+    html = _html(monkeypatch)
+    assert 'const preferred = accounts.find(a => a.is_default) || accounts[0];' in html
+    assert 'card.hidden = String(account.id) !== selectedHomeAccountId;' in html
+    assert 'card.hidden = card.dataset.accountId !== selectedHomeAccountId;' in html
+    assert 'id="home-quick-settings"' in html
+    assert 'new Option("전체 계좌", "")' not in html
