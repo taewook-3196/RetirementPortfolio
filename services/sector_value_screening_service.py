@@ -124,6 +124,25 @@ def screen_sector(market, sector):
                 records.append((ticker, info))
             except Exception:
                 failures[ticker] = "기업 정보 조회 실패"
+    # Provider industry labels are exploratory and are NOT official GICS codes.
+    # Keep missing labels out of industry comparisons instead of guessing.
+    industry_groups = {}
+    for ticker, info in records:
+        industry = str(info.get("industry") or "").strip()
+        if industry:
+            industry_groups.setdefault(industry, []).append(ticker)
+    industry_coverage = {
+        "provider": "Yahoo Finance",
+        "classification_basis": "provider_industry_label",
+        "is_official_gics": False,
+        "classified_count": sum(map(len, industry_groups.values())),
+        "sample_size": len(UNIVERSE[market][sector]),
+        "groups": [
+            {"industry": name, "ticker_count": len(tickers), "tickers": sorted(tickers)}
+            for name, tickers in sorted(industry_groups.items())
+        ],
+        "note": "공급자 산업명 기준의 표본 분류이며 공식 GICS 산업코드가 아닙니다.",
+    }
     # A provider may return only names/tickers while fundamentals are unavailable.
     # Do not present such records as a valid valuation result or cache the outage.
     usable = sum(
@@ -273,6 +292,7 @@ def screen_sector(market, sector):
                       "basis": reference_basis, "market_cap": market_caps.get(reference_ticker),
                       "market_cap_coverage": len(market_caps), "market_cap_sample_size": len(UNIVERSE[market][sector])},
         "sample_size": len(UNIVERSE[market][sector]),
+        "industry_coverage": industry_coverage,
         "results": results, "failures": failures,
         "semiconductor_cycle": semiconductor_cycle,
         "bank_pbr_roe_benchmark": {"median": round(bank_median, 4) if bank_median is not None else None,
