@@ -8314,6 +8314,12 @@ async function refreshSectorValue() {
 }
 document.getElementById("sector-value-market").addEventListener("change", syncSectorValueSectors);
 document.getElementById("sector-value-load").addEventListener("click", refreshSectorValue);
+document.getElementById("sector-value-results").addEventListener("toggle", (event) => {
+    if (!event.target.matches || !event.target.matches("details")) return;
+    const cards = [...document.querySelectorAll("#sector-value-results details")];
+    document.getElementById("sector-value-toggle-all").textContent =
+        cards.length && cards.every(card => card.open) ? "모두 접기" : "모두 펼치기";
+}, true);
 document.getElementById("sector-value-toggle-all").addEventListener("click", () => {
     const button = document.getElementById("sector-value-toggle-all");
     const cards = [...document.querySelectorAll("#sector-value-results details")];
