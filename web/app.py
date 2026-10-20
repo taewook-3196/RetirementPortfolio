@@ -8214,15 +8214,18 @@ async function refreshSectorValue() {
         // Compact cards avoid seven squeezed table columns on narrow phones.
         for (const item of data.results || []) {
             const metrics = item.metrics || {};
-            const card = document.createElement("article");
+            const card = document.createElement("details");
             card.style.cssText = "border:1px solid #d1d5db;border-radius:12px;padding:12px;margin:10px 0;overflow-wrap:anywhere";
+            const summary = document.createElement("summary");
+            summary.style.cssText = "cursor:pointer;line-height:1.7;min-height:36px";
             const heading = document.createElement("strong");
             heading.textContent = (item.name || item.ticker) + " (" + item.ticker + ")";
-            card.appendChild(heading);
-            const label = document.createElement("p");
-            label.style.cssText = "margin:6px 0;font-weight:600";
+            summary.appendChild(heading);
+            const label = document.createElement("span");
+            label.style.cssText = "display:block;font-weight:600";
             label.textContent = item.valuation_label || "평가 보류";
-            card.appendChild(label);
+            summary.appendChild(label);
+            card.appendChild(summary);
             const rationale = document.createElement("p");
             rationale.style.cssText = "margin:6px 0;line-height:1.7";
             const positive = (item.reasons || []).join(" · ");
