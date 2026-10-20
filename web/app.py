@@ -8309,7 +8309,10 @@ async function refreshSectorValue() {
             + sectorValueMetric(benchmark.median) + " · " + (data.disclaimer || "")
             + (Object.keys(data.failures || {}).length ? " · 일부 종목 조회 실패" : "");
     } catch (error) {
-        if (version === sectorValueVersion) status.textContent = error.message;
+        if (version === sectorValueVersion) {
+            status.textContent = "섹터 분석 조회 실패: " + (error.message || "알 수 없는 오류") + " · 다시 조회해 주세요.";
+            document.getElementById("sector-value-toggle-all").disabled = true;
+        }
     }
 }
 document.getElementById("sector-value-market").addEventListener("change", syncSectorValueSectors);
