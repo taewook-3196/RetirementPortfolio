@@ -8177,6 +8177,7 @@ function syncSectorValueSectors() {
     const toggleAll = document.getElementById("sector-value-toggle-all");
     toggleAll.disabled = true;
     toggleAll.textContent = "모두 펼치기";
+    document.getElementById("sector-value-load").disabled = false;
 }
 function sectorValueMetric(value, suffix = "") {
     return typeof value === "number" && Number.isFinite(value)
@@ -8190,6 +8191,8 @@ async function refreshSectorValue() {
     const sector = document.getElementById("sector-value-sector").value;
     const status = document.getElementById("sector-value-status");
     const container = document.getElementById("sector-value-results");
+    const loadButton = document.getElementById("sector-value-load");
+    loadButton.disabled = true;
     status.textContent = "재무 데이터를 조회하고 있습니다. 최초 조회는 시간이 걸릴 수 있습니다.";
     container.replaceChildren();
     document.getElementById("sector-value-toggle-all").disabled = true;
@@ -8316,6 +8319,8 @@ async function refreshSectorValue() {
             status.textContent = "섹터 분석 조회 실패: " + (error.message || "알 수 없는 오류") + " · 다시 조회해 주세요.";
             document.getElementById("sector-value-toggle-all").disabled = true;
         }
+    } finally {
+        if (version === sectorValueVersion) loadButton.disabled = false;
     }
 }
 document.getElementById("sector-value-market").addEventListener("change", syncSectorValueSectors);
@@ -8326,6 +8331,7 @@ document.getElementById("sector-value-sector").addEventListener("change", () => 
     const toggleAll = document.getElementById("sector-value-toggle-all");
     toggleAll.disabled = true;
     toggleAll.textContent = "모두 펼치기";
+    document.getElementById("sector-value-load").disabled = false;
 });
 document.getElementById("sector-value-load").addEventListener("click", refreshSectorValue);
 document.getElementById("sector-value-results").addEventListener("toggle", (event) => {
