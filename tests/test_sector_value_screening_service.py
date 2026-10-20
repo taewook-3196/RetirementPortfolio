@@ -275,3 +275,18 @@ def test_sector_reference_fetch_failure_remains_visible_without_comparison():
     assert "MSFT" in result["failures"]
     assert all(row["reference_comparison"]["pe"] is None for row in result["results"])
     CACHE.clear()
+
+
+def test_us_semiconductors_is_industry_under_technology():
+    CACHE.clear()
+    def fake_info(ticker):
+        return {"shortName": ticker, "forwardPE": 18, "priceToBook": 2,
+                "returnOnEquity": .2, "revenueGrowth": .1, "profitMargins": .2}
+    with patch("services.sector_value_screening_service._fetch_info", side_effect=fake_info):
+        result = screen_sector("us", "semiconductors")
+    assert result["classification_level"] == "industry"
+    assert result["gics_sector_code"] == "45"
+    assert result["industry_name"] == "Semiconductors"
+    assert result["sample_size"] == 12
+    assert result["semiconductor_cycle"]["status"] == "not_verified"
+    assert all(row["valuation_label"] == "평가 보류" for row in result["results"])
