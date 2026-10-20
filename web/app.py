@@ -8287,7 +8287,7 @@ async function refreshSectorValue() {
                     return label + " " + (difference > 0 ? "+" : "")
                         + sectorValueMetric(difference, unit);
                 });
-                peerInfo.textContent = "동일 산업 표본(" + peers.industry + ") 중앙값 대비: "
+                peerInfo.textContent = "동일 산업 사전 선정 표본(" + peers.industry + ", 해당 종목 포함) 중앙값 대비 · 산업 전체 대표값 아님: "
                     + peerParts.join(" · ");
                 card.appendChild(peerInfo);
             }
