@@ -4875,8 +4875,11 @@ Gemini AI 투자 가이드 사용
 </section>
 
 <section id="sector-value-section" class="card">
-<h2>섹터별 상대가치 탐색</h2>
-<p class="subtitle">선정된 표본의 재무지표 비교입니다. 저평가 확정이나 매수 추천이 아닙니다.</p>
+<h2>섹터·종목 전략별 탐색</h2>
+<p class="subtitle">모멘텀형과 PBR BAND형은 서로 독립된 전략입니다. 분석 가능 데이터가 부족하면 결과를 보류합니다.</p>
+<label for="sector-strategy-select">분석 전략</label>
+<select id="sector-strategy-select"><option value="momentum">모멘텀형 (추세·상대강도)</option><option value="pbr_band">PBR BAND형 (과거 가치평가 구간)</option></select>
+<p id="sector-strategy-explanation" class="subtitle">모멘텀형: 위의 섹터 모멘텀 분석에서 시장·기간별 추세를 확인하세요. 산업별 주도주 순위는 추후 검증 후 제공됩니다.</p>
 <label for="sector-value-market">시장</label>
 <select id="sector-value-market"><option value="us">미국</option><option value="kr">한국</option></select>
 <label for="sector-value-sector">섹터</label>
@@ -8184,6 +8187,14 @@ function sectorValueMetric(value, suffix = "") {
         ? value.toFixed(2) + suffix : "자료 없음";
 }
 async function refreshSectorValue() {
+    const strategy = document.getElementById("sector-strategy-select").value;
+    if (strategy === "momentum") {
+        document.getElementById("sector-value-results").replaceChildren();
+        document.getElementById("sector-value-toggle-all").disabled = true;
+        document.getElementById("sector-value-status").textContent = "모멘텀형: 상단 섹터 모멘텀에서 기간별 상대강도를 확인하세요. 산업별 주도주 추천은 데이터 검증 전이므로 제공하지 않습니다.";
+        return;
+    }
+    document.getElementById("sector-value-status").textContent = "PBR BAND: 과거 PBR 시계열과 BPS·ROE 검증이 아직 없어 밴드 추천은 제공하지 않습니다. 아래 조회는 기존 상대가치 참고 자료입니다.";
     const token = localStorage.getItem("access_token") || "";
     if (!token) {
         document.getElementById("sector-value-status").textContent = "로그인이 필요합니다. 다시 로그인한 뒤 분석해 주세요.";
@@ -8341,6 +8352,15 @@ document.getElementById("sector-value-sector").addEventListener("change", () => 
     document.getElementById("sector-value-load").disabled = false;
 });
 document.getElementById("sector-value-load").addEventListener("click", refreshSectorValue);
+document.getElementById("sector-strategy-select").addEventListener("change", function () {
+    const momentum = this.value === "momentum";
+    document.getElementById("sector-strategy-explanation").textContent = momentum
+        ? "모멘텀형: 위의 섹터 모멘텀 분석에서 추세를 확인하세요. 산업별 주도주 추천은 준비 중입니다."
+        : "PBR BAND형: 과거 PBR 시계열 미확보로 밴드 추천은 보류합니다. 기존 상대가치 탐색만 참고용으로 조회할 수 있습니다.";
+    document.getElementById("sector-value-status").textContent = "";
+    document.getElementById("sector-value-results").replaceChildren();
+    document.getElementById("sector-value-toggle-all").disabled = true;
+});
 document.getElementById("sector-value-results").addEventListener("toggle", (event) => {
     if (!event.target.matches || !event.target.matches("details")) return;
     const cards = [...document.querySelectorAll("#sector-value-results details")];
