@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 UNIVERSE = {
     "us": {
+        "semiconductors": ["NVDA", "AVGO", "AMD", "QCOM", "TXN", "MU", "ADI", "INTC", "MCHP", "ON", "MRVL", "NXPI"],
         "technology": ["MSFT", "AAPL", "CSCO", "ORCL", "ADBE", "CRM", "INTU", "IBM", "ACN", "NOW", "PANW", "SNPS"],
         "financials": ["JPM", "BAC", "WFC", "C", "GS", "MS", "USB", "PNC", "TFC", "BK", "SCHW", "AXP"],
         "healthcare": ["JNJ", "MRK", "ABBV", "PFE", "LLY", "UNH", "ABT", "TMO", "DHR", "BMY", "AMGN", "GILD"],
@@ -339,7 +340,11 @@ def screen_sector(market, sector):
         item["ticker"],
     ))
     result = {
-        **(us_sector_metadata(sector) if market == "us" else {}),
+        **(us_sector_metadata("technology") if market == "us" and sector == "semiconductors"
+           else us_sector_metadata(sector) if market == "us" else {}),
+        **({"classification_level": "industry", "industry_name": "Semiconductors",
+            "industry_classification_note": "정보기술 아래의 반도체 산업 탐색용 사전 선정 표본이며 공식 GICS 산업코드 또는 Finviz 전체 종목 목록과 동일하지 않습니다."}
+           if market == "us" and sector == "semiconductors" else {}),
         "market": market, "sector": sector, "valuation_policy": policy, "as_of": datetime.now(timezone.utc).isoformat(),
         "reference": {"ticker": reference_ticker, "name": reference["name"] if reference else reference_ticker,
                       "metrics": reference["metrics"] if reference else None,
