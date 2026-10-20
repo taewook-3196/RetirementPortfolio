@@ -8154,7 +8154,7 @@ document.getElementById("sector-period-select").addEventListener("change", refre
 
 
 const sectorValueOptions = {
-    us: {technology:"정보기술", financials:"금융", healthcare:"헬스케어",
+    us: {technology:"정보기술", semiconductors:"↳ 반도체 (정보기술 산업)", financials:"금융", healthcare:"헬스케어",
          industrials:"산업재", consumer_discretionary:"경기소비재",
          consumer_staples:"필수소비재", energy:"에너지", utilities:"유틸리티",
          materials:"소재", real_estate:"부동산", communication:"커뮤니케이션"},
