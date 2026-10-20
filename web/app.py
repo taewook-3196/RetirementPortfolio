@@ -1966,6 +1966,13 @@ def get_sector_value_api(
         return screen_sector(market, sector)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        if str(exc) == "Fundamental data unavailable for all sampled companies":
+            raise HTTPException(
+                status_code=503,
+                detail="외부 재무정보 제공처에서 분석 가능한 지표를 받지 못했습니다. 현재 가치평가 결과를 제공할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+            ) from exc
+        raise HTTPException(status_code=503, detail="기업 가치평가 데이터를 일시적으로 가져올 수 없습니다.") from exc
     except Exception:
         raise HTTPException(status_code=503, detail="기업 가치평가 데이터를 일시적으로 가져올 수 없습니다.")
 
