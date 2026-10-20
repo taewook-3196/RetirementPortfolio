@@ -8174,6 +8174,9 @@ function syncSectorValueSectors() {
     ++sectorValueVersion;
     document.getElementById("sector-value-status").textContent = "섹터를 선택하고 분석하기를 누르세요.";
     document.getElementById("sector-value-results").replaceChildren();
+    const toggleAll = document.getElementById("sector-value-toggle-all");
+    toggleAll.disabled = true;
+    toggleAll.textContent = "모두 펼치기";
 }
 function sectorValueMetric(value, suffix = "") {
     return typeof value === "number" && Number.isFinite(value)
