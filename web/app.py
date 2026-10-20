@@ -8177,6 +8177,7 @@ function syncSectorValueSectors() {
     const toggleAll = document.getElementById("sector-value-toggle-all");
     toggleAll.disabled = true;
     toggleAll.textContent = "모두 펼치기";
+    document.getElementById("sector-value-load").disabled = false;
 }
 function sectorValueMetric(value, suffix = "") {
     return typeof value === "number" && Number.isFinite(value)
@@ -8330,6 +8331,7 @@ document.getElementById("sector-value-sector").addEventListener("change", () => 
     const toggleAll = document.getElementById("sector-value-toggle-all");
     toggleAll.disabled = true;
     toggleAll.textContent = "모두 펼치기";
+    document.getElementById("sector-value-load").disabled = false;
 });
 document.getElementById("sector-value-load").addEventListener("click", refreshSectorValue);
 document.getElementById("sector-value-results").addEventListener("toggle", (event) => {
