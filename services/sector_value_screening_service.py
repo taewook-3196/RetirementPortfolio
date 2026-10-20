@@ -143,6 +143,35 @@ def screen_sector(market, sector):
         ],
         "note": "공급자 산업명 기준의 표본 분류이며 공식 GICS 산업코드가 아닙니다.",
     }
+    # Compare peers only inside the same provider-labelled industry. Missing
+    # labels and fewer than three valid observations cannot form a benchmark.
+    peer_metrics = {
+        "forward_pe": "forwardPE",
+        "revenue_growth": "revenueGrowth",
+        "roe": "returnOnEquity",
+        "profit_margin": "profitMargins",
+    }
+    info_by_ticker = dict(records)
+    industry_benchmarks = {}
+    for industry, tickers in sorted(industry_groups.items()):
+        metrics = {}
+        for key, source_field in peer_metrics.items():
+            observations = []
+            for ticker in tickers:
+                value = _finite(info_by_ticker[ticker].get(source_field))
+                if value is not None and (key != "forward_pe" or 0 < value <= 200):
+                    observations.append(value)
+            metrics[key] = {
+                "median": round(statistics.median(observations), 4) if len(observations) >= 3 else None,
+                "valid_count": len(observations),
+                "minimum_count": 3,
+            }
+        industry_benchmarks[industry] = metrics
+    industry_coverage["benchmarks"] = industry_benchmarks
+    industry_coverage["benchmark_note"] = (
+        "동일 공급자 산업명 내 표본 중앙값이며 산업 전체 평균이 아닙니다. "
+        "지표별 유효 표본 3개 미만이면 비교를 보류합니다."
+    )
     # A provider may return only names/tickers while fundamentals are unavailable.
     # Do not present such records as a valid valuation result or cache the outage.
     usable = sum(
