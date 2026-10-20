@@ -4883,6 +4883,7 @@ Gemini AI 투자 가이드 사용
 <select id="sector-value-sector"></select>
 <button id="sector-value-load" type="button">종목 분석하기</button>
 <div id="sector-value-status" role="status" aria-live="polite"></div>
+<button id="sector-value-toggle-all" type="button" aria-controls="sector-value-results" disabled>모두 펼치기</button>
 <div id="sector-value-results" style="overflow-x:auto"></div>
 </section>
 
@@ -8188,6 +8189,7 @@ async function refreshSectorValue() {
     const container = document.getElementById("sector-value-results");
     status.textContent = "재무 데이터를 조회하고 있습니다. 최초 조회는 시간이 걸릴 수 있습니다.";
     container.replaceChildren();
+    document.getElementById("sector-value-toggle-all").disabled = true;
     try {
         const data = await apiRequest("/api/sector-value/" + encodeURIComponent(market)
             + "/" + encodeURIComponent(sector), token);
@@ -8298,6 +8300,9 @@ async function refreshSectorValue() {
             card.appendChild(evidence);
             container.appendChild(card);
         }
+        const toggleAll = document.getElementById("sector-value-toggle-all");
+        toggleAll.disabled = !(data.results || []).length;
+        toggleAll.textContent = "모두 펼치기";
         const benchmark = data.pe_benchmark || {};
         status.textContent = "분석 표본 " + (data.sample_size || 0) + "개 · Forward PER 유효 "
             + (benchmark.valid_count || 0) + "개 · 중앙값 "
@@ -8309,6 +8314,15 @@ async function refreshSectorValue() {
 }
 document.getElementById("sector-value-market").addEventListener("change", syncSectorValueSectors);
 document.getElementById("sector-value-load").addEventListener("click", refreshSectorValue);
+document.getElementById("sector-value-toggle-all").addEventListener("click", () => {
+    const button = document.getElementById("sector-value-toggle-all");
+    const cards = [...document.querySelectorAll("#sector-value-results details")];
+    if (!cards.length) return;
+    const shouldOpen = cards.some(card => !card.open);
+    cards.forEach(card => { card.open = shouldOpen; });
+    button.textContent = shouldOpen ? "모두 접기" : "모두 펼치기";
+});
+
 syncSectorValueSectors();
 
 let marketIndexLoadVersion = 0;
