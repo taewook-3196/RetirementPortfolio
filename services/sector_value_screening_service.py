@@ -6,6 +6,8 @@ Universe is a curated sample, not all listed stocks.
 from datetime import datetime, timezone
 import math
 import statistics
+
+from services.sector_taxonomy import us_sector_metadata
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -250,6 +252,7 @@ def screen_sector(market, sector):
         item["ticker"],
     ))
     result = {
+        **(us_sector_metadata(sector) if market == "us" else {}),
         "market": market, "sector": sector, "valuation_policy": policy, "as_of": datetime.now(timezone.utc).isoformat(),
         "reference": {"ticker": reference_ticker, "name": reference["name"] if reference else reference_ticker,
                       "metrics": reference["metrics"] if reference else None,
