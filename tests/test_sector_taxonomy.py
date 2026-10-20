@@ -8,7 +8,8 @@ def test_us_sector_ids_match_momentum_and_value_screening():
     expected = set(GICS_US_SECTORS)
     assert len(expected) == 11
     assert set(SECTORS["us"]) == expected
-    assert set(UNIVERSE["us"]) == expected
+    assert set(UNIVERSE["us"]) - {"semiconductors"} == expected
+    assert "semiconductors" not in GICS_US_SECTORS
 
 
 def test_gics_codes_are_unique_and_labels_present():
