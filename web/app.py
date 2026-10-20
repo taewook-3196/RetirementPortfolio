@@ -8253,6 +8253,29 @@ async function refreshSectorValue() {
                     + " · 순이익률 " + sectorValueMetric(delta.profit_margin == null ? null : delta.profit_margin * 100, "%p");
                 card.appendChild(comparison);
             }
+            const peers = item.industry_peer_comparison || {};
+            if (peers.industry) {
+                const peerInfo = document.createElement("p");
+                peerInfo.style.cssText = "margin:6px 0;line-height:1.7";
+                const peerMetrics = peers.metrics || {};
+                const peerParts = [
+                    ["예상 PER", "forward_pe", "배", 1],
+                    ["매출 성장률", "revenue_growth", "%p", 100],
+                    ["ROE", "roe", "%p", 100],
+                    ["순이익률", "profit_margin", "%p", 100]
+                ].map(([label, key, unit, scale]) => {
+                    const metric = peerMetrics[key] || {};
+                    if (metric.difference == null) {
+                        return label + " 비교 보류(" + (metric.peer_count || 0) + "/3)";
+                    }
+                    const difference = metric.difference * scale;
+                    return label + " " + (difference > 0 ? "+" : "")
+                        + sectorValueMetric(difference, unit);
+                });
+                peerInfo.textContent = "동일 산업 표본(" + peers.industry + ") 중앙값 대비: "
+                    + peerParts.join(" · ");
+                card.appendChild(peerInfo);
+            }
             const evidence = document.createElement("p");
             evidence.style.cssText = "margin:8px 0 0;padding-top:8px;border-top:1px solid #e5e7eb;line-height:1.7";
             evidence.textContent = "참고 점수 " + sectorValueMetric(item.score)
