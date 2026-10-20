@@ -13,6 +13,7 @@ services/portfolio_service.py
 from __future__ import annotations
 
 from dataclasses import replace
+import math
 from typing import Dict, List, Optional
 
 from core.config import AppConfig, ETFConfig, load_config
@@ -361,6 +362,21 @@ class PortfolioService:
                 )
 
             else:
+                continue
+
+            # A confirmed settlement in the account currency is the actual
+            # cash movement (inclusive of any historical fees and taxes).
+            # Legacy rows and foreign-currency settlements retain the
+            # previous calculation until a full FX ledger is reconciled.
+            settlement_amount = getattr(transaction, "settlement_amount", None)
+            settlement_currency = str(
+                getattr(transaction, "settlement_currency", "") or ""
+            ).strip().upper()
+            if settlement_amount is not None and settlement_currency == account_currency:
+                settled = float(settlement_amount)
+                if not math.isfinite(settled) or settled <= 0:
+                    raise ValueError("실제 결제금액은 양수여야 합니다.")
+                cash_balance += -settled if transaction_type == "BUY" else settled
                 continue
 
             cash_balance += (
