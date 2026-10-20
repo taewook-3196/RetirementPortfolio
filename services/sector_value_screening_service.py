@@ -276,6 +276,34 @@ def screen_sector(market, sector):
             "currency": str(info.get("currency") or ""),
             **assessment,
         })
+    # Peer comparisons are informational only, never automatic valuation labels.
+    ticker_industry = {
+        ticker: str(info.get("industry") or "").strip()
+        for ticker, info in records
+    }
+    for row in results:
+        industry = ticker_industry.get(row["ticker"])
+        benchmarks = industry_benchmarks.get(industry) if industry else None
+        comparisons = {}
+        for key, source_field in peer_metrics.items():
+            metric = benchmarks[key] if benchmarks else None
+            value = _finite(info_by_ticker[row["ticker"]].get(source_field))
+            if key == "forward_pe" and (value is None or not 0 < value <= 200):
+                value = None
+            median = metric["median"] if metric else None
+            comparisons[key] = {
+                "value": round(value, 4) if value is not None else None,
+                "peer_median": median,
+                "difference": round(value - median, 4) if value is not None and median is not None else None,
+                "peer_count": metric["valid_count"] if metric else 0,
+                "minimum_count": 3,
+            }
+        row["industry_peer_comparison"] = {
+            "industry": industry or None,
+            "classification_basis": "provider_industry_label",
+            "is_official_gics": False,
+            "metrics": comparisons,
+        }
     # Prefer the largest *observed sample company* by market capitalization.
     # This is not proof of leadership across the entire sector.
     market_caps = {
