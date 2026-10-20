@@ -25,6 +25,16 @@ SECTORS = {
         "healthcare": ("244580.KS", "바이오"),
     },
 }
+INDUSTRY_ETF_PROXIES = {
+    "us": {
+        "semiconductors": ("SOXX", "↳ 반도체 (정보기술 산업)"),
+        "software": ("IGV", "↳ 소프트웨어 (정보기술 산업)"),
+        "biotechnology": ("IBB", "↳ 바이오테크 (헬스케어 산업)"),
+        "banks": ("KBE", "↳ 은행 (금융 산업)"),
+        "aerospace_defense": ("ITA", "↳ 항공우주·방산 (산업재 산업)"),
+    },
+    "kr": {},
+}
 BENCHMARKS = {"us": ("SPY", "S&P 500 ETF"), "kr": ("069500.KS", "KOSPI 200 ETF")}
 PERIOD_DAYS = {"1m": 30, "3m": 90, "6m": 180, "1y": 365}
 _CACHE = {}
@@ -71,7 +81,7 @@ def load_sector_momentum(market="us"):
     today = datetime.now(timezone.utc).date()
     end = (today + timedelta(days=1)).isoformat()
     start = (today - timedelta(days=410)).isoformat()
-    symbols = {"benchmark": BENCHMARKS[market], **SECTORS[market]}
+    symbols = {"benchmark": BENCHMARKS[market], **SECTORS[market], **INDUSTRY_ETF_PROXIES[market]}
     histories = {}
     failures = {}
     for key, (ticker, _) in symbols.items():
@@ -84,7 +94,7 @@ def load_sector_momentum(market="us"):
         failures["benchmark"] = "최근 가격 데이터 없음"
         benchmark = None
     items = []
-    for key, (ticker, label) in SECTORS[market].items():
+    for key, (ticker, label) in {**SECTORS[market], **INDUSTRY_ETF_PROXIES[market]}.items():
         values = histories.get(key)
         if not values:
             continue
@@ -106,7 +116,8 @@ def load_sector_momentum(market="us"):
                 if returns[period] is not None and benchmark_return is not None else None
             )
         items.append({
-            **(us_sector_metadata(key) if market == "us" else {}),
+            **(us_sector_metadata(key) if market == "us" and key in SECTORS["us"] else {}),
+            "classification_level": "industry" if market == "us" and key in INDUSTRY_ETF_PROXIES["us"] else "sector",
             "id": key, "name": label, "ticker": ticker,
             "source_type": "ETF proxy", "returns_pct": returns,
             "relative_pct_points": relative,
@@ -123,7 +134,7 @@ def load_sector_momentum(market="us"):
         "benchmark": {"ticker": BENCHMARKS[market][0], "name": BENCHMARKS[market][1]},
         "periods": list(PERIOD_DAYS), "items": items, "failures": failures,
         "as_of": today.isoformat(),
-        "disclaimer": "ETF 대용 지표이며 공식 업종지수가 아닙니다. 환율 및 추적오차에 유의하세요.",
+        "disclaimer": "ETF 대용 지표이며 공식 업종지수가 아닙니다. 미국 산업 ETF는 GICS 대분류와 별도 계층으로 표시하며 운용사별 구성·추적오차·환율 차이에 유의하세요.",
     }
     _CACHE[market] = (time.monotonic(), result)
     return result
