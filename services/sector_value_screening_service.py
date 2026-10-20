@@ -228,9 +228,20 @@ def screen_sector(market, sector):
             "currency": str(info.get("currency") or ""),
             **assessment,
         })
-    # Explicit curated reference, not an inferred market-cap leader.
-    # Missing fundamentals remain null rather than being interpreted as zero.
-    reference_ticker = UNIVERSE[market][sector][0]
+    # Prefer the largest *observed sample company* by market capitalization.
+    # This is not proof of leadership across the entire sector.
+    market_caps = {
+        ticker: cap for ticker, info in records
+        if (cap := _finite(info.get("marketCap"))) is not None and cap > 0
+    }
+    if market_caps:
+        reference_ticker = max(market_caps, key=lambda ticker: (market_caps[ticker], ticker))
+        reference_method = "sample_market_cap_max"
+        reference_basis = "조회된 표본 중 시가총액 최대 기업(전체 섹터 시총 1위 검증 아님)"
+    else:
+        reference_ticker = UNIVERSE[market][sector][0]
+        reference_method = "curated_first_ticker"
+        reference_basis = "시가총액 자료 부재: 표본 목록 첫 번째 지정 종목(대표주 검증 전)"
     reference = next((row for row in results if row["ticker"] == reference_ticker), None)
     comparison_keys = ("pe", "pb", "roe", "revenue_growth", "earnings_growth",
                        "profit_margin", "year_change", "debt_to_equity", "current_ratio")
@@ -256,10 +267,11 @@ def screen_sector(market, sector):
         "market": market, "sector": sector, "valuation_policy": policy, "as_of": datetime.now(timezone.utc).isoformat(),
         "reference": {"ticker": reference_ticker, "name": reference["name"] if reference else reference_ticker,
                       "metrics": reference["metrics"] if reference else None,
-                      "selection_method": "curated_first_ticker",
+                      "selection_method": reference_method,
                       "selection_verified": False,
                       "data_available": reference is not None,
-                      "basis": "표본 목록 첫 번째 사전 지정 종목(시가총액·유동성 기준 대표주 검증 전)"},
+                      "basis": reference_basis, "market_cap": market_caps.get(reference_ticker),
+                      "market_cap_coverage": len(market_caps), "market_cap_sample_size": len(UNIVERSE[market][sector])},
         "sample_size": len(UNIVERSE[market][sector]),
         "results": results, "failures": failures,
         "semiconductor_cycle": semiconductor_cycle,
