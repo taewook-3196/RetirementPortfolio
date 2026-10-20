@@ -17,6 +17,12 @@ SECTORS = {
         "energy": ("XLE", "에너지"), "utilities": ("XLU", "유틸리티"),
         "materials": ("XLB", "소재"), "real_estate": ("XLRE", "부동산"),
         "communication": ("XLC", "커뮤니케이션"),
+        # Industry ETF proxies, not additional GICS sectors or full industry indexes.
+        "semiconductors": ("SOXX", "↳ 반도체 (정보기술 산업)"),
+        "software": ("IGV", "↳ 소프트웨어 (정보기술 산업)"),
+        "biotechnology": ("IBB", "↳ 바이오테크 (헬스케어 산업)"),
+        "banks": ("KBE", "↳ 은행 (금융 산업)"),
+        "aerospace_defense": ("ITA", "↳ 항공우주·방산 (산업재 산업)"),
     },
     "kr": {
         "semiconductors": ("091160.KS", "반도체"),
@@ -106,7 +112,8 @@ def load_sector_momentum(market="us"):
                 if returns[period] is not None and benchmark_return is not None else None
             )
         items.append({
-            **(us_sector_metadata(key) if market == "us" else {}),
+            **(us_sector_metadata(key) if market == "us" and key in {"technology", "financials", "healthcare", "industrials", "consumer_discretionary", "consumer_staples", "energy", "utilities", "materials", "real_estate", "communication"} else {}),
+            "classification_level": "industry" if market == "us" and key in {"semiconductors", "software", "biotechnology", "banks", "aerospace_defense"} else "sector",
             "id": key, "name": label, "ticker": ticker,
             "source_type": "ETF proxy", "returns_pct": returns,
             "relative_pct_points": relative,
@@ -123,7 +130,7 @@ def load_sector_momentum(market="us"):
         "benchmark": {"ticker": BENCHMARKS[market][0], "name": BENCHMARKS[market][1]},
         "periods": list(PERIOD_DAYS), "items": items, "failures": failures,
         "as_of": today.isoformat(),
-        "disclaimer": "ETF 대용 지표이며 공식 업종지수가 아닙니다. 환율 및 추적오차에 유의하세요.",
+        "disclaimer": "ETF 대용 지표이며 공식 업종지수가 아닙니다. 미국 산업 ETF는 GICS 대분류와 별도 계층으로 표시하며 운용사별 구성·추적오차·환율 차이에 유의하세요.",
     }
     _CACHE[market] = (time.monotonic(), result)
     return result
