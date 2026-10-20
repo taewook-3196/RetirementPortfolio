@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 import math
 import time
 
+from services.sector_taxonomy import us_sector_metadata
+
 SECTORS = {
     "us": {
         "technology": ("XLK", "정보기술"), "financials": ("XLF", "금융"),
@@ -104,6 +106,7 @@ def load_sector_momentum(market="us"):
                 if returns[period] is not None and benchmark_return is not None else None
             )
         items.append({
+            **(us_sector_metadata(key) if market == "us" else {}),
             "id": key, "name": label, "ticker": ticker,
             "source_type": "ETF proxy", "returns_pct": returns,
             "relative_pct_points": relative,
