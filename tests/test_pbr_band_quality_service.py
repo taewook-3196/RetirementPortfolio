@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from services.pbr_band_quality_service import evaluate_pbr_band
 
 def inputs():
-    start = date(2018, 1, 1)
+    start = date(2019, 1, 1)
     return dict(
         observations=[((start + timedelta(days=100*i)).isoformat(), 0.8 + i*.02) for i in range(28)],
         current_pbr=1.1, source="verified-report-provider", as_of="2026-01-01",

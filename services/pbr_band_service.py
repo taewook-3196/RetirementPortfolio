@@ -26,6 +26,14 @@ def calculate_pbr_band(observations, current_pbr, as_of=None):
         return {"status": "withheld", "reason": "유효한 과거 PBR 관측치가 20개 미만입니다.", "valid_count": len(ordered)}
     if (ordered[-1][0] - ordered[0][0]).days < 365 * 5:
         return {"status": "withheld", "reason": "PBR 관측 기간이 5년 미만입니다.", "valid_count": len(ordered)}
+    # Prevent 20 observations clustered in a few months from masquerading as
+    # five years of quarterly historical valuation evidence.
+    quarters = {(day.year, (day.month - 1) // 3 + 1) for day, _ in ordered}
+    if len(quarters) < 20:
+        return {"status": "withheld", "reason": "서로 다른 분기별 PBR 관측치가 20개 미만입니다.", "valid_count": len(ordered), "quarter_count": len(quarters)}
+    # Stale data must not be used as a current valuation signal.
+    if (as_of - ordered[-1][0]).days > 180:
+        return {"status": "withheld", "reason": "최근 180일 이내의 PBR 관측치가 없습니다.", "valid_count": len(ordered)}
     values = sorted(value for _, value in ordered)
     def percentile(p):
         index = (len(values) - 1) * p
