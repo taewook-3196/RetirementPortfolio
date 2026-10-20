@@ -8185,7 +8185,14 @@ function sectorValueMetric(value, suffix = "") {
 }
 async function refreshSectorValue() {
     const token = localStorage.getItem("access_token") || "";
-    if (!token) return;
+    if (!token) {
+        document.getElementById("sector-value-status").textContent = "로그인이 필요합니다. 다시 로그인한 뒤 분석해 주세요.";
+        document.getElementById("sector-value-results").replaceChildren();
+        const toggleAll = document.getElementById("sector-value-toggle-all");
+        toggleAll.disabled = true;
+        toggleAll.textContent = "모두 펼치기";
+        return;
+    }
     const version = ++sectorValueVersion;
     const market = document.getElementById("sector-value-market").value;
     const sector = document.getElementById("sector-value-sector").value;
