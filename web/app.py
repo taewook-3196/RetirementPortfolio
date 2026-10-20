@@ -8197,9 +8197,19 @@ async function refreshSectorValue() {
             const comparisonHeading = document.createElement("p");
             comparisonHeading.style.cssText = "margin:10px 0;font-weight:600";
             comparisonHeading.textContent = "비교 기준: " + (reference.name || reference.ticker)
-                + " (" + reference.ticker + ") · 사전 선정 표본 첫 종목(시가총액·유동성 대표성 미검증)"
+                + " (" + reference.ticker + ") · " + (reference.basis || "표본 기준 기업(대표성 미검증)")
                 + (reference.data_available === false ? " · 재무자료 조회 실패로 기준 종목 비교 불가" : "");
             container.appendChild(comparisonHeading);
+        }
+        const industryCoverage = data.industry_coverage || {};
+        if (industryCoverage.classification_basis === "provider_industry_label") {
+            const coverage = document.createElement("p");
+            coverage.style.cssText = "margin:8px 0;line-height:1.6";
+            coverage.textContent = "산업 분류: Yahoo Finance 공급자 기준 "
+                + (industryCoverage.classified_count || 0) + "/"
+                + (industryCoverage.sample_size || 0) + "개 확인"
+                + " · 공식 GICS 산업코드 아님 · 산업 내 표본 3개 미만은 비교 보류";
+            container.appendChild(coverage);
         }
         // Compact cards avoid seven squeezed table columns on narrow phones.
         for (const item of data.results || []) {
