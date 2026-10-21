@@ -38,8 +38,7 @@ def fetch_sec_companyfacts(cik, *, user_agent, timeout=20):
         return json.loads(payload)
 
 
-def run_pilot(cik, *, user_agent, as_of):
-    payload = fetch_sec_companyfacts(cik, user_agent=user_agent)
+def analyze_companyfacts(payload, *, cik, as_of):
     equity = parse_sec_equity_filings(payload, as_of=as_of)
     shares = parse_sec_share_filings(payload, as_of=as_of)
     matched = match_equity_and_shares(equity.get("filings", []), shares.get("filings", []))
@@ -55,6 +54,11 @@ def run_pilot(cik, *, user_agent, as_of):
         "match_audit": match_audit,
         "note": "SEC 무료 응답 기반 탐색적 진단. 실제 투자용 PBR 검증이나 가격·기업행동 검증 완료를 뜻하지 않습니다.",
     }
+
+
+def run_pilot(cik, *, user_agent, as_of):
+    payload = fetch_sec_companyfacts(cik, user_agent=user_agent)
+    return analyze_companyfacts(payload, cik=cik, as_of=as_of)
 
 
 def main():
