@@ -333,3 +333,5 @@
 | 2026-10-21 | SEC 보통주 주식수 추출·BPS 매칭 | SEC us-gaap/DEI 주식수 공시에서 접수번호·공시일·보고기간·단위(shares) 추출. 자기자본과 동일 접수번호·보고기간이며 주식수 값이 유일할 때만 미조정 BPS 산출, 상태는 requires_corporate_action_validation로 고정. 분할·복수 클래스·기업행동 검증 전에는 PBR BAND 자동 연결 금지. |
 
 | 2026-10-21 | 무료 PBR 데이터 기간 충족률 검증 | 공시일 기반 잠정 BPS 관측치에 대해 유효 공시 수, 분기 수, 기간(5년), 기업행동 미검증 건수를 집계하는 순수 평가기 및 테스트 추가. 기간이 충분해도 investment_ready는 항상 false. SEC 실응답/주가/기업행동/이용권한 검증 전 자동 추천 금지. |
+
+| 2026-10-21 | SEC 무료 실데이터 파일럿 CLI | scripts/pilot_sec_companyfacts.py: 운영자 실제 연락처가 포함된 SEC_USER_AGENT를 요구하고 최대 3개 CIK, 20초 timeout, 12MB 상한, 기업 간 1초 간격으로 data.sec.gov companyfacts를 수동 요청. 자기자본·주식수 공시와 동일 접수번호/기간 매칭 수 및 분기·기간 충족률을 JSON 출력. 외부 접속 실행/실측 결과는 아직 없음. 운영 서비스와 투자추천에는 미연결. |
