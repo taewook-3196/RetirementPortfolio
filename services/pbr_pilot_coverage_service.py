@@ -14,11 +14,12 @@ def assess_pbr_pilot_coverage(pairs, *, as_of, min_quarters=20, min_years=5):
     for pair in pairs:
         try:
             filed = date.fromisoformat(pair["filed"])
+            period = date.fromisoformat(pair["period_end"])
             bps = float(pair["bps_unadjusted_usd"])
         except (TypeError, ValueError, KeyError, OverflowError):
             continue
-        if filed <= cutoff and bps > 0 and bps < float("inf"):
-            dated.append((filed, pair.get("status")))
+        if period <= filed <= cutoff and bps > 0 and bps < float("inf"):
+            dated.append((period, pair.get("status")))
     quarters = sorted({(day.year, (day.month - 1) // 3 + 1) for day, _ in dated})
     years = (max((day for day, _ in dated), default=cutoff) -
              min((day for day, _ in dated), default=cutoff)).days / 365.25
@@ -28,6 +29,7 @@ def assess_pbr_pilot_coverage(pairs, *, as_of, min_quarters=20, min_years=5):
         "status": "pilot_coverage_sufficient" if coverage_ok else "withheld",
         "investment_ready": False,
         "filing_count": len(dated),
+        "quarter_basis": "financial_period_end",
         "distinct_quarters": len(quarters),
         "span_years": round(years, 2),
         "corporate_action_validated_count": validated,
