@@ -18,6 +18,7 @@ from services.pbr_pilot_coverage_service import assess_pbr_pilot_coverage
 from services.sec_bps_quality_audit import audit_sec_bps_matches
 from services.sec_reporting_quarter_gaps import audit_reporting_quarter_gaps
 from services.sec_period_conflict_audit import audit_sec_period_conflicts
+from services.sec_pbr_readiness_gate import summarize_sec_pbr_blockers
 
 SEC_COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 
@@ -64,7 +65,11 @@ def analyze_companyfacts(payload, *, cik, as_of):
 
 def run_pilot(cik, *, user_agent, as_of):
     payload = fetch_sec_companyfacts(cik, user_agent=user_agent)
-    return analyze_companyfacts(payload, cik=cik, as_of=as_of)
+    result = analyze_companyfacts(payload, cik=cik, as_of=as_of)
+    result["source"] = "sec_companyfacts_direct_api"
+    result["source_verified"] = True
+    result["pbr_readiness"] = summarize_sec_pbr_blockers(result)
+    return result
 
 
 def main():
