@@ -12,6 +12,7 @@ import time
 from scripts.pilot_sec_companyfacts import analyze_companyfacts
 from services.sec_pilot_batch_summary import summarize_sec_pilot_reports
 from services.sec_pilot_companies import SEC_PILOT_COMPANIES
+from services.sec_pbr_readiness_gate import summarize_sec_pbr_blockers
 
 
 def audit_local_companyfacts(path, *, as_of):
@@ -35,6 +36,7 @@ def audit_local_companyfacts(path, *, as_of):
     result = analyze_companyfacts(payload, cik=cik, as_of=as_of)
     result["source"] = "user_supplied_sec_json"
     result["source_verified"] = False
+    result["pbr_readiness"] = summarize_sec_pbr_blockers(result)
     return result
 
 
