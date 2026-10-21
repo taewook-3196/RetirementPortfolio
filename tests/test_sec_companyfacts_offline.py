@@ -21,3 +21,14 @@ def test_offline_rejects_invalid_json(tmp_path):
         assert False
     except ValueError:
         pass
+
+
+def test_named_pilot_file_rejects_wrong_embedded_cik(tmp_path):
+    path = tmp_path / "CIK0000320193.json"
+    path.write_text(json.dumps({"cik": 789019, "entityName": "Other",
+                                "facts": {"us-gaap": {}, "dei": {}}}), encoding="utf-8")
+    try:
+        audit_local_companyfacts(path, as_of="2025-12-31")
+        assert False
+    except ValueError as exc:
+        assert "CIK" in str(exc)
