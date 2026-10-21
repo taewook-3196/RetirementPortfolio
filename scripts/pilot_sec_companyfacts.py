@@ -17,6 +17,7 @@ from services.sec_share_count_service import parse_sec_share_filings, match_equi
 from services.pbr_pilot_coverage_service import assess_pbr_pilot_coverage
 from services.sec_bps_quality_audit import audit_sec_bps_matches
 from services.sec_reporting_quarter_gaps import audit_reporting_quarter_gaps
+from services.sec_period_conflict_audit import audit_sec_period_conflicts
 
 SEC_COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 
@@ -46,6 +47,7 @@ def analyze_companyfacts(payload, *, cik, as_of):
     coverage = assess_pbr_pilot_coverage(matched, as_of=as_of)
     match_audit = audit_sec_bps_matches(equity.get("filings", []), shares.get("filings", []))
     quarter_gaps = audit_reporting_quarter_gaps(matched, as_of=as_of)
+    period_conflicts = audit_sec_period_conflicts(equity.get("filings", []), matched)
     return {
         "cik": cik.zfill(10),
         "company": payload.get("entityName"),
@@ -55,6 +57,7 @@ def analyze_companyfacts(payload, *, cik, as_of):
         "coverage": coverage,
         "match_audit": match_audit,
         "quarter_gaps": quarter_gaps,
+        "period_conflicts": period_conflicts,
         "note": "SEC 무료 응답 기반 탐색적 진단. 실제 투자용 PBR 검증이나 가격·기업행동 검증 완료를 뜻하지 않습니다.",
     }
 
