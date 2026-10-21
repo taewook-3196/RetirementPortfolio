@@ -23,7 +23,7 @@ def audit_reporting_quarter_gaps(pairs, *, as_of):
     lower, upper = min(quarters), max(quarters)
     missing = sorted(set(range(lower, upper + 1)) - quarters)
     def label(index):
-        return f"{(index - 1) // 4}-Q{(index - 1) % 4 + 1}"
+        return f"{index // 4}-Q{index % 4 + 1}"
     return {
         "status": "diagnostic_only",
         "observed_quarters": len(quarters),
