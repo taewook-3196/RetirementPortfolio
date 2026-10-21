@@ -41,7 +41,7 @@ def test_request_uses_sec_endpoint_and_agent():
 
 def test_empty_realistic_response_is_not_misreported_as_ready():
     with patch("scripts.pilot_sec_companyfacts.fetch_sec_companyfacts",
-               return_value={"entityName": "Sample", "facts": {"us-gaap": {}, "dei": {}}}):
+               return_value={"cik": 320193, "entityName": "Sample", "facts": {"us-gaap": {}, "dei": {}}}):
         report = run_pilot("320193", user_agent="Research ops@domain.org", as_of="2025-12-31")
     assert report["strictly_matched_filings"] == 0
     assert report["match_audit"]["investment_ready"] is False
