@@ -345,3 +345,5 @@
 | 2026-10-21 | SEC 무료 PBR 파일럿 종목별 비교 요약 | 오프라인 SEC companyfacts 파일 최대 3개에 대해 기업별 공시 수, 엄격 매칭률, 분기·기간 충족 상태, 매칭 실패 사유를 집계하는 batch_summary 추가. 실데이터 확보·주식분할·주가 정합성 검증 전 investment_ready=false 고정. |
 
 | 2026-10-21 | PBR 데이터 충족률 회계기간 기준 정정 | SEC 공시 제출일(filed)과 재무제표 보고기간 말일(period_end)을 분리. 미래 공시 누수는 filed<=as_of로 차단하고, 분기 수·5년 범위는 period_end로 계산. 기간 정보가 없는 BPS는 충족률에서 제외. 테스트 추가. |
+
+| 2026-10-21 | SEC 무료 실측 대표 종목 안내 | AAPL/MSFT/JNJ의 CIK와 공식 SEC companyfacts URL을 코드 상수 및 docs/SEC_PBR_PILOT.md에 정리. 오프라인 3종 비교 실행 명령·실측 판정 기준 문서화. 실제 API 응답 수집·기업행동 검증은 여전히 미완료. |
