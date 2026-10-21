@@ -5,6 +5,7 @@ Usage:
 No API key or SEC User-Agent is needed for local file analysis.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import time
@@ -34,6 +35,9 @@ def audit_local_companyfacts(path, *, as_of):
         if filename in (f"{ticker.lower()}.json", f"cik{expected_cik}.json") and cik.zfill(10) != expected_cik:
             raise ValueError("파일 이름의 기업과 JSON 내부 CIK가 일치하지 않습니다.")
     result = analyze_companyfacts(payload, cik=cik, as_of=as_of)
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    result["source_file_sha256"] = digest
+    result["source_file_bytes"] = source.stat().st_size
     result["source"] = "user_supplied_sec_json"
     result["source_verified"] = False
     result["pbr_readiness"] = summarize_sec_pbr_blockers(result)

@@ -1,4 +1,5 @@
 import json
+import hashlib
 from scripts.pilot_sec_companyfacts_offline import audit_local_companyfacts
 
 
@@ -10,6 +11,8 @@ def test_offline_companyfacts_report(tmp_path):
     assert result["cik"] == "0000320193"
     assert result["strictly_matched_filings"] == 0
     assert result["source_verified"] is False
+    assert result["source_file_sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    assert result["source_file_bytes"] == path.stat().st_size
     assert result["coverage"]["investment_ready"] is False
 
 
