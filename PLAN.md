@@ -343,3 +343,5 @@
 | 2026-10-21 | SEC 다운로드 JSON 오프라인 검증 | SEC data.sec.gov 접속이 차단된 환경에서도 공식 companyfacts JSON을 파일로 받아 동일 진단 가능하도록 scripts/pilot_sec_companyfacts_offline.py 추가. 최대 3개 파일, 12MB 제한, CIK/형식 검증, source_verified=false 명시. 온라인/오프라인 공통 분석 함수 분리 및 테스트. 파일의 실제 출처와 공시 수정 이력 검증은 별도 필요. |
 
 | 2026-10-21 | SEC 무료 PBR 파일럿 종목별 비교 요약 | 오프라인 SEC companyfacts 파일 최대 3개에 대해 기업별 공시 수, 엄격 매칭률, 분기·기간 충족 상태, 매칭 실패 사유를 집계하는 batch_summary 추가. 실데이터 확보·주식분할·주가 정합성 검증 전 investment_ready=false 고정. |
+
+| 2026-10-21 | PBR 데이터 충족률 회계기간 기준 정정 | SEC 공시 제출일(filed)과 재무제표 보고기간 말일(period_end)을 분리. 미래 공시 누수는 filed<=as_of로 차단하고, 분기 수·5년 범위는 period_end로 계산. 기간 정보가 없는 BPS는 충족률에서 제외. 테스트 추가. |
