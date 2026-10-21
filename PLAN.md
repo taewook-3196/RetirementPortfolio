@@ -347,3 +347,5 @@
 | 2026-10-21 | PBR 데이터 충족률 회계기간 기준 정정 | SEC 공시 제출일(filed)과 재무제표 보고기간 말일(period_end)을 분리. 미래 공시 누수는 filed<=as_of로 차단하고, 분기 수·5년 범위는 period_end로 계산. 기간 정보가 없는 BPS는 충족률에서 제외. 테스트 추가. |
 
 | 2026-10-21 | SEC 무료 실측 대표 종목 안내 | AAPL/MSFT/JNJ의 CIK와 공식 SEC companyfacts URL을 코드 상수 및 docs/SEC_PBR_PILOT.md에 정리. 오프라인 3종 비교 실행 명령·실측 판정 기준 문서화. 실제 API 응답 수집·기업행동 검증은 여전히 미완료. |
+
+| 2026-10-21 | SEC 실측 데이터 분기 공백 진단 | 최초~최종 재무제표 보고분기 사이 누락된 분기를 식별하는 sec_reporting_quarter_gaps 추가. 온라인/오프라인 공통 SEC 파일럿 출력에 quarter_gaps 포함. 실데이터 확보 전 투자 적합성 판단 불가. |
