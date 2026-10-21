@@ -11,6 +11,7 @@ import time
 
 from scripts.pilot_sec_companyfacts import analyze_companyfacts
 from services.sec_pilot_batch_summary import summarize_sec_pilot_reports
+from services.sec_pilot_companies import SEC_PILOT_COMPANIES
 
 
 def audit_local_companyfacts(path, *, as_of):
@@ -26,6 +27,11 @@ def audit_local_companyfacts(path, *, as_of):
     cik = str(payload.get("cik", ""))
     if not cik.isdigit() or len(cik) > 10:
         raise ValueError("SEC companyfacts CIK가 유효하지 않습니다.")
+    filename = source.name.lower()
+    for ticker, info in SEC_PILOT_COMPANIES.items():
+        expected_cik = info["cik"]
+        if filename in (f"{ticker.lower()}.json", f"cik{expected_cik}.json") and cik.zfill(10) != expected_cik:
+            raise ValueError("파일 이름의 기업과 JSON 내부 CIK가 일치하지 않습니다.")
     result = analyze_companyfacts(payload, cik=cik, as_of=as_of)
     result["source"] = "user_supplied_sec_json"
     result["source_verified"] = False
@@ -40,9 +46,13 @@ def main():
     if len(args.file) > 3:
         parser.error("한 번에 최대 3개 파일만 검사합니다.")
     successful_reports = []
+    seen_ciks = set()
     for path in args.file:
         try:
             report = audit_local_companyfacts(path, as_of=args.as_of)
+            if report["cik"] in seen_ciks:
+                raise ValueError("동일 CIK를 중복 분석할 수 없습니다.")
+            seen_ciks.add(report["cik"])
             successful_reports.append(report)
             print(json.dumps(report, ensure_ascii=False))
         except (ValueError, OSError, json.JSONDecodeError, TypeError) as exc:
