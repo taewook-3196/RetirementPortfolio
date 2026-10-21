@@ -329,3 +329,5 @@
 | 2026-10-21 | 무료 데이터만으로 PBR 구현 가능성 평가 | SEC EDGAR(미국)와 OpenDART(한국) 공식 공시는 무료로 이용 가능. 미국 AAPL/MSFT/JNJ, 한국 005930/000660/005380 파일럿 제안. 과거 주가·주식분할·원공시/정정·이용권한 검증이 미완료이므로 전 종목 자동 추천 가능하다고 단정하지 않음. services/free_pbr_provider_readiness.py에 재무/가격/이용권한/기업행동 4개 독립 게이트 구현, 기본은 withheld. 외부 SEC 실접속은 현재 실행 환경 DNS 연결 실패로 검증하지 못함; Render에서 운영자 연락처를 포함한 User-Agent와 OpenDART 인증키로 실제 검증 필요. |
 
 | 2026-10-21 | SEC companyfacts 파일럿 파서 | SEC us-gaap 자기자본 공시를 실제 filed 날짜·보고기간·접수번호 기준으로 정규화하는 오프라인 파서 추가. 10-K/10-Q 외·미래 공시·비정상 값을 제외. 보통주 주식수 및 분할 조정과 실시간 SEC 응답 검증 전에는 BPS/PBR 미계산. 테스트 추가. |
+
+| 2026-10-21 | SEC 보통주 주식수 추출·BPS 매칭 | SEC us-gaap/DEI 주식수 공시에서 접수번호·공시일·보고기간·단위(shares) 추출. 자기자본과 동일 접수번호·보고기간이며 주식수 값이 유일할 때만 미조정 BPS 산출, 상태는 requires_corporate_action_validation로 고정. 분할·복수 클래스·기업행동 검증 전에는 PBR BAND 자동 연결 금지. |
