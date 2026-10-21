@@ -10,6 +10,7 @@ from pathlib import Path
 import time
 
 from scripts.pilot_sec_companyfacts import analyze_companyfacts
+from services.sec_pilot_batch_summary import summarize_sec_pilot_reports
 
 
 def audit_local_companyfacts(path, *, as_of):
@@ -38,11 +39,15 @@ def main():
     args = parser.parse_args()
     if len(args.file) > 3:
         parser.error("한 번에 최대 3개 파일만 검사합니다.")
+    successful_reports = []
     for path in args.file:
         try:
-            print(json.dumps(audit_local_companyfacts(path, as_of=args.as_of), ensure_ascii=False))
+            report = audit_local_companyfacts(path, as_of=args.as_of)
+            successful_reports.append(report)
+            print(json.dumps(report, ensure_ascii=False))
         except (ValueError, OSError, json.JSONDecodeError, TypeError) as exc:
             print(json.dumps({"file": path, "status": "error", "error_type": type(exc).__name__}, ensure_ascii=False))
+    print(json.dumps({"batch_summary": summarize_sec_pilot_reports(successful_reports)}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
