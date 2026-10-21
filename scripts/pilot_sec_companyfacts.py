@@ -65,6 +65,9 @@ def analyze_companyfacts(payload, *, cik, as_of):
 
 def run_pilot(cik, *, user_agent, as_of):
     payload = fetch_sec_companyfacts(cik, user_agent=user_agent)
+    returned_cik = payload.get("cik") if isinstance(payload, dict) else None
+    if not isinstance(returned_cik, int) or returned_cik <= 0 or str(returned_cik).zfill(10) != cik.zfill(10):
+        raise ValueError("SEC API 응답의 CIK가 요청한 기업과 일치하지 않습니다.")
     result = analyze_companyfacts(payload, cik=cik, as_of=as_of)
     result["source"] = "sec_companyfacts_direct_api"
     result["source_verified"] = True
