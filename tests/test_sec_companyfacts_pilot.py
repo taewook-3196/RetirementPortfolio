@@ -44,4 +44,6 @@ def test_empty_realistic_response_is_not_misreported_as_ready():
                return_value={"entityName": "Sample", "facts": {"us-gaap": {}, "dei": {}}}):
         report = run_pilot("320193", user_agent="Research ops@domain.org", as_of="2025-12-31")
     assert report["strictly_matched_filings"] == 0
+    assert report["match_audit"]["investment_ready"] is False
+    assert report["match_audit"]["strict_match_count"] == 0
     assert report["coverage"]["investment_ready"] is False
