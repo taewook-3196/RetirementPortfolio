@@ -179,6 +179,16 @@ def get_admin_status(
     }
 
 
+@app.get("/api/admin/diagnostics/sec-connectivity")
+def get_sec_connectivity_diagnostic(
+    authorization: str | None = Header(default=None),
+):
+    """Admin-only outbound SEC connectivity check; never expose User-Agent."""
+    require_admin(authorization)
+    from services.sec_connectivity_diagnostic import diagnose_sec_connectivity
+    return diagnose_sec_connectivity()
+
+
 SIGNUP_ENABLED_KEY = "signup_enabled"
 
 
