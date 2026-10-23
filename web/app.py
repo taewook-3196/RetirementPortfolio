@@ -7,6 +7,7 @@ RetirementPortfolio 모바일 웹 애플리케이션.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import urllib.parse
 import urllib.request
@@ -177,6 +178,17 @@ def get_admin_status(
         "user_id": user["user_id"],
         "email": user["email"],
     }
+
+
+@app.on_event("startup")
+def log_sec_network_probe_on_startup():
+    """One bounded diagnostic on each Render boot; no SEC data downloads."""
+    from services.sec_connectivity_diagnostic import diagnose_sec_connectivity
+    try:
+        status = diagnose_sec_connectivity(timeout=3)
+        logging.getLogger(__name__).info("SEC_CONNECTIVITY_DIAGNOSTIC %s", json.dumps(status, sort_keys=True))
+    except Exception:
+        logging.getLogger(__name__).warning("SEC_CONNECTIVITY_DIAGNOSTIC unexpected_error")
 
 
 @app.get("/api/admin/diagnostics/sec-connectivity")
