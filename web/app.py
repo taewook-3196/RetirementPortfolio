@@ -186,9 +186,9 @@ def log_sec_network_probe_on_startup():
     from services.sec_connectivity_diagnostic import diagnose_sec_connectivity
     try:
         status = diagnose_sec_connectivity(timeout=3)
-        logging.getLogger(__name__).info("SEC_CONNECTIVITY_DIAGNOSTIC %s", json.dumps(status, sort_keys=True))
+        logging.getLogger("uvicorn.error").warning("SEC_CONNECTIVITY_DIAGNOSTIC %s", json.dumps(status, sort_keys=True))
     except Exception:
-        logging.getLogger(__name__).warning("SEC_CONNECTIVITY_DIAGNOSTIC unexpected_error")
+        logging.getLogger("uvicorn.error").warning("SEC_CONNECTIVITY_DIAGNOSTIC unexpected_error")
 
 
 @app.get("/api/admin/diagnostics/sec-connectivity")
