@@ -371,3 +371,5 @@
 | 2026-10-23 | Render SEC 연결 실측 진단 | 관리자 인증 전용 GET /api/admin/diagnostics/sec-connectivity 추가. Render 실행 인스턴스에서 data.sec.gov DNS, TLS 및 SEC_USER_AGENT(실제 연락처)가 설정된 경우 HEAD 응답 상태만 검사. 응답 본문·연락처·토큰 저장 및 공개 금지. GitHub Actions의 별도 진단은 후속 작업. HEAD 405 등은 GET 가능성의 최종 판단이 아님. |
 
 | 2026-10-23 | Render 부팅 시 자동 진단 로그 | 시작 시 한 번만 최대 3초 네트워크 진단 후 SEC_CONNECTIVITY_DIAGNOSTIC 구조화 로그 기록. 관리자 인증 토큰 없이도 Render 운영 로그에서 DNS/TLS 상태를 확인할 수 있도록 함. 개인정보·User-Agent 값·응답 본문 미기록. |
+
+| 2026-10-23 | SEC 진단 로깅 보완 | #354 Render 배포는 live이나 startup 결과가 Render 로그에서 검색되지 않음. Uvicorn error logger WARNING 레벨로 변경하여 운영 로그 가시성 확보. 연결 성공 판정 전까지 미검증 유지. |
