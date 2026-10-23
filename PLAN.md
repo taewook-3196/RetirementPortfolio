@@ -367,3 +367,7 @@
 | 2026-10-21 | PR #352 CI 회귀 테스트 수정 | 기존 mock SEC 응답에 CIK 필드가 누락되어 신규 실응답 검증에 걸림. 기존 테스트의 가짜 응답에 올바른 CIK를 포함시켜 원본 식별 검증 유지. CI 재검증 후 병합. |
 
 | 2026-10-21 | SEC 오프라인 실측 원본 재현성 | 다운로드한 companyfacts JSON의 SHA-256과 바이트 크기를 각 진단 결과에 기록해 원본 파일 식별 및 재현 검증 지원. 해시만으로 SEC 공식 출처를 증명하지는 못하며 실제 공시 원본 수집은 여전히 미완료. |
+
+| 2026-10-23 | Render SEC 연결 실측 진단 | 관리자 인증 전용 GET /api/admin/diagnostics/sec-connectivity 추가. Render 실행 인스턴스에서 data.sec.gov DNS, TLS 및 SEC_USER_AGENT(실제 연락처)가 설정된 경우 HEAD 응답 상태만 검사. 응답 본문·연락처·토큰 저장 및 공개 금지. GitHub Actions의 별도 진단은 후속 작업. HEAD 405 등은 GET 가능성의 최종 판단이 아님. |
+
+| 2026-10-23 | Render 부팅 시 자동 진단 로그 | 시작 시 한 번만 최대 3초 네트워크 진단 후 SEC_CONNECTIVITY_DIAGNOSTIC 구조화 로그 기록. 관리자 인증 토큰 없이도 Render 운영 로그에서 DNS/TLS 상태를 확인할 수 있도록 함. 개인정보·User-Agent 값·응답 본문 미기록. |
