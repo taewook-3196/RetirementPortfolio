@@ -373,3 +373,5 @@
 | 2026-10-23 | Render 부팅 시 자동 진단 로그 | 시작 시 한 번만 최대 3초 네트워크 진단 후 SEC_CONNECTIVITY_DIAGNOSTIC 구조화 로그 기록. 관리자 인증 토큰 없이도 Render 운영 로그에서 DNS/TLS 상태를 확인할 수 있도록 함. 개인정보·User-Agent 값·응답 본문 미기록. |
 
 | 2026-10-23 | SEC 진단 로깅 보완 | #354 Render 배포는 live이나 startup 결과가 Render 로그에서 검색되지 않음. Uvicorn error logger WARNING 레벨로 변경하여 운영 로그 가시성 확보. 연결 성공 판정 전까지 미검증 유지. |
+
+| 2026-10-24 | SEC 연결 검사 GET 방식 개선 | Render DNS/TLS가 정상임을 운영 로그에서 확인. HEAD 방식은 SEC API의 실제 GET 경로를 대표하지 않을 수 있어, User-Agent 설정 시 GET으로 요청하고 응답 본문은 최대 1바이트만 읽으며 저장/로그하지 않도록 수정. 실제 HTTP 확인은 SEC_USER_AGENT 연락처 설정 후 수행. |
