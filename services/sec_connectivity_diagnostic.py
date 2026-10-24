@@ -33,9 +33,11 @@ def diagnose_sec_connectivity(timeout=5):
         result["http"] = "skipped_missing_sec_user_agent"
         return result
     try:
-        # HEAD checks access without downloading the large JSON body.
-        request = Request(URL, method="HEAD", headers={"User-Agent": agent})
+        # GET is representative of the production client; read at most one byte
+        # and never persist or log SEC response content.
+        request = Request(URL, headers={"User-Agent": agent, "Accept": "application/json"})
         with urlopen(request, timeout=timeout) as response:
+            response.read(1)
             result["http"] = str(response.status)
     except HTTPError as exc:
         result["http"] = str(exc.code)
